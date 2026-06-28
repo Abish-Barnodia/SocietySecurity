@@ -1,0 +1,559 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────
+
+enum Role {
+  RESIDENT
+  GUARD
+  MANAGER
+  COMMITTEE
+}
+
+enum PassType {
+  ONE_TIME
+  RECURRING
+  DELIVERY
+  CONTRACTOR
+}
+
+enum PassStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  REVOKED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum EntryMethod {
+  QR_SCAN
+  OTP
+  MANUAL_GUARD
+  VEHICLE_ANPR
+}
+
+enum EntryStatus {
+  APPROVED
+  DENIED
+  PENDING_APPROVAL
+  NO_RESPONSE
+}
+
+enum AlertPriority {
+  P1
+  P2
+  P3
+}
+
+enum AlertStatus {
+  SENT
+  ACKNOWLEDGED
+  ESCALATED
+  RESOLVED
+}
+
+enum AlertChannel {
+  PUSH
+  SMS
+  EMAIL
+}
+
+enum IncidentStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum IncidentType {
+  UNREGISTERED_VEHICLE
+  TAILGATING
+  SUSPICIOUS_PERSON
+  PERIMETER_BREACH
+  UNAUTHORIZED_ACCESS
+  PHYSICAL_ALTERCATION
+  THEFT
+  VANDALISM
+  OTHER
+}
+
+enum AmenityStatus {
+  AVAILABLE
+  BOOKED
+  MAINTENANCE
+}
+
+// ─── Property ─────────────────────────────────────────────
+
+model Property {
+  id          String   @id @default(cuid())
+  name        String
+  address     String
+  city        String
+  pincode     String
+  totalUnits  Int
+  totalTowers Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  units      Unit[]
+  guards     Guard[]
+  entryPoints EntryPoint[]
+  incidents  Incident[]
+  amenities  Amenity[]
+  managers   Manager[]
+  broadcasts Broadcast[]
+}
+
+// ─── Entry Points (Gates / Lobbies) ───────────────────────
+
+model EntryPoint {
+  id         String   @id @default(cuid())
+  propertyId String
+  name       String
+  type       String   // MAIN_GATE, SERVICE_ENTRANCE, PARKING, LOBBY
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  property Property  @relation(fields: [propertyId], references: [id])
+  entries  Entry[]
+  guards   GuardPost[]
+}
+
+// ─── Units ────────────────────────────────────────────────
+
+model Unit {
+  id           String   @id @default(cuid())
+  propertyId   String
+  unitNumber   String
+  floor        Int
+  tower        String?
+  isOccupied   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property    Property   @relation(fields: [propertyId], references: [id])
+  residents   Resident[]
+  passes      Pass[]
+  entries     Entry[]
+  incidents   Incident[]
+
+    vehicles Vehicle[]
+
+  @@unique([propertyId, unitNumber])
+}
+
+// ─── Users (base) ─────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String?
+  role         Role
+  fcmTokens    String[] @default([])
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  resident  Resident?
+  guard     Guard?
+  manager   Manager?
+  committee CommitteeMember?
+  auditLogs AuditLog[]
+  otps      OTP[]
+  refreshTokens RefreshToken[]
+}
+
+// ─── Residents ────────────────────────────────────────────
+
+model Resident {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  unitId          String
+  name            String
+  isPrimary       Boolean  @default(false)
+  emergencyContact String?
+  emergencyContactName String?
+  alertPreferences Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user  User @relation(fields: [userId], references: [id])
+  unit  Unit @relation(fields: [unitId], references: [id])
+  passes Pass[]
+  walkinApprovals WalkinApproval[]
+}
+
+// ─── Guards ───────────────────────────────────────────────
+
+model Guard {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  propertyId String
+  name       String
+  badgeNumber String  @unique
+  isOnDuty   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id])
+  property    Property     @relation(fields: [propertyId], references: [id])
+  entries     Entry[]
+  incidents   Incident[]
+  shifts      Shift[]
+  postCheckIns GuardPost[]
+}
+
+// ─── Managers ─────────────────────────────────────────────
+
+model Manager {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  propertyId String
+  name       String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+}
+
+// ─── Committee Members ────────────────────────────────────
+
+model CommitteeMember {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  name      String
+  role      String   // CHAIRMAN, SECRETARY, TREASURER, MEMBER
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── OTP ──────────────────────────────────────────────────
+
+model OTP {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  purpose   String   // LOGIN, PASS_ENTRY
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Refresh Tokens ───────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Passes ───────────────────────────────────────────────
+
+model Pass {
+  id          String     @id @default(cuid())
+  residentId  String
+  unitId      String
+  type        PassType
+  status      PassStatus @default(ACTIVE)
+  visitorName String
+  visitorPhone String?
+  visitorPhoto String?   // URL
+  purpose     String?
+  qrPayload   String?    // signed HMAC payload
+  otpCode     String?    // hashed OTP for delivery passes
+  validFrom   DateTime
+  validUntil  DateTime
+  entryPointIds String[] @default([])
+  suspendedAt DateTime?
+  suspendedUntil DateTime?
+  revokedAt   DateTime?
+  revokedBy   String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  resident    Resident   @relation(fields: [residentId], references: [id])
+  unit        Unit       @relation(fields: [unitId], references: [id])
+  recurringRule RecurringRule?
+  entries     Entry[]
+  usageHistory PassUsageHistory[]
+}
+
+// ─── Recurring Pass Rules ─────────────────────────────────
+
+model RecurringRule {
+  id            String      @id @default(cuid())
+  passId        String      @unique
+  allowedDays   DayOfWeek[]
+  windowStartTime String    // "08:00"
+  windowEndTime   String    // "13:00"
+  createdAt     DateTime    @default(now())
+
+  pass Pass @relation(fields: [passId], references: [id])
+}
+
+// ─── Pass Usage History ───────────────────────────────────
+
+model PassUsageHistory {
+  id        String   @id @default(cuid())
+  passId    String
+  entryId   String?
+  usedAt    DateTime @default(now())
+  outcome   String   // CLEARED, DENIED, SUSPENDED, OUTSIDE_WINDOW
+
+  pass  Pass   @relation(fields: [passId], references: [id])
+  entry Entry? @relation(fields: [entryId], references: [id])
+}
+
+// ─── Entries ──────────────────────────────────────────────
+
+model Entry {
+  id            String      @id @default(cuid())
+  unitId        String
+  passId        String?
+  guardId       String
+  entryPointId  String
+  visitorName   String
+  visitorPhone  String?
+  vehicleNumber String?
+  method        EntryMethod
+  status        EntryStatus
+  gatePhotoUrl  String?
+  notes         String?
+  entryAt       DateTime    @default(now())
+  exitAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  unit        Unit              @relation(fields: [unitId], references: [id])
+  pass        Pass?             @relation(fields: [passId], references: [id])
+  guard       Guard             @relation(fields: [guardId], references: [id])
+  entryPoint  EntryPoint        @relation(fields: [entryPointId], references: [id])
+  alerts      Alert[]
+  usageHistory PassUsageHistory[]
+  walkinApproval WalkinApproval?
+}
+
+// ─── Walk-in Approvals ────────────────────────────────────
+
+model WalkinApproval {
+  id           String    @id @default(cuid())
+  entryId      String    @unique
+  residentId   String
+  visitorName  String
+  purpose      String
+  requestedAt  DateTime  @default(now())
+  respondedAt  DateTime?
+  decision     String?   // APPROVED, DENIED
+  timeoutAt    DateTime
+  guardCalledAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  entry    Entry    @relation(fields: [entryId], references: [id])
+  resident Resident @relation(fields: [residentId], references: [id])
+}
+
+// ─── Alerts ───────────────────────────────────────────────
+
+model Alert {
+  id           String        @id @default(cuid())
+  entryId      String?
+  incidentId   String?
+  propertyId   String
+  priority     AlertPriority
+  status       AlertStatus   @default(SENT)
+  title        String
+  body         String
+  targetRoles  Role[]
+  targetUserIds String[]
+  channel      AlertChannel
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  escalatedAt  DateTime?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  entry    Entry?    @relation(fields: [entryId], references: [id])
+  incident Incident? @relation(fields: [incidentId], references: [id])
+}
+
+// ─── Incidents ────────────────────────────────────────────
+
+model Incident {
+  id           String         @id @default(cuid())
+  propertyId   String
+  unitId       String?
+  guardId      String
+  type         IncidentType
+  status       IncidentStatus @default(OPEN)
+  description  String
+  location     String
+  photoUrls    String[]       @default([])
+  vehicleNumber String?
+  assignedTo   String?
+  assignedAt   DateTime?
+  closedAt     DateTime?
+  closedBy     String?
+  resolutionNote String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id])
+  unit     Unit?    @relation(fields: [unitId], references: [id])
+  guard    Guard    @relation(fields: [guardId], references: [id])
+  alerts   Alert[]
+  actions  IncidentAction[]
+}
+
+// ─── Incident Actions (timeline) ─────────────────────────
+
+model IncidentAction {
+  id          String   @id @default(cuid())
+  incidentId  String
+  actorId     String
+  actorRole   Role
+  action      String
+  note        String?
+  createdAt   DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+}
+
+// ─── Vehicles ─────────────────────────────────────────────
+
+model Vehicle {
+  id             String   @id @default(cuid())
+  unitId         String
+  registrationNo String
+  make           String?
+  model          String?
+  color          String?
+  isResident     Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  unit Unit @relation(fields: [unitId], references: [id])
+
+  @@unique([unitId, registrationNo])
+}
+
+// ─── Amenities ────────────────────────────────────────────
+
+model Amenity {
+  id         String        @id @default(cuid())
+  propertyId String
+  name       String
+  capacity   Int
+  status     AmenityStatus @default(AVAILABLE)
+  openTime   String        // "06:00"
+  closeTime  String        // "22:00"
+  createdAt  DateTime      @default(now())
+
+  property Property         @relation(fields: [propertyId], references: [id])
+  bookings AmenityBooking[]
+}
+
+model AmenityBooking {
+  id         String   @id @default(cuid())
+  amenityId  String
+  residentId String
+  date       DateTime
+  startTime  String
+  endTime    String
+  status     String   @default("CONFIRMED") // CONFIRMED, CANCELLED
+  createdAt  DateTime @default(now())
+
+  amenity Amenity @relation(fields: [amenityId], references: [id])
+}
+
+// ─── Guard Shifts ─────────────────────────────────────────
+
+model Shift {
+  id            String    @id @default(cuid())
+  guardId       String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+  totalEntries  Int       @default(0)
+  totalIncidents Int      @default(0)
+  openItems     String?
+  handoverNote  String?
+  signedOffAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  guard     Guard      @relation(fields: [guardId], references: [id])
+  postCheckIns GuardPost[]
+}
+
+// ─── Guard Post Check-ins ─────────────────────────────────
+
+model GuardPost {
+  id           String   @id @default(cuid())
+  guardId      String
+  shiftId      String
+  entryPointId String
+  checkedInAt  DateTime @default(now())
+  latitude     Float?
+  longitude    Float?
+
+  guard      Guard      @relation(fields: [guardId], references: [id])
+  shift      Shift      @relation(fields: [shiftId], references: [id])
+  entryPoint EntryPoint @relation(fields: [entryPointId], references: [id])
+}
+
+// ─── Broadcasts ───────────────────────────────────────────
+
+model Broadcast {
+  id         String   @id @default(cuid())
+  propertyId String
+  sentBy     String
+  title      String
+  body       String
+  targetScope String  // ALL, TOWER_A, FLOOR_3 etc.
+  sentAt     DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+}
+
+// ─── Audit Log ────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entity     String
+  entityId   String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Vehicle relation to Unit ─────────────────────────────
+// Add this to the Unit model block above
+// vehicles Vehicle[]

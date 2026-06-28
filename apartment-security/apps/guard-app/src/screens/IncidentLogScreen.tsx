@@ -1,0 +1,1 @@
+// log with photo + taxonomy

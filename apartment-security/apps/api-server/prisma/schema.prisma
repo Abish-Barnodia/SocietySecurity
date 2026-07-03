@@ -116,6 +116,7 @@ model Property {
   amenities  Amenity[]
   managers   Manager[]
   broadcasts Broadcast[]
+  invoices   Invoice[]
 }
 
 // ─── Entry Points (Gates / Lobbies) ───────────────────────
@@ -152,6 +153,7 @@ model Unit {
   incidents   Incident[]
 
     vehicles Vehicle[]
+    invoices Invoice[]
 
   @@unique([propertyId, unitNumber])
 }
@@ -197,6 +199,7 @@ model Resident {
   unit  Unit @relation(fields: [unitId], references: [id])
   passes Pass[]
   walkinApprovals WalkinApproval[]
+  invoices       Invoice[]
 }
 
 // ─── Guards ───────────────────────────────────────────────
@@ -557,3 +560,43 @@ model AuditLog {
 // ─── Vehicle relation to Unit ─────────────────────────────
 // Add this to the Unit model block above
 // vehicles Vehicle[]
+
+// ─── Billing & Payments ───────────────────────────────────
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  propertyId  String
+  unitId      String
+  residentId  String?
+  amount      Float
+  description String
+  dueDate     DateTime
+  status      InvoiceStatus @default(PENDING)
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  property Property  @relation(fields: [propertyId], references: [id])
+  unit     Unit      @relation(fields: [unitId], references: [id])
+  resident Resident? @relation(fields: [residentId], references: [id])
+  payments Payment[]
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  invoiceId     String
+  amount        Float
+  method        String   // UPI, CREDIT_CARD, CASH
+  transactionId String?  @unique
+  status        String   // SUCCESS, FAILED
+  paidAt        DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}

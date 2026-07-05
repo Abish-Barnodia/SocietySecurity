@@ -56,18 +56,18 @@ app.get('/health', (_req, res) => {
 
 // API routes
 const API = '/api/v1';
-app.use(`${API}/auth`,      authRouter);
+app.use(`${API}/auth`, authRouter);
 app.use(`${API}/residents`, residentRouter);
-app.use(`${API}/guards`,    guardRouter);
-app.use(`${API}/passes`,    passRouter);
-app.use(`${API}/entries`,   entryRouter);
-app.use(`${API}/walkins`,   walkinRouter);
-app.use(`${API}/alerts`,    alertRouter);
+app.use(`${API}/guards`, guardRouter);
+app.use(`${API}/passes`, passRouter);
+app.use(`${API}/entries`, entryRouter);
+app.use(`${API}/walkins`, walkinRouter);
+app.use(`${API}/alerts`, alertRouter);
 app.use(`${API}/incidents`, incidentRouter);
-app.use(`${API}/vehicles`,  vehicleRouter);
+app.use(`${API}/vehicles`, vehicleRouter);
 app.use(`${API}/amenities`, amenityRouter);
-app.use(`${API}/reports`,   reportRouter);
-app.use(`${API}/offline`,   offlineRouter);
+app.use(`${API}/reports`, reportRouter);
+app.use(`${API}/offline`, offlineRouter);
 
 // 404 handler
 app.use(notFoundHandler);

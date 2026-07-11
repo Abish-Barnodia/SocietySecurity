@@ -1,49 +1,38 @@
+import { usePasses, useAlerts, useHousehold, useEntries } from '../context/DomainContexts';
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { useAuth } from '../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
 
-type ServiceProfile = {
-  id: string;
-  role: string;
-  name: string;
-  phone: string;
-  charges: string;
-  rating: string;
-  experience: string;
-  emoji: string;
-  color: string;
-};
-
-const SERVICES: ServiceProfile[] = [
-  { id: '1', role: 'Plumber', name: 'Ramesh Kumar', phone: '+91 98765 43210', charges: '₹300 / visit', rating: '4.8', experience: '8 yrs', emoji: '🪠', color: '#e0f2fe' },
-  { id: '2', role: 'Electrician', name: 'Suresh Singh', phone: '+91 98765 43211', charges: '₹250 / visit', rating: '4.9', experience: '12 yrs', emoji: '⚡', color: '#fef3c7' },
-  { id: '3', role: 'Carpenter', name: 'Abdul Ansari', phone: '+91 98765 43212', charges: '₹400 / visit', rating: '4.7', experience: '15 yrs', emoji: '🔨', color: '#ffedd5' },
-  { id: '4', role: 'Painter', name: 'Manoj Das', phone: '+91 98765 43213', charges: 'Based on area', rating: '4.6', experience: '5 yrs', emoji: '🎨', color: '#f3e8ff' },
-];
-
-import { useAuth } from '../context/AuthContext';
-
 export default function HomeScreen({ navigation }: { navigation: any }) {
-  const { passes, alerts, emergencyContacts } = useData();
-  const { userProfile, userEmail } = useAuth();
+  const { passes } = usePasses();
+  const { alerts } = useAlerts();
+  const { emergencyContacts } = useHousehold();
+  const { userProfile, userEmail, userRole } = useAuth();
   const insets = useSafeAreaInsets();
-  const [selectedService, setSelectedService] = React.useState<ServiceProfile | null>(null);
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
 
-  const activePasses = passes.filter(p => p.status === 'Active').slice(0, 2);
+  const activePasses = passes.filter(p => p.status === 'Active');
+  const upcomingPasses = passes.filter(p => (p.status as any) === 'Scheduled');
+  const unreadAlerts = alerts.filter(a => a.unread);
+  const [activeAction, setActiveAction] = React.useState('Create Visitor Pass'); // ponytail: dynamic highlight
 
   const navigateTo = (screen: string) => {
     navigation.navigate(screen);
   };
 
-  // Fallback to defaults if no profile exists
-  const name = userProfile?.name ? userProfile.name.split(' ')[0] : 'Resident';
-  const initial = (userProfile?.name || 'Resident').charAt(0).toUpperCase();
+  const isManager = userRole === 'MANAGER' || userRole === 'COMMITTEE';
+  const name = userProfile?.name ? userProfile.name.split(' ')[0] : (isManager ? 'Manager' : 'Resident');
+  const subtitle = isManager ? 'PROPERTY DASHBOARD' : `${userProfile?.wing || 'Unknown Block'} · FLAT ${userProfile?.flat || 'N/A'}`;
 
   const handleSOS = () => {
     let message = "🚨 SOS ALARM SENT!\nGuard station has been instantly notified.";
@@ -55,527 +44,348 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 50 }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
+    <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
         {/* App Header */}
         <View style={styles.appHeader}>
           <View>
-            <Text style={styles.greetingText}>Hello, {name}</Text>
-            {userProfile?.wing && userProfile?.flat ? (
-              <Text style={styles.apartmentText}>Block {userProfile.wing} • Flat {userProfile.flat}</Text>
-            ) : (
-              <Text style={styles.apartmentText}>{userEmail}</Text>
-            )}
+            <Text style={styles.apartmentText}>{subtitle}</Text>
+            <Text style={styles.greetingText}>Welcome, {name}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity 
-              style={styles.sosButton}
-              onPress={handleSOS}
-            >
-              <Text style={styles.sosText}>SOS</Text>
-            </TouchableOpacity>
-            <View style={[styles.profileAvatar, { overflow: 'hidden' }]}>
-              {userProfile?.photoUri ? (
-                <Image source={{ uri: userProfile.photoUri }} style={{ width: '100%', height: '100%' }} />
-              ) : (
-                <Text style={styles.profileAvatarText}>{initial}</Text>
-              )}
+          <TouchableOpacity style={styles.sosButton} onPress={handleSOS}>
+            <Ionicons name="alert-outline" size={24} color={colors.danger} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 2x2 Grid */}
+        <View style={styles.gridContainer}>
+          <TouchableOpacity style={styles.topGridCard} onPress={() => navigateTo('Entries')}>
+            <View style={[styles.topGridIconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : '#fef3c7' }]}>
+              <Ionicons name="person-add-outline" size={24} color={colors.primary} />
             </View>
-          </View>
+            <Text style={styles.gridNumber}>3</Text>
+            <Text style={styles.topGridLabel}>Visitors Today</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.topGridCard} onPress={() => navigation.navigate('Passes', { initialTab: 'Active' })}>
+            <View style={[styles.topGridIconWrapper, { backgroundColor: isDarkMode ? '#262626' : '#e5e7eb' }]}>
+              <Ionicons name="ticket-outline" size={24} color={colors.textMuted} />
+            </View>
+            <Text style={styles.gridNumber}>{activePasses.length}</Text>
+            <Text style={styles.topGridLabel}>Active Passes</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.topGridCard} onPress={() => navigateTo('Alerts')}>
+            <View style={[styles.topGridIconWrapper, { backgroundColor: isDarkMode ? '#450a0a' : '#fee2e2' }]}>
+              <Ionicons name="alert-circle-outline" size={24} color={colors.danger} />
+            </View>
+            <View style={styles.numberRow}>
+              <Text style={styles.gridNumber}>{unreadAlerts.length}</Text>
+              {unreadAlerts.length > 0 && <View style={styles.redDot} />}
+            </View>
+            <Text style={styles.topGridLabel}>Alerts</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.topGridCard} onPress={() => navigation.navigate('Passes', { initialTab: 'Scheduled' })}>
+            <View style={[styles.topGridIconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : '#fef3c7' }]}>
+              <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.gridNumber}>{upcomingPasses.length}</Text>
+            <Text style={styles.topGridLabel}>Upcoming</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigateTo('CreatePass')}>
-            <View style={styles.iconContainer}>
-              <Text style={styles.actionEmoji}>📝</Text>
-            </View>
-            <Text style={styles.actionText}>New Pass</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigateTo('Household')}>
-            <View style={[styles.iconContainer, { backgroundColor: '#fdf4ff' }]}>
-              <Text style={styles.actionEmoji}>👨‍👩‍👧</Text>
-            </View>
-            <Text style={styles.actionText}>Household</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigateTo('Amenities')}>
-            <View style={[styles.iconContainer, { backgroundColor: '#fef3c7' }]}>
-              <Text style={styles.actionEmoji}>🎉</Text>
-            </View>
-            <Text style={styles.actionText}>Amenities</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigateTo('Entries')}>
-            <View style={[styles.iconContainer, { backgroundColor: '#ecfccb' }]}>
-              <Text style={styles.actionEmoji}>📜</Text>
-            </View>
-            <Text style={styles.actionText}>Entry Log</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Home Services */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Home Services</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesContainer} contentContainerStyle={{ paddingHorizontal: 4 }}>
-          {SERVICES.map((service) => (
-            <TouchableOpacity 
-              key={service.id} 
-              style={styles.serviceCard} 
-              onPress={() => setSelectedService(service)}
-            >
-              <View style={[styles.serviceIconWrapper, { backgroundColor: service.color }]}>
-                <Text style={styles.serviceEmoji}>{service.emoji}</Text>
-              </View>
-              <Text style={styles.serviceText}>{service.role}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Active Passes */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Active passes</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Passes')}>
-            <Text style={styles.seeAllText}>See all</Text>
-          </TouchableOpacity>
-        </View>
-
-        {activePasses.length === 0 ? (
-          <View style={styles.card}>
-            <Text style={{ color: colors.textMuted, textAlign: 'center' }}>No active passes.</Text>
-          </View>
-        ) : (
-          activePasses.map(pass => (
-            <View key={pass.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.cardTitle}>{pass.name}</Text>
-                  <Text style={styles.cardSubtitle}>{pass.type}</Text>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        
+        <View style={styles.actionsContainer}>
+          {[
+            { id: 'Create Visitor Pass', icon: 'person-add-outline', screen: 'CreatePass' },
+            { id: 'Invite Delivery', icon: 'bus-outline', screen: 'CreatePass', params: { initialType: 'Delivery / service' } },
+            { id: 'Add Domestic Worker', icon: 'body-outline', screen: 'Household' },
+            { id: 'View Entry Log', icon: 'time-outline', screen: 'Entries' },
+          ].map(action => {
+            const isActive = activeAction === action.id;
+            return (
+              <TouchableOpacity 
+                key={action.id}
+                style={[styles.actionCard, isActive && { backgroundColor: colors.primary }]} 
+                onPress={() => { 
+                  setActiveAction(action.id); 
+                  if (action.params) navigation.navigate(action.screen, action.params); 
+                  else navigateTo(action.screen); 
+                }}
+              >
+                <View style={[styles.actionIconWrapper, isActive && { backgroundColor: 'rgba(0,0,0,0.1)' }]}>
+                  <Ionicons name={action.icon as any} size={20} color={isActive ? (isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.5)') : colors.text} />
                 </View>
-                <View style={[styles.badgeSuccess, { backgroundColor: pass.color + '20' }]}>
-                  <Text style={[styles.badgeSuccessText, { color: pass.color }]}>• Active</Text>
-                </View>
-              </View>
-              <View style={styles.divider} />
-              <TouchableOpacity style={styles.cardFooter} onPress={() => navigation.navigate('PassDetail', { passId: pass.id })}>
-                <Text style={styles.cardFooterText}>⏱ {pass.time}</Text>
-                <Text style={styles.chevron}>›</Text>
+                <Text style={[styles.actionCardText, isActive && { color: isDarkMode ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)' }]}>{action.id}</Text>
               </TouchableOpacity>
-            </View>
-          ))
-        )}
+            );
+          })}
+        </View>
 
-        {/* Recent Alerts */}
-        <View style={[styles.sectionHeader, { marginTop: 16 }]}>
-          <Text style={styles.sectionTitle}>Recent alerts</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Alerts')}>
-            <Text style={styles.seeAllText}>See all</Text>
+        {/* Recent Activity */}
+        <View style={[styles.sectionHeader, { marginTop: spacing.lg }]}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <TouchableOpacity onPress={() => navigateTo('Entries')}>
+            <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
 
-        {alerts.length === 0 ? (
-          <View style={styles.card}>
-            <Text style={{ color: colors.textMuted, textAlign: 'center', padding: 8 }}>No recent alerts.</Text>
-          </View>
-        ) : (
-          alerts.slice(0, 2).map((alert) => (
-            <View key={alert.id} style={styles.card}>
-              <View style={styles.alertRow}>
-                <Text style={styles.alertEmoji}>{alert.icon}</Text>
-                <View style={styles.alertContent}>
-                  <Text style={styles.alertTitle}>{alert.title}</Text>
-                  <Text style={styles.alertSubtitle}>{alert.subtitle}</Text>
-                  <Text style={styles.alertTime}>{alert.time}</Text>
+        <View style={styles.recentActivityContainer}>
+          {useEntries().entries.slice(0, 3).map((entry, index) => {
+            const isEntered = entry.status === 'ENTERED';
+            return (
+              <TouchableOpacity key={index} style={styles.activityCard}>
+                <View style={[styles.activityIconWrapper, { backgroundColor: isEntered ? (isDarkMode ? '#452a0a' : '#fef3c7') : (isDarkMode ? '#262626' : '#e5e7eb') }]}>
+                  <Ionicons name={isEntered ? "log-in-outline" : "log-out-outline"} size={24} color={isEntered ? colors.primary : colors.textMuted} />
                 </View>
-                {alert.unread && <View style={styles.unreadDot} />}
-              </View>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityName}>{entry.name}</Text>
+                  <Text style={styles.activityAction}>{isEntered ? 'Entered' : 'Exited'} via {entry.gate || 'Main Gate'}</Text>
+                </View>
+                <Text style={styles.activityTime}>{entry.time}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* More */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>More</Text>
+        </View>
+
+        <View style={styles.moreGridContainer}>
+          <TouchableOpacity style={styles.moreGridCard} onPress={() => navigateTo('Household')}>
+            <View style={styles.moreGridIconWrapper}>
+              <Ionicons name="people-outline" size={20} color={colors.textMuted} />
             </View>
-          ))
-        )}
+            <Text style={styles.moreGridLabel}>Workers</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.moreGridCard} onPress={() => navigateTo('Household')}>
+            <View style={styles.moreGridIconWrapper}>
+              <Ionicons name="home-outline" size={20} color={colors.textMuted} />
+            </View>
+            <Text style={styles.moreGridLabel}>Household</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.moreGridCard} onPress={() => navigateTo('Amenities')}>
+            <View style={styles.moreGridIconWrapper}>
+              <Ionicons name="business-outline" size={20} color={colors.primary} />
+            </View>
+            <Text style={styles.moreGridLabel}>Amenities</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.moreGridCard, { backgroundColor: isDarkMode ? '#4a1111' : '#f5d3d3', borderColor: 'transparent' }]} onPress={handleSOS}>
+            <View style={[styles.moreGridIconWrapper, { backgroundColor: 'transparent' }]}>
+              <Ionicons name="alert-circle-outline" size={20} color="#c92a2a" />
+            </View>
+            <Text style={[styles.moreGridLabel, { color: '#c92a2a' }]}>Emergency</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Service Info Modal */}
-      <Modal visible={!!selectedService} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.serviceModalContent}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedService(null)}>
-              <Text style={styles.closeIcon}>✕</Text>
-            </TouchableOpacity>
-
-            {selectedService && (
-              <>
-                <View style={[styles.largeServiceIcon, { backgroundColor: selectedService.color }]}>
-                  <Text style={styles.largeServiceEmoji}>{selectedService.emoji}</Text>
-                </View>
-                <Text style={styles.serviceModalTitle}>{selectedService.role}</Text>
-                <Text style={styles.serviceModalName}>{selectedService.name}</Text>
-
-                <View style={styles.serviceInfoGrid}>
-                  <View style={styles.serviceInfoItem}>
-                    <Text style={styles.serviceInfoLabel}>Rating</Text>
-                    <Text style={styles.serviceInfoValue}>⭐ {selectedService.rating}</Text>
-                  </View>
-                  <View style={styles.serviceInfoItem}>
-                    <Text style={styles.serviceInfoLabel}>Experience</Text>
-                    <Text style={styles.serviceInfoValue}>{selectedService.experience}</Text>
-                  </View>
-                  <View style={styles.serviceInfoItem}>
-                    <Text style={styles.serviceInfoLabel}>Est. Charges</Text>
-                    <Text style={styles.serviceInfoValue}>{selectedService.charges}</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity 
-                  style={styles.callButton} 
-                  onPress={() => Linking.openURL(`tel:${selectedService.phone}`)}
-                >
-                  <Text style={styles.callButtonText}>📞 Call {selectedService.name}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingTop: 16,
-    paddingBottom: 400, // Extra space to force scrolling on Android
+    padding: spacing.lg,
   },
   appHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 44, // increased from 32
-    paddingHorizontal: 4,
-  },
-  greetingText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.xl,
   },
   apartmentText: {
-    fontSize: 14,
+    fontSize: typography.sizes.xs,
     color: colors.textMuted,
-    fontWeight: '500',
+    fontWeight: typography.weights.bold,
+    letterSpacing: 1,
+    textTransform: 'uppercase' as const,
+    marginBottom: 4,
   },
-  profileAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  profileAvatarText: {
-    color: colors.white,
-    fontSize: 20,
-    fontWeight: 'bold',
+  greetingText: {
+    fontSize: 28,
+    fontWeight: typography.weights.extrabold,
+    color: colors.text,
   },
   sosButton: {
+    backgroundColor: isDarkMode ? '#2c0c0c' : colors.dangerLight,
+    padding: spacing.sm,
+    borderRadius: roundness.lg,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  gridContainer: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: spacing.xl,
+  },
+  topGridCard: {
+    width: '48%',
+    backgroundColor: colors.surface,
+    borderRadius: roundness.xl,
+    padding: spacing.lg,
+    marginBottom: 16,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+  },
+  topGridIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: roundness.lg,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.md,
+  },
+  numberRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  gridNumber: {
+    fontSize: 32,
+    fontWeight: typography.weights.extrabold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  redDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.danger,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 16,
-    shadowColor: colors.danger,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+    marginLeft: 8,
+    marginTop: 4,
   },
-  sosText: {
-    color: colors.white,
-    fontWeight: '900',
-    fontSize: 14,
-    letterSpacing: 1,
+  topGridLabel: {
+    fontSize: typography.sizes.sm,
+    color: colors.textMuted,
+    fontWeight: typography.weights.medium,
   },
-  quickActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 44, // Increased spacing
-    paddingHorizontal: 4,
+  actionsContainer: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'space-between' as const,
   },
-  actionItem: {
-    alignItems: 'center',
-    width: '24%',
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: '#eff6ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  actionEmoji: {
-    fontSize: 28,
-  },
-  actionText: {
-    fontSize: 13,
-    color: '#1e293b',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  servicesContainer: {
-    marginBottom: 32,
-    marginTop: 8,
-  },
-  serviceCard: {
-    alignItems: 'center',
-    marginRight: 24,
-    width: 72,
-  },
-  serviceIconWrapper: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  serviceEmoji: {
-    fontSize: 28,
-  },
-  serviceText: {
-    fontSize: 13,
-    color: '#334155',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  actionCard: {
+    width: '48%',
+    backgroundColor: colors.surface,
+    borderRadius: roundness.lg,
+    padding: spacing.md,
     marginBottom: 16,
-    paddingHorizontal: 4,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  seeAllText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.03)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  badgeSuccess: {
-    backgroundColor: colors.successLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeSuccessText: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardFooterText: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  chevron: {
-    fontSize: 20,
-    color: colors.textMuted,
-  },
-  alertRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  alertEmoji: {
-    fontSize: 24,
-    marginRight: 16,
-  },
-  alertContent: {
-    flex: 1,
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  alertSubtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  alertTime: {
-    fontSize: 12,
-    color: '#94a3b8',
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-    marginTop: 6,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  serviceModalContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    paddingBottom: 48,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
+  actionIconWrapper: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
+    borderRadius: roundness.md,
+    backgroundColor: isDarkMode ? '#262626' : '#e5e7eb',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.sm,
   },
-  closeIcon: {
-    fontSize: 16,
-    color: '#64748b',
-    fontWeight: 'bold',
+  actionCardText: {
+    flex: 1,
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
   },
-  largeServiceIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 16,
+  sectionHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.md,
   },
-  largeServiceEmoji: {
-    fontSize: 48,
+  sectionTitle: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
   },
-  serviceModalTitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '700',
-    marginBottom: 4,
+  viewAllText: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
+    color: colors.primary,
   },
-  serviceModalName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 32,
+  recentActivityContainer: {
+    marginBottom: spacing.xxl,
   },
-  serviceInfoGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 32,
-    paddingHorizontal: 8,
+  activityCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: isDarkMode ? colors.surface : '#f6f5f2',
+    padding: spacing.lg,
+    borderRadius: roundness.xl,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'transparent' : '#eae7e1',
   },
-  serviceInfoItem: {
-    alignItems: 'center',
+  activityIconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: roundness.md,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.md,
+  },
+  activityInfo: {
     flex: 1,
   },
-  serviceInfoLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 6,
-    fontWeight: '500',
+  activityName: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    marginBottom: 4,
   },
-  serviceInfoValue: {
-    fontSize: 15,
-    color: '#1e293b',
-    fontWeight: '700',
+  activityAction: {
+    fontSize: typography.sizes.sm,
+    color: '#6c757d',
   },
-  callButton: {
-    backgroundColor: colors.primary,
-    width: '100%',
-    paddingVertical: 18,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
+  activityTime: {
+    fontSize: typography.sizes.sm,
+    color: '#6c757d',
   },
-  callButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  moreGridContainer: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'space-between' as const,
+    gap: 16,
+  },
+  moreGridCard: {
+    width: '47%',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: isDarkMode ? colors.surface : '#f6f5f2',
+    borderRadius: roundness.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'transparent' : '#eae7e1',
+  },
+  moreGridIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: roundness.md,
+    backgroundColor: isDarkMode ? '#262626' : '#e6dfd1',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.sm,
+  },
+  moreGridLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
   },
 });

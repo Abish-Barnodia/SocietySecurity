@@ -1,31 +1,52 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response.util';
+import { AppError } from '../../middlewares/error.middleware';
 import { redis } from '../../config/redis';
 
 export const syncOfflineEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { entries } = req.body;  // Array of locally queued entry records
-    const guardId = req.user!.guardId!;
+    // Resolve guard via userId (guardId is NOT in the JWT payload)
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+    if (!guard) return next(new AppError('Guard record not found', 404));
+    const guardId = guard.id;
 
-    const results = [];
+    const results: any[] = [];
+    
+    // Bulk fetch validation data
+    const unitIds = [...new Set(entries.map((e: any) => e.unitId))];
+    const units = await prisma.unit.findMany({ where: { id: { in: unitIds as string[] } } });
+    const validUnitIds = new Set(units.filter(u => u.propertyId === guard.propertyId).map(u => u.id));
+
+    const entryTimestamps = entries.map((e: any) => new Date(e.entryAt));
+    const existingEntries = await prisma.entry.findMany({
+      where: { guardId, entryAt: { in: entryTimestamps } }
+    });
+
+    const transactions = [];
+    const localIdToTxIndex = new Map();
 
     for (const e of entries) {
-      // Idempotency: skip if already synced (use client-generated localId)
-      // Usually you'd store localId on the Entry model to check this easily, 
-      // but here we just check for identical entries near this time
-      const exists = await prisma.entry.findFirst({
-        where: { guardId, entryAt: new Date(e.entryAt), passId: e.passId ?? undefined },
-      });
-      if (exists) {
+      if (!validUnitIds.has(e.unitId)) {
+        results.push({ localId: e.localId, synced: false, reason: 'FORBIDDEN_PROPERTY' });
+        continue;
+      }
+
+      const passId = e.passId || null;
+      const isDuplicate = existingEntries.some(
+        ex => ex.entryAt.getTime() === new Date(e.entryAt).getTime() && ex.passId === passId
+      );
+
+      if (isDuplicate) {
         results.push({ localId: e.localId, synced: false, reason: 'DUPLICATE' });
         continue;
       }
 
-      const created = await prisma.entry.create({
+      transactions.push(prisma.entry.create({
         data: {
           unitId: e.unitId,
-          passId: e.passId,
+          passId,
           guardId,
           entryPointId: e.entryPointId,
           visitorName: e.visitorName,
@@ -35,9 +56,16 @@ export const syncOfflineEntries = async (req: Request, res: Response, next: Next
           status: e.status,
           gatePhotoUrl: e.gatePhotoUrl,
           entryAt: new Date(e.entryAt),
-        },
+        }
+      }));
+      localIdToTxIndex.set(transactions.length - 1, e.localId);
+    }
+
+    if (transactions.length > 0) {
+      const createdEntries = await prisma.$transaction(transactions);
+      createdEntries.forEach((created, index) => {
+        results.push({ localId: localIdToTxIndex.get(index), synced: true, serverId: created.id });
       });
-      results.push({ localId: e.localId, synced: true, serverId: created.id });
     }
 
     sendSuccess(res, 200, 'Synced successfully', { results, total: entries.length });
@@ -47,8 +75,8 @@ export const syncOfflineEntries = async (req: Request, res: Response, next: Next
 export const getPassCache = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Returns the active pass set for this property — used to seed guard's offline cache
-    const guardId = req.user!.guardId!;
-    const guard = await prisma.guard.findUnique({ where: { id: guardId } });
+    // Resolve guard via userId (guardId is NOT in the JWT payload)
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
     const propertyId = guard?.propertyId;
     
     if (!propertyId) return sendSuccess(res, 400, 'Property not found', []);

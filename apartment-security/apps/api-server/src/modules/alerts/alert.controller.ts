@@ -22,6 +22,10 @@ export const broadcastAlert = async (req: Request, res: Response, next: NextFunc
     
     if (!propertyId) return next(new AppError('No property context found for alert broadcast', 400));
 
+    if (severity === 'CRITICAL' && req.user!.role !== 'MANAGER') {
+      return next(new AppError('Only managers can broadcast critical alerts', 403));
+    }
+
     // Map severity to AlertPriority
     let priority: any = 'P3';
     if (severity === 'CRITICAL') priority = 'P1';
@@ -38,14 +42,19 @@ export const broadcastAlert = async (req: Request, res: Response, next: NextFunc
       }
     });
 
-    // 1. Broadcast via WebSocket (Global to property or specific rooms based on roles)
-    io?.emit('new_alert', alert);
+    // 1. Broadcast via WebSocket scoped to this property only
+    io?.to(`property:${propertyId}`).emit('new_alert', alert);
 
-    // 2. Fetch users to notify based on roles
+    // 2. Fetch users scoped to this property only to prevent cross-tenant notification
     const targetUsers = await prisma.user.findMany({
       where: {
         role: { in: targetRoles || ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'] },
-        isActive: true
+        isActive: true,
+        OR: [
+          { guard: { propertyId } },
+          { manager: { propertyId } },
+          { resident: { unit: { propertyId } } },
+        ],
       }
     });
 
@@ -59,10 +68,11 @@ export const broadcastAlert = async (req: Request, res: Response, next: NextFunc
       }
     }
 
-    // 4. Send Firebase FCM Pushes
+    // 4. Send Firebase FCM Pushes via the sendPush utility (batches 500 tokens, cleans invalid ones)
     const fcmTokens = targetUsers.flatMap(u => u.fcmTokens);
     if (fcmTokens.length > 0) {
-       // TODO: Implement FCM Push bulk send
+      const { sendPush } = await import('../../utils/push.util');
+      await sendPush(fcmTokens, { title: `[${type}] ${title}`, body: message });
     }
 
     await auditLog(req.user!.userId, 'BROADCAST_ALERT', 'Alert', alert.id);
@@ -96,8 +106,8 @@ export const triggerDuress = async (req: Request, res: Response, next: NextFunct
       }
     });
 
-    // Notify Guards and Managers immediately via sockets
-    io?.emit('duress_alert', alert);
+    // Notify Guards and Managers immediately via sockets — scoped to this property
+    io?.to(`property:${propertyId}`).emit('duress_alert', alert);
 
     // Send SMS to Emergency Contact if Resident
     if (user.resident?.emergencyContact) {
@@ -124,11 +134,27 @@ export const triggerDuress = async (req: Request, res: Response, next: NextFunct
 
 export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Resolve the caller's propertyId to scope alerts — prevents cross-tenant data exposure
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: {
+        manager: true,
+        guard: true,
+        resident: { include: { unit: true } },
+      },
+    });
+
+    const propertyId =
+      user?.manager?.propertyId ??
+      user?.guard?.propertyId ??
+      user?.resident?.unit.propertyId;
+
+    if (!propertyId) return next(new AppError('No property context found', 403));
+
     const alerts = await prisma.alert.findMany({
       where: {
-        targetRoles: {
-          has: req.user!.role as any
-        }
+        propertyId,
+        targetRoles: { has: req.user!.role as any },
       },
       orderBy: { createdAt: 'desc' },
       take: 50

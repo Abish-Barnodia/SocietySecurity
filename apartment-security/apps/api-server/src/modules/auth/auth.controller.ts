@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/prisma';
 import { createOTP, verifyOTP } from '../../utils/otp.util';
 import { signAccessToken, signRefreshToken, rotateRefreshToken } from '../../utils/jwt.util';
@@ -32,6 +33,85 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
     await auditLog(user.id, 'OTP_REQUESTED', 'User', user.id);
 
     return sendSuccess(res, 200, 'OTP sent successfully');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Email + Password login.
+ * POST /auth/login  { email, password }
+ */
+export const emailLogin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        resident: {
+          select: {
+            id: true,
+            name: true,
+            unit: { select: { unitNumber: true, tower: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      return next(new AppError('Invalid email or password', 401));
+    }
+
+    if (!user.isActive) {
+      return next(new AppError('Your account has been deactivated', 403));
+    }
+
+    if (!user.passwordHash) {
+      return next(new AppError('Password login is not configured for this account. Please use OTP.', 400));
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return next(new AppError('Invalid email or password', 401));
+    }
+
+    // Generate tokens
+    const payload = { userId: user.id, role: user.role };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
+
+    // Store refresh token
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 30);
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        expiresAt: expiryDate,
+      },
+    });
+
+    // Update last login
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    await auditLog(user.id, 'LOGIN_SUCCESS', 'User', user.id);
+
+    return sendSuccess(res, 200, 'Login successful', {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        resident: user.resident,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -103,7 +183,14 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
       return next(new AppError('Invalid or expired refresh token', 401));
     }
 
-    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: 'UNKNOWN' }); // Ideally fetch role
+    // Fetch user to get real role and check if active
+    const user = await prisma.user.findUnique({
+      where: { id: storedToken.userId },
+      select: { role: true, isActive: true }
+    });
+    if (!user || !user.isActive) return next(new AppError('User no longer exists or is deactivated', 401));
+
+    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: user.role });
     const newRefreshToken = await rotateRefreshToken(refreshToken);
 
     // Update DB
@@ -157,13 +244,46 @@ export const registerFcmToken = async (req: Request, res: Response, next: NextFu
     // Append token if not exists
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (user && !user.fcmTokens.includes(token)) {
+      const updatedTokens = [...user.fcmTokens, token].slice(-5); // Keep only the latest 5
       await prisma.user.update({
         where: { id: userId },
-        data: { fcmTokens: { push: token } }
+        data: { fcmTokens: updatedTokens }
       });
     }
 
     return sendSuccess(res, 200, 'FCM token registered');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return next(new AppError('Unauthorized', 401));
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        phone: true,
+        email: true,
+        role: true,
+        isActive: true,
+        resident: {
+          select: {
+            id: true,
+            name: true,
+            unit: { select: { unitNumber: true, tower: true } }
+          }
+        }
+      }
+    });
+
+    if (!user) return next(new AppError('User not found', 404));
+    if (!user.isActive) return next(new AppError('Account deactivated', 403));
+
+    return sendSuccess(res, 200, 'Authenticated', user);
   } catch (error) {
     next(error);
   }

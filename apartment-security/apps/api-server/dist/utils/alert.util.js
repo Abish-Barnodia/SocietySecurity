@@ -51,7 +51,9 @@ const triggerAlert = async (params) => {
         const pushPromise = allFcmTokens.length
             ? (0, push_util_1.sendPush)(allFcmTokens, { title, body, data: { alertId: alert.id, priority } })
             : Promise.resolve();
-        const smsPromises = users.map((u) => (0, sms_util_1.sendSMS)(u.phone, `🚨 URGENT: ${title}. ${body}`));
+        const smsPromises = users
+            .filter((u) => u.phone)
+            .map((u) => (0, sms_util_1.sendSMS)(u.phone, `🚨 URGENT: ${title}. ${body}`));
         // Emergency services for P1 incidents
         if (incidentId && env_1.env.EMERGENCY_SMS_NUMBER) {
             smsPromises.push((0, sms_util_1.sendSMS)(env_1.env.EMERGENCY_SMS_NUMBER, `P1 ALERT at property ${propertyId}: ${title}. ${body}`));

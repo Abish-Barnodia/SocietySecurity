@@ -1,28 +1,39 @@
+import { usePasses } from '../context/DomainContexts';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 
 const passTypes = ['One-time visitor', 'Delivery / service', 'Recurring', 'Contractor'];
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export default function CreatePassScreen({ navigation }: { navigation: any }) {
-  const { createPass } = useData();
-  const [selectedType, setSelectedType] = useState('One-time visitor');
+export default function CreatePassScreen({ navigation, route }: { navigation: any, route?: any }) {
+  const { createPass } = usePasses();
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
+
+  const [selectedType, setSelectedType] = useState(route?.params?.initialType || 'One-time visitor');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [purpose, setPurpose] = useState('');
   const [shareWhatsApp, setShareWhatsApp] = useState(true);
-  
+
+  const [isCreating, setIsCreating] = useState(false);
+
   // Date/Time specific states
   const [showPicker, setShowPicker] = useState<string | null>(null);
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
   const [dates, setDates] = useState({
     entryStart: new Date(new Date().setHours(8, 0, 0, 0)),
     entryEnd: new Date(new Date().setHours(13, 0, 0, 0)),
-    expiresOn: new Date(),
+    expiresOn: tomorrow,
     validFrom: new Date(),
-    validUntil: new Date(),
+    validUntil: tomorrow,
   });
 
   const onChangeDate = (event: any, selectedDate?: Date) => {
@@ -60,39 +71,60 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   };
 
   const handleCreate = async () => {
+    if (isCreating) return;
+    
     if (!name) {
       alert('Please enter visitor name');
       return;
     }
 
-    const timeString = selectedType === 'Recurring' 
-      ? `${formatTime(dates.entryStart)} - ${formatTime(dates.entryEnd)}`
-      : `${formatDate(dates.validFrom)} ${formatTime(dates.validFrom)}`;
-
-    const newPass = {
-      name,
-      type: selectedType,
-      time: timeString,
-      purpose: purpose || 'Visit',
-      phone,
+    const typeMapping: any = {
+      'One-time visitor': 'ONE_TIME',
+      'Delivery / service': 'DELIVERY',
+      'Recurring': 'RECURRING',
+      'Contractor': 'CONTRACTOR'
+    };
+    
+    const dayMapping: any = {
+      'Mon': 'MONDAY', 'Tue': 'TUESDAY', 'Wed': 'WEDNESDAY', 
+      'Thu': 'THURSDAY', 'Fri': 'FRIDAY', 'Sat': 'SATURDAY', 'Sun': 'SUNDAY'
     };
 
+    const payload: any = {
+      type: typeMapping[selectedType],
+      visitorName: name,
+      visitorPhone: phone || undefined,
+      purpose: purpose || 'Visit',
+      validFrom: selectedType === 'Recurring' ? dates.entryStart.toISOString() : dates.validFrom.toISOString(),
+      validUntil: selectedType === 'Recurring' ? dates.expiresOn.toISOString() : dates.validUntil.toISOString(),
+    };
+
+    if (selectedType === 'Recurring') {
+      payload.recurringRule = {
+        allowedDays: selectedDays.map(d => dayMapping[d]),
+        windowStartTime: `${dates.entryStart.getHours().toString().padStart(2, '0')}:${dates.entryStart.getMinutes().toString().padStart(2, '0')}`,
+        windowEndTime: `${dates.entryEnd.getHours().toString().padStart(2, '0')}:${dates.entryEnd.getMinutes().toString().padStart(2, '0')}`
+      };
+    }
+
     try {
-      await createPass(newPass);
+      setIsCreating(true);
+      await createPass(payload);
       alert('Pass created successfully!');
-      navigation.goBack();
-    } catch (error) {
-      alert('Failed to create pass. Please try again.');
+      navigation.navigate('MainTabs', { screen: 'Passes' });
+    } catch (error: any) {
+      setIsCreating(false);
+      alert(`Failed to create pass: ${error.message}`);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.label}>Pass type</Text>
         <View style={styles.typeGrid}>
           {passTypes.map(type => (
@@ -114,7 +146,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           placeholder="Enter visitor name"
           value={name}
           onChangeText={setName}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={colors.textMuted}
         />
 
         {selectedType !== 'Recurring' && (
@@ -126,7 +158,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
               keyboardType="phone-pad"
               value={phone}
               onChangeText={setPhone}
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
             />
           </>
         )}
@@ -137,7 +169,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           placeholder="e.g. Dinner visit, plumber"
           value={purpose}
           onChangeText={setPurpose}
-          placeholderTextColor="#9ca3af"
+          placeholderTextColor={colors.textMuted}
         />
 
         {selectedType === 'Recurring' ? (
@@ -187,7 +219,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
 
             <View style={styles.switchRow}>
               <View style={styles.switchLabelContainer}>
-                <Text style={styles.whatsappIcon}>💬</Text>
+                <Ionicons name="logo-whatsapp" size={24} color="#25D366" style={styles.whatsappIcon} />
                 <Text style={styles.switchLabel}>Share via WhatsApp</Text>
               </View>
               <Switch
@@ -216,9 +248,9 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.button} onPress={handleCreate}>
+        <TouchableOpacity style={[styles.button, isCreating && { opacity: 0.6 }]} onPress={handleCreate} disabled={isCreating}>
           <Text style={styles.buttonText}>
-            {selectedType === 'Recurring' ? 'Create recurring pass' : 'Create pass'}
+            {isCreating ? 'Creating...' : (selectedType === 'Recurring' ? 'Create recurring pass' : 'Create pass')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -226,128 +258,133 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    paddingBottom: 400, // Large padding to allow scrolling past the keyboard
+    padding: spacing.lg,
+    paddingBottom: 400,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: spacing.lg,
   },
   typeButton: {
     width: '48%',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: colors.white,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    borderRadius: roundness.md,
+    alignItems: 'center' as const,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
   },
   typeButtonActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight,
   },
   typeText: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
   },
   typeTextActive: {
     color: colors.primary,
+    fontWeight: typography.weights.bold,
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    borderRadius: roundness.md,
+    padding: spacing.lg,
+    fontSize: typography.sizes.md,
     color: colors.text,
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginVertical: 16,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginVertical: spacing.lg,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: roundness.md,
   },
   switchLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   whatsappIcon: {
-    fontSize: 18,
-    marginRight: 8,
+    marginRight: spacing.md,
   },
   switchLabel: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.semibold,
     color: colors.text,
   },
   daysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: spacing.xl,
   },
   dayButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   dayButtonActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   dayText: {
-    fontSize: 12,
+    fontSize: typography.sizes.xs,
     color: colors.textMuted,
-    fontWeight: '500',
+    fontWeight: typography.weights.bold,
   },
   dayTextActive: {
-    color: colors.white,
+    color: isDarkMode ? colors.white : colors.text, // Assuming black text on mustard in light mode
   },
   timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.xl,
   },
   toText: {
-    marginHorizontal: 16,
+    marginHorizontal: spacing.lg,
     color: colors.textMuted,
+    fontWeight: typography.weights.bold,
   },
   footer: {
-    padding: 16,
-    backgroundColor: colors.white,
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   button: {
     backgroundColor: colors.primary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: 20,
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
   },
   buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: isDarkMode ? colors.white : colors.text,
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
 });

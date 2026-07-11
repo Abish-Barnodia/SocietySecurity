@@ -1,12 +1,22 @@
+import { useGuardState, useAlerts, useEntries } from '../context/DomainContexts';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image } from 'react-native';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import api from '../utils/api';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function WalkInApprovalScreen({ route, navigation }: { route: any; navigation: any }) {
   const { requestId } = route.params || {};
-  const { scanRequests, updateScanRequestStatus, markAlertRead, addEntry } = useData();
+  const { scanRequests, updateScanRequestStatus } = useGuardState();
+  const { markAlertRead } = useAlerts();
+  const { addEntry } = useEntries();
   const [timeLeft, setTimeLeft] = useState(47);
+
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
 
   const request = scanRequests.find(r => r.id === requestId);
   const visitorName = request ? request.visitorName : 'Unknown Visitor';
@@ -29,8 +39,17 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
     return () => clearInterval(timer);
   }, [request]);
 
-  const handleAction = (action: 'APPROVED' | 'DENIED') => {
+  const handleAction = async (action: 'APPROVED' | 'DENIED') => {
     if (requestId) {
+      const request = scanRequests.find(r => r.id === requestId);
+      if (request?.passId) {
+        try {
+          await api.post(`/walkin/${request.passId}/respond`, { status: action });
+        } catch (e: any) {
+          console.warn('Walk-in respond API error:', e?.response?.data?.message ?? e.message);
+        }
+      }
+
       updateScanRequestStatus(requestId, action);
       markAlertRead(requestId);
 
@@ -38,23 +57,23 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
         id: Math.random().toString(36).substr(2, 9),
         name: visitorName,
         initials: visitorName.charAt(0).toUpperCase(),
-        color: action === 'APPROVED' ? colors.primary : colors.danger,
+        color: action === 'APPROVED' ? '#10b981' : colors.danger,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: action === 'APPROVED' ? 'Entered' : 'Denied',
-        method: request?.passId ? 'QR scan' : 'Walk-in',
+        status: action === 'APPROVED' ? 'ENTERED' : 'DENIED',
+        type: 'Visitor',
         gate: 'Main Gate',
         statusColor: action === 'APPROVED' ? colors.success : colors.danger,
         date: 'TODAY'
       });
     }
-    
+
     navigation.goBack();
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        
+
         <View style={styles.avatarContainer}>
           <Text style={styles.avatarEmoji}>👨</Text>
         </View>
@@ -91,27 +110,27 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: spacing.xl,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   avatarContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
+    backgroundColor: isDarkMode ? '#262626' : colors.white,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.xl,
     borderWidth: 4,
-    borderColor: '#bfdbfe',
+    borderColor: isDarkMode ? colors.primaryLight : '#fef3c7',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -122,77 +141,77 @@ const styles = StyleSheet.create({
     fontSize: 64,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 32,
   },
   detailsCard: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    width: '100%' as const,
+    backgroundColor: colors.surface,
+    borderRadius: roundness.xl,
+    padding: spacing.lg,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
     marginBottom: 32,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: spacing.sm,
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
     color: colors.textMuted,
   },
   detailValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 8,
+    marginVertical: spacing.sm,
   },
   timerText: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
     color: colors.textMuted,
   },
   timerNumber: {
-    fontWeight: 'bold',
+    fontWeight: typography.weights.bold,
     color: colors.danger,
-    fontSize: 18,
+    fontSize: typography.sizes.lg,
   },
   footer: {
-    flexDirection: 'row',
-    padding: 24,
+    flexDirection: 'row' as const,
+    padding: spacing.xl,
     paddingBottom: 40,
   },
   denyButton: {
     flex: 1,
     backgroundColor: colors.danger,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginRight: 8,
+    padding: 20,
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
+    marginRight: spacing.sm,
   },
   denyButtonText: {
     color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
   },
   approveButton: {
     flex: 1,
     backgroundColor: colors.success,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginLeft: 8,
+    padding: 20,
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
+    marginLeft: spacing.sm,
   },
   approveButtonText: {
     color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
   },
 });

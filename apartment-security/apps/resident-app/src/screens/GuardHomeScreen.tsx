@@ -1,27 +1,34 @@
+import { useGuardState } from '../context/DomainContexts';
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'GuardTabs'>;
 
 export default function GuardHomeScreen({ navigation }: { navigation: NavigationProp }) {
   const { userEmail, logout } = useAuth();
-  const { scanRequests } = useData();
+  const { scanRequests } = useGuardState();
+
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Security Dashboard</Text>
             <Text style={styles.subtitle}>Logged in as {userEmail}</Text>
           </View>
           <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+            <Ionicons name="log-out-outline" size={24} color={colors.danger} />
           </TouchableOpacity>
         </View>
 
@@ -37,21 +44,22 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
         </View>
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
+
         <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('ScanPass')}>
-          <Ionicons name="qr-code-outline" size={32} color="#FFFFFF" />
+          <Ionicons name="qr-code-outline" size={32} color={isDarkMode ? colors.white : colors.text} />
           <Text style={styles.actionText}>Scan Entry Pass</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('ScanPass')}>
-          <Ionicons name="person-add-outline" size={32} color="#FFFFFF" />
-          <Text style={styles.actionText}>Walk-in Entry</Text>
+        <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.success }]} onPress={() => navigation.navigate('ScanPass')}>
+          <Ionicons name="person-add-outline" size={32} color={colors.white} />
+          <Text style={[styles.actionText, { color: colors.white }]}>Walk-in Entry</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Requests</Text>
+        <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>Recent Requests</Text>
         {scanRequests.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={{ color: '#6B7280' }}>No recent scan requests.</Text>
+            <Ionicons name="shield-checkmark-outline" size={48} color={colors.textMuted} style={{ marginBottom: spacing.sm }} />
+            <Text style={{ color: colors.textMuted, fontSize: typography.sizes.md, fontWeight: typography.weights.medium }}>No recent scan requests.</Text>
           </View>
         ) : (
           scanRequests.map(req => (
@@ -61,11 +69,14 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
                   <Text style={styles.requestName}>{req.visitorName}</Text>
                   <Text style={styles.requestTime}>{req.time}</Text>
                 </View>
-                <View style={[styles.statusBadge, { 
-                  backgroundColor: req.status === 'APPROVED' ? '#dcfce7' : req.status === 'DENIED' ? '#fee2e2' : '#fef9c3' 
+                <View style={[styles.statusBadge, {
+                  backgroundColor: req.status === 'APPROVED' ? (isDarkMode ? '#052e16' : '#dcfce7') : 
+                                   req.status === 'DENIED' ? (isDarkMode ? '#450a0a' : '#fee2e2') : 
+                                   (isDarkMode ? '#422006' : '#fef9c3')
                 }]}>
-                  <Text style={[styles.statusText, { 
-                    color: req.status === 'APPROVED' ? '#16a34a' : req.status === 'DENIED' ? '#dc2626' : '#ca8a04' 
+                  <Text style={[styles.statusText, {
+                    color: req.status === 'APPROVED' ? colors.success : 
+                           req.status === 'DENIED' ? colors.danger : colors.warning
                   }]}>{req.status}</Text>
                 </View>
               </View>
@@ -77,47 +88,49 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 24,
-    paddingBottom: 40,
+    padding: spacing.xl,
+    paddingBottom: 100,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 32,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.xxl,
   },
   greeting: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1F2937',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.extrabold,
+    color: colors.text,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: typography.sizes.sm,
+    color: colors.textMuted,
     marginTop: 4,
   },
   logoutBtn: {
-    padding: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 12,
+    padding: spacing.sm,
+    backgroundColor: isDarkMode ? '#450a0a' : colors.dangerLight,
+    borderRadius: roundness.lg,
   },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: spacing.xxl,
   },
   statCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    width: '48%',
-    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    borderRadius: roundness.xl,
+    width: '48%' as const,
+    alignItems: 'center' as const,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -125,30 +138,31 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4F46E5',
+    fontSize: typography.sizes.xxxl,
+    fontWeight: typography.weights.extrabold,
+    color: colors.primary,
   },
   statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
-    fontWeight: '500',
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    fontWeight: typography.weights.bold,
+    textTransform: 'uppercase' as const,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 16,
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    marginBottom: spacing.lg,
   },
   actionButton: {
-    backgroundColor: '#4F46E5',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
     padding: 24,
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: roundness.xl,
+    marginBottom: spacing.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -156,45 +170,49 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   actionText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    marginLeft: 16,
+    color: isDarkMode ? colors.white : colors.text,
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
+    marginLeft: spacing.md,
   },
   emptyCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 24,
-    borderRadius: 16,
-    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: spacing.xxl,
+    borderRadius: roundness.xl,
+    alignItems: 'center' as const,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
   },
   requestCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: roundness.lg,
+    marginBottom: spacing.sm,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
   },
   requestRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
   },
   requestName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1F2937',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
   },
   requestTime: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: typography.sizes.sm,
+    color: colors.textMuted,
     marginTop: 4,
   },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: roundness.full,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.bold,
   },
 });

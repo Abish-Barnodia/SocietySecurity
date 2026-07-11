@@ -12,6 +12,12 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
     const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
     if (!guard || !guard.isOnDuty) return next(new AppError('Guard must be on an active shift', 400));
 
+    // Validate the unit belongs to the guard's property
+    const targetUnit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (!targetUnit || targetUnit.propertyId !== guard.propertyId) {
+      return next(new AppError('Forbidden: Unit does not belong to your assigned property', 403));
+    }
+
     // Create a pending entry
     const entry = await prisma.entry.create({
       data: {
@@ -37,7 +43,19 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       gatePhotoUrl
     });
 
-    // TODO: Send Push Notification to all residents in unit
+    // Notify all residents in the unit via push using the shared alert utility
+    const unit = await prisma.unit.findUnique({ where: { id: unitId }, include: { residents: { include: { user: true } } } });
+    if (unit) {
+      const { triggerAlert } = await import('../../utils/alert.util');
+      await triggerAlert({
+        priority: 'P2',
+        title: 'Visitor at your gate',
+        body: `${visitorName} is requesting entry. Please approve or deny.`,
+        targetUserIds: unit.residents.map((r: any) => r.userId),
+        propertyId: (await prisma.entryPoint.findUnique({ where: { id: entryPointId } }))?.propertyId ?? '',
+        entryId: entry.id,
+      });
+    }
 
     return sendSuccess(res, 201, 'Walk-in request sent to residents', entry);
   } catch (err) { next(err); }

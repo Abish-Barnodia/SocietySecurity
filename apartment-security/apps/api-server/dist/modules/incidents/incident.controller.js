@@ -43,10 +43,11 @@ const server_1 = require("../../server");
 const createIncident = async (req, res, next) => {
     try {
         const { type, description, location, photoUrls, vehicleNumber, unitId } = req.body;
-        const guardId = req.user.guardId;
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { id: guardId } });
+        // Resolve guard via userId (guardId is NOT in the JWT payload)
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
         if (!guard)
             return next(new error_middleware_1.AppError('Guard not found', 404));
+        const guardId = guard.id;
         const incident = await prisma_1.prisma.incident.create({
             data: {
                 propertyId: guard.propertyId,
@@ -100,6 +101,8 @@ const assignIncident = async (req, res, next) => {
         // Authorization
         if (!incident)
             return next(new error_middleware_1.AppError('Incident not found', 404));
+        if (incident.propertyId !== req.user.propertyId)
+            return next(new error_middleware_1.AppError('Forbidden: Incident belongs to another property', 403));
         const updated = await prisma_1.prisma.incident.update({
             where: { id },
             data: { assignedTo, assignedAt: new Date(), status: 'IN_PROGRESS' },
@@ -140,6 +143,8 @@ const escalateIncident = async (req, res, next) => {
         const incident = await prisma_1.prisma.incident.findUnique({ where: { id } });
         if (!incident)
             return next(new error_middleware_1.AppError('Incident not found', 404));
+        if (incident.propertyId !== req.user.propertyId)
+            return next(new error_middleware_1.AppError('Forbidden: Incident belongs to another property', 403));
         await prisma_1.prisma.incidentAction.create({
             data: {
                 incidentId: id,
@@ -171,6 +176,8 @@ const closeIncident = async (req, res, next) => {
         const incident = await prisma_1.prisma.incident.findUnique({ where: { id } });
         if (!incident)
             return next(new error_middleware_1.AppError('Incident not found', 404));
+        if (incident.propertyId !== req.user.propertyId)
+            return next(new error_middleware_1.AppError('Forbidden: Incident belongs to another property', 403));
         if (incident.status === 'CLOSED')
             return next(new error_middleware_1.AppError('Already closed', 400));
         const updated = await prisma_1.prisma.incident.update({

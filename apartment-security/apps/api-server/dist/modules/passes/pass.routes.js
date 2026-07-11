@@ -14,6 +14,9 @@ router.post('/', (0, role_middleware_1.requireRole)('RESIDENT'), (0, validate_mi
 router.get('/', (0, role_middleware_1.requireRole)('RESIDENT'), pass_controller_1.getMyPasses);
 router.put('/:id/suspend', (0, role_middleware_1.requireRole)('RESIDENT'), pass_controller_1.suspendPass);
 router.put('/:id/revoke', (0, role_middleware_1.requireRole)('RESIDENT', 'MANAGER'), pass_controller_1.revokePass);
+router.delete('/:id', (0, role_middleware_1.requireRole)('RESIDENT'), pass_controller_1.deletePass);
 // Manager / Committee
 router.get('/all', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), pass_controller_1.getAllPasses);
+// Guard
+router.get('/verify/:id', (0, role_middleware_1.requireRole)('GUARD', 'MANAGER'), pass_controller_1.verifyPass);
 //# sourceMappingURL=pass.routes.js.map

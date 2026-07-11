@@ -1,20 +1,25 @@
+import { usePasses } from '../context/DomainContexts';
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Share } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
 
 type RoutePropType = RouteProp<RootStackParamList, 'PassDetail'>;
 
 export default function PassDetailScreen({ navigation, route }: { navigation: any, route: RoutePropType }) {
   const { passId } = route.params;
-  const { passes, updatePassStatus } = useData();
+  const { passes, updatePassStatus, deletePass } = usePasses();
   const [isSharing, setIsSharing] = React.useState(false);
   
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
+
   const pass = passes.find(p => p.id === passId);
 
   const generateAndSharePDF = async () => {
@@ -28,8 +33,8 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
               <h1 style="color: #0f172a; margin-bottom: 5px; font-size: 32px;">${pass.name}</h1>
               <p style="color: #64748b; font-size: 18px; margin-top: 0;">${pass.purpose}</p>
               
-              <div style="margin: 40px 0;">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://apartment-security.com/pass/${pass.id}" width="250" height="250" />
+              <div style="margin: 40px 0; word-break: break-all; background: #f1f5f9; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #334155;">
+                ${pass.qrPayload || pass.id}
               </div>
               
               <h2 style="color: #16a34a; margin-bottom: 5px;">Valid: ${pass.time}</h2>
@@ -62,8 +67,12 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           </Text>
         </TouchableOpacity>
       ),
+      headerStyle: {
+        backgroundColor: colors.background,
+      },
+      headerTintColor: colors.text,
     });
-  }, [navigation, pass, isSharing]);
+  }, [navigation, pass, isSharing, colors]);
 
   if (!pass) {
     return (
@@ -73,21 +82,40 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
     );
   }
 
-  const handleStatusUpdate = (status: 'Suspended' | 'Expired') => {
-    updatePassStatus(pass.id, status);
-    alert(`Pass has been ${status.toLowerCase()}`);
-    navigation.goBack();
+  const handleStatusUpdate = async (action: 'suspend' | 'revoke') => {
+    try {
+      await updatePassStatus(pass.id, action);
+      alert(`Pass has been ${action === 'suspend' ? 'suspended' : 'revoked'}`);
+      // ponytail: check if we can go back before trying
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.message ?? 'Failed to update pass status');
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deletePass(pass.id);
+      alert('Pass has been deleted permanently.');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.message ?? 'Failed to delete pass');
+    }
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
         <View style={styles.card}>
           <View style={styles.badgeContainer}>
-            <View style={[styles.badgeSuccess, { backgroundColor: pass.color + '20' }]}>
+            <View style={[styles.badgeSuccess, { backgroundColor: isDarkMode ? '#262626' : pass.color + '20' }]}>
               {pass.status === 'Active' && <View style={[styles.dot, { backgroundColor: pass.color }]} />}
-              <Text style={[styles.badgeSuccessText, { color: pass.color }]}>{pass.status}</Text>
+              <Text style={[styles.badgeSuccessText, { color: isDarkMode ? colors.text : pass.color }]}>{pass.status}</Text>
             </View>
           </View>
 
@@ -95,14 +123,14 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
 
           <View style={styles.qrContainer}>
             <QRCode
-              value={`https://apartment-security.com/pass/${pass.id}`}
+              value={pass.qrPayload || pass.id}
               size={200}
-              color={colors.text}
-              backgroundColor="white"
+              color="#000000"
+              backgroundColor="#FFFFFF"
             />
             {/* Logo overlay on QR mock */}
             <View style={styles.qrLogo}>
-              <Text style={{fontSize: 20}}>🏢</Text>
+              <Text style={{ fontSize: 20 }}>🏢</Text>
             </View>
           </View>
 
@@ -137,11 +165,16 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
 
       <View style={styles.footer}>
         {pass.status === 'Active' && (
-          <TouchableOpacity style={styles.suspendButton} onPress={() => handleStatusUpdate('Suspended')}>
+          <TouchableOpacity style={styles.suspendButton} onPress={() => handleStatusUpdate('suspend')}>
             <Text style={styles.suspendButtonText}>⏸ Suspend</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.revokeButton} onPress={() => handleStatusUpdate('Expired')}>
+        {(pass.status === 'Suspended' || pass.status === 'Expired') && (
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <Text style={styles.deleteButtonText}>🗑 Delete</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.revokeButton} onPress={() => handleStatusUpdate('revoke')}>
           <Text style={styles.revokeButtonText}>✕ Revoke</Text>
         </TouchableOpacity>
       </View>
@@ -149,141 +182,153 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    paddingBottom: 400, // Extra space to force scrolling on Android
+    padding: spacing.lg,
+    paddingBottom: 100, // Extra space to force scrolling on Android
   },
   card: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: roundness.xl,
+    padding: spacing.xl,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    alignItems: 'center' as const,
   },
   badgeContainer: {
-    width: '100%',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    width: '100%' as const,
+    alignItems: 'flex-start' as const,
+    marginBottom: spacing.md,
   },
   badgeSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: roundness.full,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-    marginRight: 4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   badgeSuccessText: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.bold,
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.extrabold,
     color: colors.text,
-    marginBottom: 24,
+    marginBottom: spacing.xl,
+    textAlign: 'center' as const,
   },
   qrContainer: {
-    padding: 16,
-    backgroundColor: colors.white,
-    borderRadius: 16,
+    padding: spacing.lg,
+    backgroundColor: '#FFFFFF', // Keep QR white background even in dark mode for scanning
+    borderRadius: roundness.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
-    marginBottom: 16,
-    position: 'relative',
+    marginBottom: spacing.lg,
+    position: 'relative' as const,
   },
   qrLogo: {
-    position: 'absolute',
+    position: 'absolute' as const,
     top: '50%',
     left: '50%',
     transform: [{ translateX: -16 }, { translateY: -16 }],
-    backgroundColor: colors.white,
+    backgroundColor: '#FFFFFF',
     padding: 4,
     borderRadius: 8,
   },
   qrSubtitle: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   validText: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
     color: colors.success,
-    fontWeight: '600',
-    marginBottom: 24,
+    fontWeight: typography.weights.bold,
+    marginBottom: spacing.xl,
   },
   divider: {
-    width: '100%',
+    width: '100%' as const,
     height: 1,
     backgroundColor: colors.border,
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 16,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    width: '100%' as const,
+    marginBottom: spacing.lg,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: typography.weights.bold,
   },
   footer: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: colors.white,
+    flexDirection: 'row' as const,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   suspendButton: {
     flex: 1,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: roundness.lg,
     borderWidth: 1,
     borderColor: colors.warning,
-    alignItems: 'center',
-    marginRight: 8,
+    alignItems: 'center' as const,
+    marginRight: spacing.sm,
   },
   suspendButtonText: {
     color: colors.warning,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
   revokeButton: {
     flex: 1,
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.dangerLight,
-    backgroundColor: colors.dangerLight,
-    alignItems: 'center',
-    marginLeft: 8,
+    borderRadius: roundness.lg,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.dangerLight,
+    backgroundColor: isDarkMode ? '#450a0a' : colors.dangerLight,
+    alignItems: 'center' as const,
+    marginLeft: spacing.sm,
   },
   revokeButtonText: {
     color: colors.danger,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
+  },
+  deleteButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: roundness.lg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center' as const,
+    marginRight: spacing.sm,
+  },
+  deleteButtonText: {
+    color: colors.danger,
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
 });

@@ -1,17 +1,23 @@
+import { useAlerts } from '../context/DomainContexts';
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function AlertsScreen({ navigation }: { navigation: any }) {
-  const { alerts } = useData();
+  const { alerts } = useAlerts();
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Alerts</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.listContent}>
+      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
         {alerts.length > 0 ? (
           <View style={styles.markReadContainer}>
             <TouchableOpacity>
@@ -19,16 +25,16 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={{ padding: 24, alignItems: 'center', marginTop: 40 }}>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>🔔</Text>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}>No new alerts</Text>
-            <Text style={{ color: colors.textMuted, marginTop: 8 }}>You're all caught up!</Text>
+          <View style={styles.emptyState}>
+            <Ionicons name="notifications-off-outline" size={64} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>No new alerts</Text>
+            <Text style={styles.emptySubtitle}>You're all caught up!</Text>
           </View>
         )}
 
         {alerts.map((alert) => (
-          <TouchableOpacity 
-            key={alert.id} 
+          <TouchableOpacity
+            key={alert.id}
             style={styles.card}
             onPress={() => {
               // Pass the request ID to WalkInApproval to approve/deny
@@ -36,7 +42,9 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
             }}
           >
             <View style={styles.alertRow}>
-              <Text style={styles.alertIcon}>{alert.icon}</Text>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#262626' : '#f4f4f5' }]}>
+                <Text style={styles.alertIcon}>{alert.icon}</Text>
+              </View>
               <View style={styles.alertContent}>
                 <Text style={styles.alertTitle}>{alert.title}</Text>
                 <Text style={styles.alertSubtitle}>{alert.subtitle}</Text>
@@ -51,74 +59,98 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   header: {
-    padding: 16,
-    paddingTop: 24,
+    padding: spacing.lg,
+    paddingTop: spacing.xl,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.extrabold,
     color: colors.text,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: spacing.lg,
+    paddingBottom: 100,
   },
   markReadContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 16,
+    alignItems: 'flex-end' as const,
+    marginBottom: spacing.lg,
   },
   markReadText: {
     color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
+  },
+  emptyState: {
+    padding: spacing.xl,
+    alignItems: 'center' as const,
+    marginTop: 40,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
+    marginTop: spacing.md,
+  },
+  emptySubtitle: {
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    fontSize: typography.sizes.sm,
   },
   card: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: roundness.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
   },
   alertRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+  },
+  iconWrapper: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.md,
   },
   alertIcon: {
     fontSize: 24,
-    marginRight: 16,
   },
   alertContent: {
     flex: 1,
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   alertTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 4,
   },
   alertSubtitle: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     lineHeight: 20,
   },
   alertTime: {
-    fontSize: 12,
-    color: '#94a3b8',
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    fontWeight: typography.weights.medium,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.danger,
     marginTop: 6,
   },
 });

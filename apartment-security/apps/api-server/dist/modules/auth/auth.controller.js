@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerFcmToken = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = void 0;
+exports.getMe = exports.registerFcmToken = exports.logout = exports.refreshToken = exports.verifyOtp = exports.emailLogin = exports.requestOtp = void 0;
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../config/prisma");
 const otp_util_1 = require("../../utils/otp.util");
 const jwt_util_1 = require("../../utils/jwt.util");
@@ -33,6 +37,75 @@ const requestOtp = async (req, res, next) => {
     }
 };
 exports.requestOtp = requestOtp;
+/**
+ * Email + Password login.
+ * POST /auth/login  { email, password }
+ */
+const emailLogin = async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { email },
+            include: {
+                resident: {
+                    select: {
+                        id: true,
+                        name: true,
+                        unit: { select: { unitNumber: true, tower: true } },
+                    },
+                },
+            },
+        });
+        if (!user) {
+            return next(new error_middleware_1.AppError('Invalid email or password', 401));
+        }
+        if (!user.isActive) {
+            return next(new error_middleware_1.AppError('Your account has been deactivated', 403));
+        }
+        if (!user.passwordHash) {
+            return next(new error_middleware_1.AppError('Password login is not configured for this account. Please use OTP.', 400));
+        }
+        const isMatch = await bcryptjs_1.default.compare(password, user.passwordHash);
+        if (!isMatch) {
+            return next(new error_middleware_1.AppError('Invalid email or password', 401));
+        }
+        // Generate tokens
+        const payload = { userId: user.id, role: user.role };
+        const accessToken = (0, jwt_util_1.signAccessToken)(payload);
+        const refreshToken = (0, jwt_util_1.signRefreshToken)(payload);
+        // Store refresh token
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+        await prisma_1.prisma.refreshToken.create({
+            data: {
+                userId: user.id,
+                token: refreshToken,
+                expiresAt: expiryDate,
+            },
+        });
+        // Update last login
+        await prisma_1.prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+        });
+        await (0, audit_util_1.auditLog)(user.id, 'LOGIN_SUCCESS', 'User', user.id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Login successful', {
+            accessToken,
+            refreshToken,
+            user: {
+                id: user.id,
+                phone: user.phone,
+                email: user.email,
+                role: user.role,
+                resident: user.resident,
+            },
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.emailLogin = emailLogin;
 const verifyOtp = async (req, res, next) => {
     try {
         const { phone, code } = req.body;
@@ -89,7 +162,14 @@ const refreshToken = async (req, res, next) => {
         if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
             return next(new error_middleware_1.AppError('Invalid or expired refresh token', 401));
         }
-        const newAccessToken = (0, jwt_util_1.signAccessToken)({ userId: storedToken.userId, role: 'UNKNOWN' }); // Ideally fetch role
+        // Fetch user to get real role and check if active
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: storedToken.userId },
+            select: { role: true, isActive: true }
+        });
+        if (!user || !user.isActive)
+            return next(new error_middleware_1.AppError('User no longer exists or is deactivated', 401));
+        const newAccessToken = (0, jwt_util_1.signAccessToken)({ userId: storedToken.userId, role: user.role });
         const newRefreshToken = await (0, jwt_util_1.rotateRefreshToken)(refreshToken);
         // Update DB
         await prisma_1.prisma.$transaction([
@@ -140,9 +220,10 @@ const registerFcmToken = async (req, res, next) => {
         // Append token if not exists
         const user = await prisma_1.prisma.user.findUnique({ where: { id: userId } });
         if (user && !user.fcmTokens.includes(token)) {
+            const updatedTokens = [...user.fcmTokens, token].slice(-5); // Keep only the latest 5
             await prisma_1.prisma.user.update({
                 where: { id: userId },
-                data: { fcmTokens: { push: token } }
+                data: { fcmTokens: updatedTokens }
             });
         }
         return (0, response_util_1.sendSuccess)(res, 200, 'FCM token registered');
@@ -152,4 +233,37 @@ const registerFcmToken = async (req, res, next) => {
     }
 };
 exports.registerFcmToken = registerFcmToken;
+const getMe = async (req, res, next) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId)
+            return next(new error_middleware_1.AppError('Unauthorized', 401));
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                phone: true,
+                email: true,
+                role: true,
+                isActive: true,
+                resident: {
+                    select: {
+                        id: true,
+                        name: true,
+                        unit: { select: { unitNumber: true, tower: true } }
+                    }
+                }
+            }
+        });
+        if (!user)
+            return next(new error_middleware_1.AppError('User not found', 404));
+        if (!user.isActive)
+            return next(new error_middleware_1.AppError('Account deactivated', 403));
+        return (0, response_util_1.sendSuccess)(res, 200, 'Authenticated', user);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.getMe = getMe;
 //# sourceMappingURL=auth.controller.js.map

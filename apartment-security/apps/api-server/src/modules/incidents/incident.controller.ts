@@ -10,10 +10,10 @@ import { Role } from '@prisma/client';
 export const createIncident = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { type, description, location, photoUrls, vehicleNumber, unitId } = req.body;
-    const guardId = req.user!.guardId!;
-
-    const guard = await prisma.guard.findUnique({ where: { id: guardId } });
+    // Resolve guard via userId (guardId is NOT in the JWT payload)
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
     if (!guard) return next(new AppError('Guard not found', 404));
+    const guardId = guard.id;
 
     const incident = await prisma.incident.create({
       data: {
@@ -70,6 +70,7 @@ export const assignIncident = async (req: Request, res: Response, next: NextFunc
     
     // Authorization
     if (!incident) return next(new AppError('Incident not found', 404));
+    if (incident.propertyId !== req.user!.propertyId) return next(new AppError('Forbidden: Incident belongs to another property', 403));
 
     const updated = await prisma.incident.update({
       where: { id },
@@ -112,6 +113,7 @@ export const escalateIncident = async (req: Request, res: Response, next: NextFu
 
     const incident = await prisma.incident.findUnique({ where: { id } });
     if (!incident) return next(new AppError('Incident not found', 404));
+    if (incident.propertyId !== req.user!.propertyId) return next(new AppError('Forbidden: Incident belongs to another property', 403));
 
     await prisma.incidentAction.create({
       data: {
@@ -143,6 +145,7 @@ export const closeIncident = async (req: Request, res: Response, next: NextFunct
 
     const incident = await prisma.incident.findUnique({ where: { id } });
     if (!incident) return next(new AppError('Incident not found', 404));
+    if (incident.propertyId !== req.user!.propertyId) return next(new AppError('Forbidden: Incident belongs to another property', 403));
     
     if (incident.status === 'CLOSED') return next(new AppError('Already closed', 400));
 

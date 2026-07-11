@@ -64,12 +64,18 @@ const cleanInvalidTokens = async (tokens: string[]) => {
     where: { fcmTokens: { hasSome: tokens } },
     select: { id: true, fcmTokens: true },
   });
-  for (const user of users) {
+
+  // Batch all updates into a single transaction instead of N individual writes
+  const updates = users.map((user) => {
     const cleaned = user.fcmTokens.filter((t) => !tokens.includes(t));
-    await prisma.user.update({
+    return prisma.user.update({
       where: { id: user.id },
       data: { fcmTokens: cleaned },
     });
+  });
+
+  if (updates.length > 0) {
+    await prisma.$transaction(updates);
   }
 };
 

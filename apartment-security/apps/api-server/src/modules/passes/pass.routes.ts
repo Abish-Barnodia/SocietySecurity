@@ -7,7 +7,9 @@ import {
   getMyPasses,
   suspendPass,
   revokePass,
-  getAllPasses
+  getAllPasses,
+  deletePass,
+  verifyPass
 } from './pass.controller';
 import { createPassSchema } from './pass.schema';
 
@@ -18,8 +20,12 @@ router.post('/',           requireRole('RESIDENT'), validate(createPassSchema), 
 router.get('/',            requireRole('RESIDENT'), getMyPasses);
 router.put('/:id/suspend', requireRole('RESIDENT'), suspendPass);
 router.put('/:id/revoke',  requireRole('RESIDENT', 'MANAGER'), revokePass);
+router.delete('/:id',      requireRole('RESIDENT'), deletePass);
 
 // Manager / Committee
 router.get('/all',         requireRole('MANAGER', 'COMMITTEE'), getAllPasses);
+
+// Guard
+router.get('/verify/:id',  requireRole('GUARD', 'MANAGER'), verifyPass);
 
 export { router as passRouter };

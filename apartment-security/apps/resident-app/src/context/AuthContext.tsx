@@ -1,8 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import api from '../utils/api';
+import api, { authEvents } from '../utils/api';
 
-type Role = 'RESIDENT' | 'GUARD' | 'MANAGER' | null;
+type Role = 'RESIDENT' | 'GUARD' | 'MANAGER' | 'COMMITTEE' | null;
 
 type UserProfile = {
   name: string;
@@ -14,109 +14,98 @@ type UserProfile = {
 
 type AuthContextType = {
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => Promise<void>;
+  login: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  userPhone: string | null;
   userEmail: string | null;
   userRole: Role;
   isOnboarded: boolean;
   userProfile: UserProfile | null;
   updateProfile: (profile: UserProfile) => void;
   isLoading: boolean;
+  userId: string | null;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userPhone, setUserPhone] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<Role>(null);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Check for stored token on mount
   useEffect(() => {
-    const bootstrapAsync = async () => {
-      try {
-        const token = await SecureStore.getItemAsync('userToken');
-        if (token) {
-          // Verify token or fetch user profile here if you have a /me endpoint
-          // For now, assume token is valid and they are a RESIDENT
-          setIsAuthenticated(true);
-          setUserRole('RESIDENT');
-          setIsOnboarded(true); // Assuming they are onboarded if they have a token
-        }
-      } catch (e) {
-        // Restoring token failed
-        console.error('Failed to restore token', e);
-      }
-      setIsLoading(false);
-    };
-
-    bootstrapAsync();
+    const unsubscribe = authEvents.subscribe(() => {
+      logout();
+    });
+    loadUser();
+    return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password?: string) => {
-    if (!password) {
-      alert("Password is required for secure login.");
-      return;
-    }
-    
+  const loadUser = async () => {
     try {
-      const response = await api.post('/auth/login', {
-        email,
-        password
-      });
-
-      const { token, user } = response.data;
-      
-      // Store token securely
-      await SecureStore.setItemAsync('userToken', token);
-
-      let role: Role = user.role || 'RESIDENT';
-
-      setIsAuthenticated(true);
-      setUserEmail(user.email || email);
-      setUserRole(role);
-      // For development/mock, we assume they are onboarded. 
-      // Ideally, the backend would tell us if their profile is complete.
-      setIsOnboarded(role !== 'RESIDENT' || !!user.resident); 
-      
-      if (user.resident) {
-        setUserProfile({
-          name: user.resident.name,
-          phone: user.phone,
-          wing: user.resident.unit?.tower || '',
-          flat: user.resident.unit?.unitNumber || '',
-          photoUri: null,
-        });
+      setIsLoading(true);
+      const token = await SecureStore.getItemAsync('userToken');
+      if (token) {
+        const res = await api.get('/auth/me');
+        const data = res.data.data;
+        setUserPhone(data.phone);
+        setUserRole(data.role);
+        setUserId(data.id);
+        
+        if (data.resident) {
+          setUserProfile({
+            name: data.resident.name || 'Resident',
+            phone: data.phone,
+            wing: data.resident.unit?.property?.name || 'Block',
+            flat: data.resident.unit?.unitNumber || 'N/A',
+            photoUri: data.resident.photoUrl || null,
+          });
+          setIsOnboarded(true);
+        }
+        setIsAuthenticated(true);
       }
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      alert(error.response?.data?.message || 'Login failed. Please check your credentials.');
+    } catch (e: any) {
+      console.log('Failed to load user', e);
+      // Only force logout on explicit 401s, not on network timeouts or 500s.
+      if (e.response && e.response.status === 401) {
+        await SecureStore.deleteItemAsync('userToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        setIsAuthenticated(false);
+      }
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const login = async (accessToken: string, refreshToken: string) => {
+    await SecureStore.setItemAsync('userToken', accessToken);
+    await SecureStore.setItemAsync('refreshToken', refreshToken);
+    await loadUser();
+  };
+  
+  const logout = async () => {
+    await SecureStore.deleteItemAsync('userToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+    setIsAuthenticated(false);
+    setUserProfile(null);
+    setUserRole(null);
+    setUserId(null);
   };
 
   const updateProfile = (profile: UserProfile) => {
     setUserProfile(profile);
-    setIsOnboarded(true);
-  };
-
-  const logout = async () => {
-    try {
-      await SecureStore.deleteItemAsync('userToken');
-    } catch (error) {
-      console.error('Failed to clear secure store:', error);
-    }
-    setIsAuthenticated(false);
-    setUserEmail(null);
-    setUserRole(null);
-    setIsOnboarded(false);
-    setUserProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, userEmail, userRole, isOnboarded, userProfile, updateProfile, isLoading }}>
+    <AuthContext.Provider value={{
+      isAuthenticated, login, logout,
+      userPhone, userEmail, userRole, isOnboarded, userProfile, updateProfile, isLoading, userId
+    }}>
       {children}
     </AuthContext.Provider>
   );

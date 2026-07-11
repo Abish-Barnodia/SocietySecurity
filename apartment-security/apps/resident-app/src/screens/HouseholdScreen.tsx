@@ -1,15 +1,21 @@
+import { useHousehold } from '../context/DomainContexts';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
-import { colors } from '../theme/colors';
-import { useData } from '../context/DataContext';
+import { View, Text, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function HouseholdScreen() {
-  const { members, addMember, deleteMember } = useData();
+  const { members, addMember, deleteMember } = useHousehold();
   const { userProfile, userEmail } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
 
   const name = userProfile?.name || 'Resident';
   const phone = userProfile?.phone || userEmail || '';
@@ -30,7 +36,7 @@ export default function HouseholdScreen() {
     if (!newName) return;
     const randomColors = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'];
     addMember({
-      id: Math.random().toString(36).substr(2, 9),
+      id: Date.now().toString(36),
       name: newName,
       phone: newPhone,
       initials: newName.charAt(0).toUpperCase(),
@@ -44,9 +50,9 @@ export default function HouseholdScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
+          <Ionicons name="information-circle" size={24} color={isDarkMode ? '#60a5fa' : '#1e40af'} style={styles.infoIcon} />
           <Text style={styles.infoText}>
             Only the primary resident can add or remove household members. Max 6 per unit.
           </Text>
@@ -69,7 +75,7 @@ export default function HouseholdScreen() {
               </View>
               {!member.isPrimary && (
                 <TouchableOpacity style={styles.deleteButton} onPress={() => deleteMember(member.id)}>
-                  <Text style={styles.deleteIcon}>🗑️</Text>
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 </TouchableOpacity>
               )}
             </View>
@@ -78,7 +84,8 @@ export default function HouseholdScreen() {
 
         {allMembers.length < 6 && (
           <TouchableOpacity style={styles.addButton} onPress={() => setShowModal(true)}>
-            <Text style={styles.addButtonText}>+ Add household member</Text>
+            <Ionicons name="add" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.addButtonText}>Add household member</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -87,19 +94,21 @@ export default function HouseholdScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Member</Text>
-            
+
             <Text style={styles.label}>Name</Text>
-            <TextInput 
-              style={styles.input} 
+            <TextInput
+              style={styles.input}
               placeholder="Full Name"
+              placeholderTextColor={colors.textMuted}
               value={newName}
               onChangeText={setNewName}
             />
-            
+
             <Text style={styles.label}>Phone Number</Text>
-            <TextInput 
-              style={styles.input} 
+            <TextInput
+              style={styles.input}
               placeholder="+91"
+              placeholderTextColor={colors.textMuted}
               keyboardType="phone-pad"
               value={newPhone}
               onChangeText={setNewPhone}
@@ -120,70 +129,69 @@ export default function HouseholdScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
+    padding: spacing.lg,
   },
   infoBox: {
-    flexDirection: 'row',
-    backgroundColor: colors.primaryLight,
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 24,
+    flexDirection: 'row' as const,
+    backgroundColor: isDarkMode ? 'rgba(37, 99, 235, 0.2)' : '#eff6ff',
+    padding: spacing.lg,
+    borderRadius: roundness.lg,
+    marginBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: isDarkMode ? '#1e3a8a' : '#bfdbfe',
   },
   infoIcon: {
-    marginRight: 8,
-    fontSize: 16,
+    marginRight: spacing.sm,
   },
   infoText: {
     flex: 1,
-    color: '#1e40af',
-    fontSize: 14,
+    color: isDarkMode ? '#93c5fd' : '#1e40af',
+    fontSize: typography.sizes.sm,
     lineHeight: 20,
   },
   card: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: roundness.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
   },
   cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.md,
   },
   avatarText: {
     color: colors.white,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
   },
   memberInfo: {
     flex: 1,
-    alignItems: 'flex-start',
+    alignItems: 'flex-start' as const,
   },
   memberName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 4,
   },
   memberPhone: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
     marginBottom: 4,
   },
@@ -197,40 +205,38 @@ const styles = StyleSheet.create({
   primaryBadgeText: {
     color: colors.white,
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: typography.weights.bold,
   },
   deleteButton: {
     padding: 8,
   },
-  deleteIcon: {
-    fontSize: 20,
-    color: colors.textMuted,
-  },
   addButton: {
-    marginTop: 8,
-    padding: 16,
-    borderRadius: 12,
+    flexDirection: 'row' as const,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: roundness.lg,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.white,
-    alignItems: 'center',
+    backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   addButtonText: {
     color: colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   modalContent: {
-    width: '85%',
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 24,
+    width: '85%' as const,
+    backgroundColor: colors.surface,
+    borderRadius: roundness.xl,
+    padding: spacing.xl,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -238,52 +244,52 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   input: {
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    marginBottom: 20,
+    borderRadius: roundness.md,
+    padding: spacing.lg,
+    fontSize: typography.sizes.md,
+    marginBottom: spacing.lg,
     color: colors.text,
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 8,
+    flexDirection: 'row' as const,
+    justifyContent: 'flex-end' as const,
+    marginTop: spacing.sm,
   },
   cancelButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 8,
-    marginRight: 12,
+    borderRadius: roundness.md,
+    marginRight: spacing.md,
   },
   cancelText: {
     color: colors.textMuted,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
   saveButton: {
     backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: roundness.md,
   },
   saveText: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
 });

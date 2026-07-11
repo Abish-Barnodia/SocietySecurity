@@ -105,6 +105,11 @@ const addHouseholdMember = async (req, res, next) => {
         else if (user.role !== 'RESIDENT') {
             return next(new error_middleware_1.AppError('User exists with a different role', 400));
         }
+        else {
+            const existingResident = await prisma_1.prisma.resident.findUnique({ where: { userId: user.id } });
+            if (existingResident)
+                return next(new error_middleware_1.AppError('User is already registered to a unit', 409));
+        }
         const newResident = await prisma_1.prisma.resident.create({
             data: {
                 userId: user.id,

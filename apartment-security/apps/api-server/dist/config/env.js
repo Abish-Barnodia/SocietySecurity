@@ -10,11 +10,11 @@ dotenv_1.default.config();
 const envSchema = zod_1.z.object({
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     PORT: zod_1.z.string().default('5000').transform(Number),
-    DATABASE_URL: zod_1.z.string().url().optional(), // Made optional for now so dev can start without it immediately crashing if absent
+    DATABASE_URL: zod_1.z.string().url({ message: 'DATABASE_URL must be a valid URL' }),
     REDIS_URL: zod_1.z.string().default('redis://localhost:6379'),
-    JWT_SECRET: zod_1.z.string().min(32).default('your_super_secret_key_min_32_chars_override_me'),
+    JWT_SECRET: zod_1.z.string().min(32, { message: 'JWT_SECRET must be at least 32 characters — set it in .env' }),
     JWT_EXPIRES_IN: zod_1.z.string().default('7d'),
-    JWT_REFRESH_SECRET: zod_1.z.string().min(32).default('your_refresh_secret_key_override_me_please'),
+    JWT_REFRESH_SECRET: zod_1.z.string().min(32, { message: 'JWT_REFRESH_SECRET must be at least 32 characters — set it in .env' }),
     JWT_REFRESH_EXPIRES_IN: zod_1.z.string().default('30d'),
     // Third party services (optional for local dev, required in prod)
     FIREBASE_PROJECT_ID: zod_1.z.string().optional(),
@@ -28,7 +28,7 @@ const envSchema = zod_1.z.object({
     WHATSAPP_API_URL: zod_1.z.string().url().optional(),
     WHATSAPP_TOKEN: zod_1.z.string().optional(),
     WHATSAPP_PHONE_ID: zod_1.z.string().optional(),
-    QR_HMAC_SECRET: zod_1.z.string().min(32).default('your_qr_signing_secret_override_me_please'),
+    QR_HMAC_SECRET: zod_1.z.string().min(32, { message: 'QR_HMAC_SECRET must be at least 32 characters — set it in .env' }),
     OTP_EXPIRY_MINUTES: zod_1.z.string().default('10').transform(Number),
     EMERGENCY_SMS_NUMBER: zod_1.z.string().optional(),
     CLIENT_RESIDENT_APP_URL: zod_1.z.string().url().default('http://localhost:3000'),

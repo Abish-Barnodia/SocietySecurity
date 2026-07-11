@@ -78,9 +78,9 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
       ? sendPush(allFcmTokens, { title, body, data: { alertId: alert.id, priority } })
       : Promise.resolve();
 
-    const smsPromises = users.map((u) =>
-      sendSMS(u.phone, `🚨 URGENT: ${title}. ${body}`)
-    );
+    const smsPromises = users
+      .filter((u) => u.phone)
+      .map((u) => sendSMS(u.phone!, `🚨 URGENT: ${title}. ${body}`));
 
     // Emergency services for P1 incidents
     if (incidentId && env.EMERGENCY_SMS_NUMBER) {

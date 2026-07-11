@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -21,19 +22,32 @@ import { vehicleRouter } from './modules/vehicles/vehicle.routes';
 import { amenityRouter } from './modules/amenities/amenity.routes';
 import { reportRouter } from './modules/reports/report.routes';
 import { offlineRouter } from './modules/offline/offline.routes';
+import communityRouter from './modules/community/community.routes';
 
 const app = express();
+
+// Serve static files from public directory
+app.use('/public', express.static(path.join(__dirname, '../public')));
 
 // Security headers
 app.use(helmet());
 
-// CORS — only allow known client origins
+// CORS — allow mobile apps (no Origin header) + known browser client origins
 app.use(cors({
-  origin: [
-    env.CLIENT_RESIDENT_APP_URL,
-    env.CLIENT_GUARD_APP_URL,
-    env.CLIENT_MANAGER_URL,
-  ],
+  origin: (origin, callback) => {
+    // Mobile apps (React Native / Expo) send no Origin header — always allow
+    if (!origin) return callback(null, true);
+    // Allow configured browser client origins
+    const allowed = [
+      env.CLIENT_RESIDENT_APP_URL,
+      env.CLIENT_GUARD_APP_URL,
+      env.CLIENT_MANAGER_URL,
+      'http://localhost:8081',
+      'http://127.0.0.1:8081'
+    ];
+    if (allowed.includes(origin) || origin.startsWith('http://192.168.') || origin.startsWith('http://10.')) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 
@@ -68,6 +82,7 @@ app.use(`${API}/vehicles`, vehicleRouter);
 app.use(`${API}/amenities`, amenityRouter);
 app.use(`${API}/reports`, reportRouter);
 app.use(`${API}/offline`, offlineRouter);
+app.use(`${API}/community`, communityRouter);
 
 // 404 handler
 app.use(notFoundHandler);

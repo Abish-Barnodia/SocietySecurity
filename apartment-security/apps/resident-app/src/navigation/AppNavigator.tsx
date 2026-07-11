@@ -1,13 +1,13 @@
+import { useAlerts } from '../context/DomainContexts';
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { LoginRoutes } from '../login';
 
 // Screens
-import OTPLoginScreen from '../screens/OTPLoginScreen';
-import VerifyOTPScreen from '../screens/VerifyOTPScreen';
 import HomeScreen from '../screens/HomeScreen';
 import PassesScreen from '../screens/PassesScreen';
 import EntriesScreen from '../screens/EntriesScreen';
@@ -19,16 +19,14 @@ import HouseholdScreen from '../screens/HouseholdScreen';
 import AmenitiesScreen from '../screens/AmenitiesScreen';
 import WalkInApprovalScreen from '../screens/WalkInApprovalScreen';
 import GuardHomeScreen from '../screens/GuardHomeScreen';
-import ResidentOnboardingScreen from '../screens/ResidentOnboardingScreen';
 import ScanPassScreen from '../screens/ScanPassScreen';
+import CommunityScreen from '../community/screens/CommunityScreen';
 
 export type RootStackParamList = {
-  OTPLogin: undefined;
-  VerifyOTP: { phone: string };
+  LoginFlow: undefined;
   MainTabs: undefined;
   GuardTabs: undefined;
-  ResidentOnboarding: undefined;
-  CreatePass: undefined;
+  CreatePass: { initialType?: string } | undefined;
   PassDetail: { passId: string };
   Household: undefined;
   Amenities: undefined;
@@ -40,6 +38,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 const GuardTabs = () => {
+  const { colors, isDarkMode } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -49,10 +49,16 @@ const GuardTabs = () => {
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#4F46E5',
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         headerShown: false,
-        tabBarStyle: { paddingBottom: 5, paddingTop: 5, height: 60 },
+        tabBarStyle: { 
+          paddingBottom: 5, 
+          paddingTop: 5, 
+          height: 60,
+          backgroundColor: isDarkMode ? '#0a0a0a' : '#ffffff',
+          borderTopColor: colors.border
+        },
       })}
     >
       <Tab.Screen name="Dashboard" component={GuardHomeScreen} />
@@ -61,10 +67,10 @@ const GuardTabs = () => {
   );
 };
 
-import { useData } from '../context/DataContext';
 
 const MainTabs = () => {
-  const { alerts } = useData();
+  const { alerts } = useAlerts();
+  const { colors, isDarkMode } = useTheme();
   const unreadCount = alerts.filter(a => a.unread).length;
 
   return (
@@ -74,7 +80,8 @@ const MainTabs = () => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
           else if (route.name === 'Passes') iconName = focused ? 'ticket' : 'ticket-outline';
-          else if (route.name === 'Entries') iconName = focused ? 'document-text' : 'document-text-outline';
+          else if (route.name === 'Entries') iconName = focused ? 'time' : 'time-outline';
+          else if (route.name === 'Community') iconName = focused ? 'people' : 'people-outline';
           else if (route.name === 'Alerts') iconName = focused ? 'notifications' : 'notifications-outline';
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -86,12 +93,15 @@ const MainTabs = () => {
           paddingBottom: 5,
           paddingTop: 5,
           height: 60,
+          backgroundColor: isDarkMode ? '#0a0a0a' : '#ffffff',
+          borderTopColor: colors.border
         },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Passes" component={PassesScreen} />
-      <Tab.Screen name="Entries" component={EntriesScreen} />
+      <Tab.Screen name="Entries" component={EntriesScreen} options={{ title: 'Entry Log' }} />
+      <Tab.Screen name="Community" component={CommunityScreen} />
       <Tab.Screen 
         name="Alerts" 
         component={AlertsScreen} 
@@ -103,22 +113,17 @@ const MainTabs = () => {
 };
 
 export default function AppNavigator() {
-  const { isAuthenticated, userRole, isOnboarded } = useAuth();
+  const { isAuthenticated, userRole } = useAuth();
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <>
-          <Stack.Screen name="OTPLogin" component={OTPLoginScreen} />
-          <Stack.Screen name="VerifyOTP" component={VerifyOTPScreen} />
-        </>
+        <Stack.Screen name="LoginFlow" component={LoginRoutes} />
       ) : userRole === 'GUARD' ? (
         <>
           <Stack.Screen name="GuardTabs" component={GuardTabs} />
           <Stack.Screen name="ScanPass" component={ScanPassScreen} options={{ headerShown: true, title: 'Scan Pass' }} />
         </>
-      ) : !isOnboarded ? (
-        <Stack.Screen name="ResidentOnboarding" component={ResidentOnboardingScreen} />
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />

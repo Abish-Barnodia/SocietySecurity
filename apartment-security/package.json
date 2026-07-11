@@ -3,13 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
-  },
-  "devDependencies": {
-    "turbo": "latest"
-  },
-  "packageManager": "pnpm@9.0.0"
+    "dev:api": "npm run dev --prefix apps/api-server",
+    "dev:resident": "npm run start --prefix apps/resident-app",
+    "test:api": "npm run test --prefix apps/api-server"
+  }
 }

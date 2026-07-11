@@ -44,10 +44,11 @@ exports.alertEscalationJob = node_cron_1.default.schedule('*/1 * * * *', async (
                         data: { alertId: alert.id, type: 'ESCALATION' },
                     });
                 }
-                // SMS escalation for P1
                 if (priority === 'P1') {
                     for (const target of escalationTargets) {
-                        await (0, sms_util_1.sendSMS)(target.phone, `ESCALATED P1: ${alert.title}. ${alert.body}. Check the app immediately.`);
+                        if (target.phone) {
+                            await (0, sms_util_1.sendSMS)(target.phone, `ESCALATED P1: ${alert.title}. ${alert.body}. Check the app immediately.`);
+                        }
                     }
                 }
                 await prisma_1.prisma.alert.update({

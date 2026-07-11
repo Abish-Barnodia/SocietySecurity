@@ -15,6 +15,12 @@ enum Role {
   COMMITTEE
 }
 
+enum MessageType {
+  TEXT
+  POLL
+  ALERT
+}
+
 enum PassType {
   ONE_TIME
   RECURRING
@@ -115,8 +121,10 @@ model Property {
   incidents  Incident[]
   amenities  Amenity[]
   managers   Manager[]
+  committeeMembers CommitteeMember[]
   broadcasts Broadcast[]
   invoices   Invoice[]
+  communityMessages CommunityMessage[]
 }
 
 // ─── Entry Points (Gates / Lobbies) ───────────────────────
@@ -161,16 +169,17 @@ model Unit {
 // ─── Users (base) ─────────────────────────────────────────
 
 model User {
-  id           String   @id @default(cuid())
-  phone        String   @unique
-  email        String?  @unique
-  passwordHash String?
-  role         Role
-  fcmTokens    String[] @default([])
-  isActive     Boolean  @default(true)
-  lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  phone            String?  @unique
+  email            String?  @unique
+  isEmailVerified  Boolean  @default(false)
+  passwordHash     String?
+  role             Role
+  fcmTokens        String[] @default([])
+  isActive         Boolean  @default(true)
+  lastLoginAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   resident  Resident?
   guard     Guard?
@@ -179,6 +188,7 @@ model User {
   auditLogs AuditLog[]
   otps      OTP[]
   refreshTokens RefreshToken[]
+  communityMessages CommunityMessage[]
 }
 
 // ─── Residents ────────────────────────────────────────────
@@ -238,13 +248,15 @@ model Manager {
 // ─── Committee Members ────────────────────────────────────
 
 model CommitteeMember {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  name      String
-  role      String   // CHAIRMAN, SECRETARY, TREASURER, MEMBER
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  propertyId String
+  name       String
+  role       String   // CHAIRMAN, SECRETARY, TREASURER, MEMBER
+  createdAt  DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
 }
 
 // ─── OTP ──────────────────────────────────────────────────
@@ -599,4 +611,22 @@ model Payment {
   paidAt        DateTime @default(now())
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+// ─── Community Portal ─────────────────────────────────────
+
+model CommunityMessage {
+  id         String   @id @default(cuid())
+  propertyId String
+  senderId   String
+  type       MessageType @default(TEXT)
+  content    String
+  metadata   Json?
+  replyToId  String?
+  isPinned   Boolean  @default(false)
+  isEdited   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id])
+  sender   User     @relation(fields: [senderId], references: [id])
 }

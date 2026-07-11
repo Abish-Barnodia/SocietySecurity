@@ -41,8 +41,8 @@ const checkVehicle = async (req, res, next) => {
     try {
         // Called by guard on ANPR match or manual plate lookup
         const registrationNo = req.params.registrationNo;
-        const guardId = req.user.guardId;
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { id: guardId } });
+        // Resolve guard via userId (guardId is NOT in the JWT payload)
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
         if (!guard)
             return next(new error_middleware_1.AppError('Guard not found', 404));
         const vehicle = await prisma_1.prisma.vehicle.findFirst({

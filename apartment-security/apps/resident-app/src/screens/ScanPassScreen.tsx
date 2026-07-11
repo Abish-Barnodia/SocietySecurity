@@ -1,32 +1,88 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Button } from 'react-native';
+import { useGuardState, useAlerts, useEntries } from '../context/DomainContexts';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Button, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { colors } from '../theme/colors';
-import { useData, Pass } from '../context/DataContext';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import api from '../utils/api';
+import { useTheme } from '../theme/ThemeContext';
+import { Pass } from '../context/DataContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'ScanPass'>;
 
 export default function ScanPassScreen({ navigation }: { navigation: NavigationProp }) {
-  const { passes, addScanRequest, addAlert, addEntry } = useData();
+  const { addScanRequest } = useGuardState();
+  const { addAlert } = useAlerts();
+  const { addEntry } = useEntries();
   const [passId, setPassId] = useState('');
   const [visitorName, setVisitorName] = useState('');
   const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  
+
+  const { colors, isDarkMode } = useTheme();
+  const styles = useStyles(getStyles);
+
   // Step 2 State
   const [scannedPass, setScannedPass] = useState<Pass | null>(null);
+  const [scannedQrPayload, setScannedQrPayload] = useState<string | null>(null);
   const [walkInName, setWalkInName] = useState<string | null>(null);
 
-  const handleLookup = (data?: string) => {
-    let pId = data || passId.trim();
-    let name = visitorName.trim();
+  const mapPass = (p: any): Pass => {
+    let typeStr = 'One-time visitor';
+    if (p.type === 'RECURRING') typeStr = 'Recurring';
+    if (p.type === 'DELIVERY') typeStr = 'Delivery / service';
+    if (p.type === 'CONTRACTOR') typeStr = 'Contractor';
 
-    if (pId) {
-      const foundPass = passes.find(p => p.id === pId || p.id.includes(pId));
-      if (foundPass) {
-        setScannedPass(foundPass);
+    let statusStr: 'Active' | 'Suspended' | 'Expired' = 'Active';
+    if (p.status === 'SUSPENDED') statusStr = 'Suspended';
+    if (p.status !== 'ACTIVE' && p.status !== 'SUSPENDED') statusStr = 'Expired';
+
+    return {
+      id: p.id,
+      name: p.visitorName || 'Unknown',
+      type: typeStr,
+      status: statusStr,
+      time: p.validFrom,
+      purpose: p.purpose || 'Visit',
+      color: statusStr === 'Active' ? '#10b981' : '#f43f5e',
+      created: p.createdAt,
+      gate: p.unitId,
+      qrPayload: p.qrPayload
+    };
+  };
+
+  const handleQrScan = async (data: string) => {
+    setScannedQrPayload(data);
+    try {
+      const base64Part = data.split('.')[0];
+      const parsed = JSON.parse(atob(base64Part));
+      
+      const response = await api.get(`/passes/verify/${parsed.passId}`);
+      setScannedPass(mapPass(response.data.data));
+      return;
+    } catch (error) { 
+      console.log('Error verifying QR pass', error);
+    }
+    
+    alert("Pass not found or invalid QR code.");
+    setScanned(false);
+  };
+
+  const handleLookup = async (pId?: string) => {
+    const id = pId || passId.trim();
+    const name = visitorName.trim();
+
+    if (id) {
+      try {
+        const response = await api.get(`/passes/verify/${id}`);
+        setScannedPass(mapPass(response.data.data));
+        return;
+      } catch (err) {
+        alert("Pass not found. Please try again or enter name for Walk-in.");
+        setScanned(false);
         return;
       }
     }
@@ -36,34 +92,26 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
       return;
     }
 
-    if (pId && !name) {
-      alert("Pass not found. Please try again or enter name for Walk-in.");
-      setScanned(false);
-    } else {
-      alert("Please enter a Pass ID or Visitor Name");
-    }
+    alert("Please enter a Pass ID or Visitor Name");
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (scannedPass) {
       if (scannedPass.status === 'Active') {
-        // Direct Entry
-        addEntry({
-          id: Math.random().toString(36).substr(2, 9),
-          name: scannedPass.name,
-          initials: scannedPass.name.charAt(0).toUpperCase(),
-          color: scannedPass.color,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'Entered',
-          method: 'QR scan',
-          gate: 'Main Gate',
-          statusColor: colors.success,
-          date: 'TODAY'
-        });
-        alert('Entry Logged Successfully!');
+        try {
+          await api.post('/entries', {
+            unitId: scannedPass.gate ?? null,
+            method: 'QR_SCAN',
+            visitorName: scannedPass.name,
+            qrPayload: scannedPass.qrPayload ?? scannedQrPayload ?? scannedPass.id,
+          });
+          Alert.alert('Entry Logged', 'Entry logged successfully.');
+        } catch (error: any) {
+          Alert.alert('Error', error.response?.data?.message ?? 'Failed to log entry.');
+          return;
+        }
         navigation.goBack();
       } else {
-        // Pass is suspended or expired, request approval anyway
         sendApprovalRequest(scannedPass.name, scannedPass.id);
       }
     } else if (walkInName) {
@@ -88,8 +136,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
       icon: '🔔',
       unread: true,
     });
-    
-    // Simulate push notification to resident
+
     import('../utils/notifications').then(({ scheduleLocalNotification }) => {
       scheduleLocalNotification(
         'Walk-in approval requested',
@@ -103,6 +150,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
 
   const resetScanner = () => {
     setScannedPass(null);
+    setScannedQrPayload(null);
     setWalkInName(null);
     setScanned(false);
     setPassId('');
@@ -120,19 +168,19 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.content}>
-          
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
           {scannedPass || walkInName ? (
             <View style={styles.detailsCard}>
               <Text style={styles.detailsHeader}>Visitor Details</Text>
-              
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Name</Text>
                 <Text style={styles.detailValue}>{scannedPass ? scannedPass.name : walkInName}</Text>
               </View>
-              
+
               {scannedPass && (
                 <>
                   <View style={styles.detailRow}>
@@ -145,7 +193,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
                   </View>
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Status</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: scannedPass.status === 'Active' ? colors.success + '20' : colors.danger + '20' }]}>
+                    <View style={[styles.statusBadge, { backgroundColor: scannedPass.status === 'Active' ? (isDarkMode ? '#052e16' : colors.success + '20') : (isDarkMode ? '#450a0a' : colors.danger + '20') }]}>
                       <Text style={[styles.statusText, { color: scannedPass.status === 'Active' ? colors.success : colors.danger }]}>{scannedPass.status}</Text>
                     </View>
                   </View>
@@ -159,15 +207,15 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
                 </View>
               )}
 
-              <TouchableOpacity 
-                style={[styles.scanButton, { marginTop: 24, backgroundColor: (scannedPass && scannedPass.status === 'Active') ? colors.success : colors.primary }]} 
+              <TouchableOpacity
+                style={[styles.scanButton, { marginTop: spacing.xl, backgroundColor: (scannedPass && scannedPass.status === 'Active') ? colors.success : colors.primary }]}
                 onPress={confirmAction}
               >
                 <Text style={styles.scanButtonText}>
                   {(scannedPass && scannedPass.status === 'Active') ? 'Allow Entry' : 'Request Resident Approval'}
                 </Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity style={styles.resetButton} onPress={resetScanner}>
                 <Text style={styles.resetButtonText}>Cancel & Scan Again</Text>
               </TouchableOpacity>
@@ -175,12 +223,12 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
           ) : (
             <>
               <View style={styles.scannerBox}>
-                <CameraView 
-                  style={styles.camera} 
+                <CameraView
+                  style={styles.camera}
                   facing="back"
                   onBarcodeScanned={scanned ? undefined : ({ data }) => {
                     setScanned(true);
-                    handleLookup(data);
+                    handleQrScan(data);
                   }}
                 >
                   <View style={styles.scannerOverlay}>
@@ -201,6 +249,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
                 <TextInput
                   style={styles.input}
                   placeholder="e.g. 123456"
+                  placeholderTextColor={colors.textMuted}
                   value={passId}
                   onChangeText={setPassId}
                 />
@@ -211,6 +260,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
                 <TextInput
                   style={styles.input}
                   placeholder="e.g. Rahul Sharma"
+                  placeholderTextColor={colors.textMuted}
                   value={visitorName}
                   onChangeText={setVisitorName}
                 />
@@ -228,31 +278,34 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   permissionContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: spacing.xl,
+    backgroundColor: colors.background,
   },
   permissionText: {
-    textAlign: 'center',
-    marginBottom: 20,
-    fontSize: 16,
+    textAlign: 'center' as const,
+    marginBottom: spacing.lg,
+    fontSize: typography.sizes.md,
+    color: colors.text,
   },
   content: {
-    padding: 24,
+    padding: spacing.xl,
+    paddingBottom: 40,
   },
   scannerBox: {
     height: 300,
     backgroundColor: '#000',
-    borderRadius: 24,
-    overflow: 'hidden',
-    marginBottom: 32,
+    borderRadius: roundness.xl,
+    overflow: 'hidden' as const,
+    marginBottom: spacing.xxl,
   },
   camera: {
     flex: 1,
@@ -260,63 +313,63 @@ const styles = StyleSheet.create({
   scannerOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    position: 'relative' as const,
   },
-  scannerCornerTL: { position: 'absolute', top: 40, left: 40, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
-  scannerCornerTR: { position: 'absolute', top: 40, right: 40, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
-  scannerCornerBL: { position: 'absolute', bottom: 40, left: 40, width: 40, height: 40, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
-  scannerCornerBR: { position: 'absolute', bottom: 40, right: 40, width: 40, height: 40, borderBottomWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
-  scannerText: { color: colors.white, fontWeight: 'bold' },
-  scannerTextActive: { color: colors.success, fontWeight: 'bold', marginTop: 10, fontSize: 18 },
+  scannerCornerTL: { position: 'absolute' as const, top: 40, left: 40, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
+  scannerCornerTR: { position: 'absolute' as const, top: 40, right: 40, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
+  scannerCornerBL: { position: 'absolute' as const, bottom: 40, left: 40, width: 40, height: 40, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
+  scannerCornerBR: { position: 'absolute' as const, bottom: 40, right: 40, width: 40, height: 40, borderBottomWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
+  scannerText: { color: colors.white, fontWeight: typography.weights.bold },
   
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    borderRadius: roundness.lg,
+    padding: spacing.lg,
+    fontSize: typography.sizes.md,
+    color: colors.text,
   },
   scanButton: {
     backgroundColor: colors.primary,
     padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
     marginTop: 12,
   },
   scanButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: isDarkMode ? colors.white : colors.text, // Assuming black text for contrast in light mode on golden mustard
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
   detailsCard: {
-    backgroundColor: colors.white,
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.xl,
+    borderRadius: roundness.xl,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -324,47 +377,47 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   detailsHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
-    marginBottom: 20,
-    textAlign: 'center',
+    marginBottom: spacing.xl,
+    textAlign: 'center' as const,
   },
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   detailLabel: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    fontWeight: '600',
+    fontWeight: typography.weights.bold,
   },
   detailValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
   },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: roundness.md,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.bold,
   },
   resetButton: {
     padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
     marginTop: 12,
   },
   resetButtonText: {
     color: colors.textMuted,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
 });

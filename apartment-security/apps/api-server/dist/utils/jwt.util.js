@@ -26,10 +26,10 @@ const verifyRefreshToken = (token) => {
     return jsonwebtoken_1.default.verify(token, env_1.env.JWT_REFRESH_SECRET);
 };
 exports.verifyRefreshToken = verifyRefreshToken;
-// In real-world, we'd invalidate the old refresh token in the DB here
+// rotateRefreshToken verifies the old token and issues a new signed one.
+// The DB revocation of the old token happens in auth.controller.ts inside a transaction.
 const rotateRefreshToken = async (oldToken) => {
     const { iat, exp, ...decoded } = (0, exports.verifyRefreshToken)(oldToken);
-    // (DB update logic would go here)
     return (0, exports.signRefreshToken)(decoded);
 };
 exports.rotateRefreshToken = rotateRefreshToken;

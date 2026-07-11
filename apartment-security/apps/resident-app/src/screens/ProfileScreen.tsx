@@ -1,19 +1,29 @@
+import { usePasses, useEntries, useHousehold } from '../context/DomainContexts';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Modal, Image, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, Image, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
+import { useStyles } from '../theme/useStyles';
+import { typography, spacing, roundness } from '../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen({ navigation }: { navigation: any }) {
   const { logout, userProfile, userEmail } = useAuth();
-  const { passes, entries, alertPreferences, updateAlertPreferences, emergencyContacts, addEmergencyContact, removeEmergencyContact } = useData();
+  const { passes } = usePasses();
+  const { entries } = useEntries();
+  const { alertPreferences, updateAlertPreferences, emergencyContacts, addEmergencyContact, removeEmergencyContact } = useHousehold();
   const [duressVisible, setDuressVisible] = useState(false);
   const [alertsVisible, setAlertsVisible] = useState(false);
   const [emergencyContactsVisible, setEmergencyContactsVisible] = useState(false);
 
+  const { colors, isDarkMode, toggleTheme } = useTheme();
+  const styles = useStyles(getStyles);
+
   // New Contact State
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactRelation, setNewContactRelation] = useState('');
   const [isAddingContact, setIsAddingContact] = useState(false);
 
   // Fallback to defaults if no profile exists
@@ -25,386 +35,474 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
   const entriesCount = entries.length;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            {userProfile?.photoUri ? (
-              <Image source={{ uri: userProfile.photoUri }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{initial}</Text>
-            )}
-          </View>
-          <Text style={styles.name}>{name}</Text>
-          <Text style={styles.phone}>{phone}</Text>
-          {userProfile?.wing && userProfile?.flat && (
-            <Text style={styles.flatText}>Wing {userProfile.wing} • Flat {userProfile.flat}</Text>
-          )}
-        </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        <View style={styles.statsRow}>
-          <View style={[styles.statBox, { backgroundColor: colors.primaryLight }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{activePassesCount}</Text>
-            <Text style={styles.statLabel}>Active passes</Text>
-          </View>
-          <View style={[styles.statBox, { backgroundColor: colors.successLight }]}>
-            <Text style={[styles.statValue, { color: colors.success }]}>{entriesCount}</Text>
-            <Text style={styles.statLabel}>Entries this month</Text>
-          </View>
-        </View>
+        <Text style={styles.title}>Profile</Text>
 
-        <View style={styles.menuContainer}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Household')}>
-            <View style={styles.menuItemLeft}>
-              <Text style={styles.menuIcon}>👨‍👩‍👧</Text>
-              <Text style={styles.menuText}>Household members</Text>
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatar}>
+              {userProfile?.photoUri ? (
+                <Image source={{ uri: userProfile.photoUri }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person-outline" size={32} color={colors.primary} />
+              )}
             </View>
-            <Text style={styles.chevron}>›</Text>
+            <View style={styles.profileInfo}>
+              <Text style={styles.name}>{name}</Text>
+              <Text style={styles.phone}>{phone}</Text>
+            </View>
+          </View>
+
+          <View style={styles.towerGrid}>
+            <View style={styles.towerCard}>
+              <Text style={styles.towerLabel}>Tower</Text>
+              <Text style={styles.towerValue}>Tower A</Text>
+            </View>
+            <View style={styles.towerCard}>
+              <Text style={styles.towerLabel}>Flat</Text>
+              <Text style={styles.towerValue}>402</Text>
+            </View>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.appearanceCard} onPress={toggleTheme}>
+          <View style={styles.appearanceLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight }]}>
+              <Ionicons name={isDarkMode ? "moon-outline" : "sunny-outline"} size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.appearanceTitle}>Appearance</Text>
+              <Text style={styles.appearanceSubtitle}>{isDarkMode ? 'Dark mode' : 'Light mode'}</Text>
+            </View>
+          </View>
+          <View style={[styles.toggleSwitchBase, isDarkMode && { backgroundColor: colors.primary }]}>
+            <View style={[styles.toggleKnob, isDarkMode && { transform: [{ translateX: 20 }] }]}>
+              <Ionicons name={isDarkMode ? "moon" : "sunny"} size={14} color={isDarkMode ? colors.white : colors.primary} />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.sectionTitle}>SETTINGS</Text>
+        <View style={styles.sectionCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => setAlertsVisible(true)}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight }]}>
+                <Ionicons name="notifications-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.menuText}>Notification Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
           <View style={styles.divider} />
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => setAlertsVisible(true)}>
-          <View style={styles.menuItemLeft}>
-            <Text style={styles.menuIcon}>🔔</Text>
-            <Text style={styles.menuText}>Alert preferences</Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.divider} />
+          <TouchableOpacity style={styles.menuItem} onPress={() => setEmergencyContactsVisible(true)}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#4a1111' : '#f5d3d3' }]}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#c92a2a" />
+              </View>
+              <Text style={styles.menuText}>Security Settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+          <View style={styles.divider} />
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => setEmergencyContactsVisible(true)}>
-          <View style={styles.menuItemLeft}>
-            <Text style={styles.menuIcon}>📞</Text>
-            <Text style={styles.menuText}>Emergency contacts</Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.divider} />
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('Amenities')}>
-          <View style={styles.menuItemLeft}>
-            <Text style={styles.menuIcon}>🏊‍♂️</Text>
-            <Text style={styles.menuText}>Amenities</Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
-        <View style={styles.divider} />
-
-        <TouchableOpacity style={styles.menuItem} onPress={() => setDuressVisible(true)}>
-          <View style={styles.menuItemLeft}>
-            <Text style={styles.menuIcon}>🛡️</Text>
-            <Text style={styles.menuText}>Duress / emergency</Text>
-          </View>
-          <Text style={styles.chevron}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-        <Text style={styles.logoutIcon}>🚪</Text>
-        <Text style={styles.logoutText}>Log out</Text>
-      </TouchableOpacity>
-
-    </ScrollView>
-
-    {/* Alert Preferences Modal */}
-    <Modal visible={alertsVisible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeaderRow}>
-          <Text style={styles.modalTitleSmall}>Alert Preferences</Text>
-          <TouchableOpacity onPress={() => setAlertsVisible(false)}>
-            <Text style={styles.closeIcon}>✕</Text>
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#262626' : '#e6dfd1' }]}>
+                <Ionicons name="eye-off-outline" size={20} color={colors.textMuted} />
+              </View>
+              <Text style={styles.menuText}>Privacy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.modalContentScroll}>
-          <View style={styles.prefRow}>
-            <View>
-              <Text style={styles.prefTitle}>Push Notifications</Text>
-              <Text style={styles.prefDesc}>Receive entry and exit alerts on your phone lock screen.</Text>
-            </View>
-            <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.pushEnabled ? colors.success : colors.border }]}>
-              <TouchableOpacity onPress={() => updateAlertPreferences({ pushEnabled: !alertPreferences?.pushEnabled })} style={[styles.toggleThumb, alertPreferences?.pushEnabled && styles.toggleThumbActive]} />
-            </View>
-          </View>
-          <View style={styles.prefRow}>
-            <View>
-              <Text style={styles.prefTitle}>SMS Fallback</Text>
-              <Text style={styles.prefDesc}>Get an SMS if you don't respond to a push notification.</Text>
-            </View>
-            <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.smsEnabled ? colors.success : colors.border }]}>
-              <TouchableOpacity onPress={() => updateAlertPreferences({ smsEnabled: !alertPreferences?.smsEnabled })} style={[styles.toggleThumb, alertPreferences?.smsEnabled && styles.toggleThumbActive]} />
-            </View>
-          </View>
-          <View style={styles.prefRow}>
-            <View>
-              <Text style={styles.prefTitle}>Domestic Worker Entries</Text>
-              <Text style={styles.prefDesc}>Notify me when my registered staff arrives.</Text>
-            </View>
-            <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.staffEnabled ? colors.success : colors.border }]}>
-              <TouchableOpacity onPress={() => updateAlertPreferences({ staffEnabled: !alertPreferences?.staffEnabled })} style={[styles.toggleThumb, alertPreferences?.staffEnabled && styles.toggleThumbActive]} />
-            </View>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
 
-    {/* Emergency Contacts Modal */}
-    <Modal visible={emergencyContactsVisible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeaderRow}>
-          <Text style={styles.modalTitleSmall}>Emergency Contacts</Text>
-          <TouchableOpacity onPress={() => setEmergencyContactsVisible(false)}>
-            <Text style={styles.closeIcon}>✕</Text>
+        <Text style={styles.sectionTitle}>ABOUT</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight }]}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.menuText}>App Version</Text>
+            </View>
+            <Text style={styles.versionText}>1.0.0</Text>
+          </View>
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <View style={[styles.iconWrapper, { backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight }]}>
+                <Ionicons name="help-circle-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.menuText}>Help & Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={styles.modalContentScroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.prefDesc}>These contacts will be notified automatically if you trigger an SOS.</Text>
-          
-          {emergencyContacts.length === 0 ? (
-            <Text style={{ marginTop: 20, color: colors.textMuted }}>No emergency contacts added yet.</Text>
-          ) : (
-            emergencyContacts.map(contact => (
-              <View key={contact.id} style={styles.contactCard}>
-                <Text style={styles.contactIcon}>👤</Text>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{contact.name} ({contact.relation})</Text>
-                  <Text style={styles.contactPhone}>{contact.phone}</Text>
-                </View>
-                <TouchableOpacity onPress={() => removeEmergencyContact(contact.id)}>
-                  <Text style={styles.removeIcon}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-          
-          {isAddingContact ? (
-            <View style={{ marginTop: 20 }}>
-              <TextInput style={styles.input} placeholder="Contact Name" value={newContactName} onChangeText={setNewContactName} />
-              <TextInput style={[styles.input, { marginTop: 10 }]} placeholder="Phone Number" value={newContactPhone} onChangeText={setNewContactPhone} keyboardType="phone-pad" />
-              <View style={{ flexDirection: 'row', marginTop: 10 }}>
-                <TouchableOpacity style={[styles.addButton, { flex: 1, marginRight: 5 }]} onPress={() => {
-                  if(newContactName && newContactPhone) {
-                    addEmergencyContact({ id: Math.random().toString(), name: newContactName, phone: newContactPhone, relation: 'Family' });
-                    setIsAddingContact(false);
-                    setNewContactName('');
-                    setNewContactPhone('');
-                  }
-                }}>
-                  <Text style={styles.addButtonText}>Save</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.addButton, { flex: 1, marginLeft: 5, backgroundColor: colors.border }]} onPress={() => setIsAddingContact(false)}>
-                  <Text style={[styles.addButtonText, { color: colors.text }]}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.addButton} onPress={() => setIsAddingContact(true)}>
-              <Text style={styles.addButtonText}>+ Add New Contact</Text>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+          <View style={[styles.iconWrapper, { backgroundColor: 'transparent', width: 32 }]}>
+            <Ionicons name="log-out-outline" size={20} color="#c92a2a" />
+          </View>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+
+      {/* Alert Preferences Modal */}
+      <Modal visible={alertsVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeaderRow}>
+            <Text style={styles.modalTitleSmall}>Alert Preferences</Text>
+            <TouchableOpacity onPress={() => setAlertsVisible(false)}>
+              <Ionicons name="close" size={28} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContentScroll}>
+            <View style={styles.prefRow}>
+              <View style={styles.prefTextContainer}>
+                <Text style={styles.prefTitle}>Push Notifications</Text>
+                <Text style={styles.prefDesc}>Receive entry and exit alerts on your phone lock screen.</Text>
+              </View>
+              <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.pushEnabled ? colors.success : colors.border }]}>
+                <TouchableOpacity onPress={() => updateAlertPreferences({ pushEnabled: !alertPreferences?.pushEnabled })} style={[styles.toggleThumb, alertPreferences?.pushEnabled && styles.toggleThumbActive]} />
+              </View>
+            </View>
+            <View style={styles.prefRow}>
+              <View style={styles.prefTextContainer}>
+                <Text style={styles.prefTitle}>SMS Fallback</Text>
+                <Text style={styles.prefDesc}>Get an SMS if you don't respond to a push notification.</Text>
+              </View>
+              <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.smsEnabled ? colors.success : colors.border }]}>
+                <TouchableOpacity onPress={() => updateAlertPreferences({ smsEnabled: !alertPreferences?.smsEnabled })} style={[styles.toggleThumb, alertPreferences?.smsEnabled && styles.toggleThumbActive]} />
+              </View>
+            </View>
+            <View style={styles.prefRow}>
+              <View style={styles.prefTextContainer}>
+                <Text style={styles.prefTitle}>Domestic Worker Entries</Text>
+                <Text style={styles.prefDesc}>Notify me when my registered staff arrives.</Text>
+              </View>
+              <View style={[styles.toggleSwitch, { backgroundColor: alertPreferences?.staffEnabled ? colors.success : colors.border }]}>
+                <TouchableOpacity onPress={() => updateAlertPreferences({ staffEnabled: !alertPreferences?.staffEnabled })} style={[styles.toggleThumb, alertPreferences?.staffEnabled && styles.toggleThumbActive]} />
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
-    {/* Duress Modal */}
-    <Modal visible={duressVisible} animationType="slide" presentationStyle="pageSheet">
-      <SafeAreaView style={styles.modalContainer}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => setDuressVisible(false)}>
-          <Text style={styles.closeIcon}>✕</Text>
-        </TouchableOpacity>
-        
-        <View style={styles.modalContent}>
-          <Text style={styles.shieldIcon}>🛡️</Text>
-          <Text style={styles.modalTitle}>Emergency alert</Text>
-          <Text style={styles.modalSubtitle}>
-            Press the button below to silently alert the security guard and property management. No sound will play on your device.
-          </Text>
-          
-          <TouchableOpacity style={styles.emergencyButton} onPress={() => { alert('Emergency alert sent!'); setDuressVisible(false); }}>
-            <Text style={styles.emergencyButtonText}>⚠️ Send silent alert</Text>
+      {/* Emergency Contacts Modal */}
+      <Modal visible={emergencyContactsVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeaderRow}>
+            <Text style={styles.modalTitleSmall}>Emergency Contacts</Text>
+            <TouchableOpacity onPress={() => setEmergencyContactsVisible(false)}>
+              <Ionicons name="close" size={28} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContentScroll} keyboardShouldPersistTaps="handled">
+            <Text style={[styles.prefDesc, { marginBottom: spacing.lg }]}>These contacts will be notified automatically if you trigger an SOS.</Text>
+
+            {emergencyContacts.length === 0 ? (
+              <Text style={{ marginTop: 20, color: colors.textMuted }}>No emergency contacts added yet.</Text>
+            ) : (
+              emergencyContacts.map(contact => (
+                <View key={contact.id} style={styles.contactCard}>
+                  <Ionicons name="person-circle-outline" size={40} color={colors.textMuted} style={{ marginRight: spacing.md }} />
+                  <View style={styles.contactInfo}>
+                    <Text style={styles.contactName}>{contact.name} ({contact.relation})</Text>
+                    <Text style={styles.contactPhone}>{contact.phone}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeEmergencyContact(contact.id)}>
+                    <Ionicons name="trash-outline" size={24} color={colors.danger} />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+
+            {isAddingContact ? (
+              <View style={{ marginTop: 20 }}>
+                <TextInput style={styles.input} placeholder="Contact Name" placeholderTextColor={colors.textMuted} value={newContactName} onChangeText={setNewContactName} />
+                <TextInput style={[styles.input, { marginTop: 10 }]} placeholder="Phone Number" placeholderTextColor={colors.textMuted} value={newContactPhone} onChangeText={setNewContactPhone} keyboardType="phone-pad" />
+                <TextInput style={[styles.input, { marginTop: 10 }]} placeholder="Relation (e.g. Spouse, Parent)" placeholderTextColor={colors.textMuted} value={newContactRelation} onChangeText={setNewContactRelation} />
+                <View style={{ flexDirection: 'row', marginTop: 10 }}>
+                  <TouchableOpacity style={[styles.addButton, { flex: 1, marginRight: 5 }]} onPress={() => {
+                    if (newContactName && newContactPhone) {
+                      addEmergencyContact({ id: Date.now().toString(36), name: newContactName, phone: newContactPhone, relation: newContactRelation || 'Family' });
+                      setIsAddingContact(false);
+                      setNewContactName('');
+                      setNewContactPhone('');
+                      setNewContactRelation('');
+                    }
+                  }}>
+                    <Text style={styles.addButtonText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.addButton, { flex: 1, marginLeft: 5, backgroundColor: isDarkMode ? '#262626' : colors.border }]} onPress={() => setIsAddingContact(false)}>
+                    <Text style={[styles.addButtonText, { color: colors.text }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.addButton} onPress={() => setIsAddingContact(true)}>
+                <Text style={styles.addButtonText}>+ Add New Contact</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Duress Modal */}
+      <Modal visible={duressVisible} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={() => setDuressVisible(false)}>
+            <Ionicons name="close" size={28} color={colors.textMuted} />
           </TouchableOpacity>
 
-          <Text style={styles.emergencyInfoText}>
-            For immediate danger, call emergency services
-          </Text>
-          <Text style={styles.emergencyNumbers}>
-            <Text style={{fontWeight: 'bold'}}>100</Text> (Police) • <Text style={{fontWeight: 'bold'}}>112</Text> (Emergency)
-          </Text>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  </SafeAreaView>
-);
+          <View style={styles.modalContent}>
+            <Ionicons name="shield-checkmark" size={80} color={colors.danger} style={styles.shieldIcon} />
+            <Text style={styles.modalTitle}>Emergency alert</Text>
+            <Text style={styles.modalSubtitle}>
+              Press the button below to silently alert the security guard and property management. No sound will play on your device.
+            </Text>
+
+            <TouchableOpacity style={styles.emergencyButton} onPress={() => { alert('Emergency alert sent!'); setDuressVisible(false); }}>
+              <Ionicons name="warning" size={24} color={colors.white} style={{ marginRight: 8 }} />
+              <Text style={styles.emergencyButtonText}>Send silent alert</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.emergencyInfoText}>
+              For immediate danger, call emergency services
+            </Text>
+            <Text style={styles.emergencyNumbers}>
+              <Text style={{ fontWeight: 'bold' }}>100</Text> (Police) • <Text style={{ fontWeight: 'bold' }}>112</Text> (Emergency)
+            </Text>
+          </View>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDarkMode: boolean) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
-    paddingTop: 32,
+    padding: spacing.lg,
+    paddingTop: spacing.xxl,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 24,
+  title: {
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.extrabold,
+    color: colors.text,
+    marginBottom: spacing.xl,
+  },
+  profileCard: {
+    backgroundColor: isDarkMode ? colors.surface : '#f6f5f2',
+    borderRadius: roundness.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'transparent' : '#eae7e1',
+  },
+  profileHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.lg,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    overflow: 'hidden',
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: isDarkMode ? '#452a0a' : '#e6dfd1',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.md,
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: '100%' as const,
+    height: '100%' as const,
+    borderRadius: 16,
   },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.primary,
+  profileInfo: {
+    flex: 1,
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 4,
   },
   phone: {
-    fontSize: 16,
-    color: colors.textMuted,
-    marginBottom: 8,
+    fontSize: typography.sizes.sm,
+    color: '#6c757d',
   },
-  flatText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '600',
+  towerGrid: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    gap: spacing.md,
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  statBox: {
+  towerCard: {
     flex: 1,
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginHorizontal: 4,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: roundness.md,
+    alignItems: 'center' as const,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  towerLabel: {
+    fontSize: typography.sizes.xs,
+    color: '#6c757d',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  menuContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  menuText: {
-    fontSize: 16,
+  towerValue: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
   },
-  chevron: {
-    fontSize: 20,
-    color: colors.textMuted,
+  appearanceCard: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    backgroundColor: isDarkMode ? colors.surface : '#f6f5f2',
+    padding: spacing.lg,
+    borderRadius: roundness.xl,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'transparent' : '#eae7e1',
+  },
+  appearanceLeft: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  appearanceTitle: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+  },
+  appearanceSubtitle: {
+    fontSize: typography.sizes.sm,
+    color: '#6c757d',
+  },
+  toggleSwitchBase: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e6dfd1',
+    padding: 2,
+    flexDirection: 'row' as const,
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.xs,
+    fontWeight: typography.weights.bold,
+    color: '#6c757d',
+    marginBottom: spacing.sm,
+    letterSpacing: 1,
+  },
+  sectionCard: {
+    backgroundColor: isDarkMode ? colors.surface : '#f6f5f2',
+    borderRadius: roundness.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: isDarkMode ? 'transparent' : '#eae7e1',
+  },
+  menuItem: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: spacing.lg,
+  },
+  menuItemLeft: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+  },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    marginRight: spacing.md,
+  },
+  menuText: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.medium,
+    color: colors.text,
+  },
+  versionText: {
+    fontSize: typography.sizes.sm,
+    color: '#6c757d',
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: isDarkMode ? '#262626' : '#eae7e1',
   },
   logoutButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.dangerLight,
-    padding: 16,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    backgroundColor: isDarkMode ? '#4a1111' : '#f5d3d3',
+    padding: spacing.md,
+    borderRadius: roundness.lg,
+    alignItems: 'center' as const,
     borderWidth: 1,
-    borderColor: '#fca5a5',
-  },
-  logoutIcon: {
-    fontSize: 20,
-    marginRight: 8,
+    borderColor: isDarkMode ? 'transparent' : '#eec2c2',
   },
   logoutText: {
-    color: colors.danger,
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#c92a2a',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
-  
+
   /* Modal Styles */
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: colors.background,
   },
   closeButton: {
-    padding: 16,
-    alignItems: 'flex-end',
-  },
-  closeIcon: {
-    fontSize: 24,
-    color: colors.textMuted,
+    padding: spacing.lg,
+    alignItems: 'flex-end' as const,
   },
   modalContent: {
     flex: 1,
-    alignItems: 'center',
-    padding: 24,
-    paddingTop: 60,
+    alignItems: 'center' as const,
+    padding: spacing.xl,
+    paddingTop: 40,
   },
   shieldIcon: {
-    fontSize: 64,
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   modalTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.extrabold,
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   modalSubtitle: {
-    fontSize: 16,
+    fontSize: typography.sizes.md,
     color: colors.textMuted,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     lineHeight: 24,
     marginBottom: 40,
   },
   emergencyButton: {
+    flexDirection: 'row' as const,
     backgroundColor: colors.danger,
-    width: '100%',
+    width: '100%' as const,
     padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 24,
+    borderRadius: roundness.xl,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: spacing.xl,
     shadowColor: colors.danger,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
@@ -413,60 +511,63 @@ const styles = StyleSheet.create({
   },
   emergencyButtonText: {
     color: colors.white,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.bold,
   },
   emergencyInfoText: {
-    fontSize: 12,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     marginBottom: 4,
   },
   emergencyNumbers: {
-    fontSize: 12,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: spacing.xl,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitleSmall: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
     color: colors.text,
   },
   modalContentScroll: {
-    padding: 20,
+    padding: spacing.xl,
   },
   prefRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    paddingVertical: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  prefTextContainer: {
+    flex: 1,
+    paddingRight: spacing.lg,
+  },
   prefTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
     marginBottom: 4,
   },
   prefDesc: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
-    maxWidth: '85%',
   },
   toggleSwitch: {
     width: 50,
     height: 30,
     borderRadius: 15,
-    justifyContent: 'center',
+    justifyContent: 'center' as const,
     padding: 2,
   },
   toggleThumb: {
@@ -484,53 +585,45 @@ const styles = StyleSheet.create({
     transform: [{ translateX: 20 }],
   },
   contactCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginVertical: 16,
-  },
-  contactIcon: {
-    fontSize: 24,
-    marginRight: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: roundness.lg,
+    borderWidth: isDarkMode ? 0 : 1,
+    borderColor: isDarkMode ? 'transparent' : colors.border,
+    marginVertical: spacing.sm,
   },
   contactInfo: {
     flex: 1,
   },
   contactName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
     color: colors.text,
   },
   contactPhone: {
-    fontSize: 14,
+    fontSize: typography.sizes.sm,
     color: colors.textMuted,
   },
-  removeIcon: {
-    fontSize: 16,
-    color: colors.danger,
-    padding: 8,
-  },
   input: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
+    color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 12,
-    borderRadius: 8,
+    padding: spacing.lg,
+    borderRadius: roundness.md,
   },
   addButton: {
-    padding: 16,
-    backgroundColor: colors.primaryLight,
-    borderRadius: 12,
-    alignItems: 'center',
+    padding: spacing.lg,
+    backgroundColor: isDarkMode ? '#452a0a' : colors.primaryLight,
+    borderRadius: roundness.md,
+    alignItems: 'center' as const,
     marginTop: 10,
   },
   addButtonText: {
     color: colors.primary,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.bold,
   },
 });

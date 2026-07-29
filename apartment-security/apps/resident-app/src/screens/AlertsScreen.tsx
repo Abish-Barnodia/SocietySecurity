@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { colors } from '../theme/colors';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 
 export default function AlertsScreen({ navigation }: { navigation: any }) {
-  const { alerts } = useData();
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
+  const { alerts, markAllAlertsRead } = useData();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -14,7 +17,7 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
       <ScrollView contentContainerStyle={styles.listContent}>
         {alerts.length > 0 ? (
           <View style={styles.markReadContainer}>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={markAllAlertsRead}>
               <Text style={styles.markReadText}>Mark all as read</Text>
             </TouchableOpacity>
           </View>
@@ -51,7 +54,7 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -79,7 +82,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,

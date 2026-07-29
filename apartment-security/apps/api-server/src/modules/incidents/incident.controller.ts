@@ -7,6 +7,22 @@ import { auditLog } from '../../utils/audit.util';
 import { io } from '../../server';
 import { Role } from '@prisma/client';
 
+export const getIncidents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const incidents = await prisma.incident.findMany({
+      include: {
+        guard: {
+          include: {
+            user: { select: { name: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    sendSuccess(res, 200, 'Incidents retrieved', incidents);
+  } catch (err) { next(err); }
+};
+
 export const createIncident = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { type, description, location, photoUrls, vehicleNumber, unitId } = req.body;

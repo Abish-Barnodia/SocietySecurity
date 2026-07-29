@@ -94,6 +94,32 @@ export const logExit = async (req: Request, res: Response, next: NextFunction) =
   } catch (err) { next(err); }
 };
 
+export const getEntryPoints = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    let propertyId: string | undefined;
+
+    if (req.user!.role === 'GUARD') {
+      const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+      propertyId = guard?.propertyId;
+    } else {
+      const resident = await prisma.resident.findUnique({
+        where: { userId: req.user!.userId },
+        select: { unit: { select: { propertyId: true } } },
+      });
+      propertyId = resident?.unit.propertyId;
+    }
+
+    if (!propertyId) return next(new AppError('Property context not found', 404));
+
+    const entryPoints = await prisma.entryPoint.findMany({
+      where: { propertyId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return sendSuccess(res, 200, 'Entry points fetched', entryPoints);
+  } catch (err) { next(err); }
+};
+
 export const getUnitEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // For Resident
@@ -104,6 +130,7 @@ export const getUnitEntries = async (req: Request, res: Response, next: NextFunc
 
     const entries = await prisma.entry.findMany({
       where: { unitId: currentResident.unitId },
+      include: { entryPoint: { select: { name: true } } },
       orderBy: { entryAt: 'desc' },
       take: 100
     });
@@ -114,13 +141,24 @@ export const getUnitEntries = async (req: Request, res: Response, next: NextFunc
 
 export const getAllEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // For Manager / Committee
-    const entries = await prisma.entry.findMany({
-      include: { unit: true, guard: true, pass: true },
-      orderBy: { entryAt: 'desc' },
-      take: 100
+    // For Manager / Committee — with offset pagination
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
+
+    const [entries, total] = await prisma.$transaction([
+      prisma.entry.findMany({
+        include: { unit: true, guard: true, pass: true },
+        orderBy: { entryAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.entry.count(),
+    ]);
+
+    return sendSuccess(res, 200, 'All entries fetched', {
+      entries,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
     });
-    
-    return sendSuccess(res, 200, 'All entries fetched', entries);
   } catch (err) { next(err); }
 };

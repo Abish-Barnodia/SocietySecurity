@@ -1,7 +1,12 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
+import tokenStorage from './tokenStorage';
 
-export const API_URL = 'http://localhost:3000/api/v1';
+// Fallback for Android Emulator is 10.0.2.2, but for physical devices we need the LAN IP
+const debuggerHost = Constants.expoConfig?.hostUri;
+const localhost = debuggerHost ? debuggerHost.split(':')[0] : '10.0.2.2';
+
+export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `http://${localhost}:5000/api/v1`;
 
 const api = axios.create({
   baseURL: API_URL,
@@ -13,7 +18,7 @@ const api = axios.create({
 // Interceptor to add JWT token to every request
 api.interceptors.request.use(
   async (config) => {
-    const token = await SecureStore.getItemAsync('userToken');
+    const token = await tokenStorage.getItemAsync('userToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,7 +35,7 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401) {
       // You could trigger a global logout here by dispatching an event
-      await SecureStore.deleteItemAsync('userToken');
+      await tokenStorage.deleteItemAsync('userToken');
     }
     return Promise.reject(error);
   }

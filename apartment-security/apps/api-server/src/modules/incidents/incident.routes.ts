@@ -6,7 +6,8 @@ import {
   createIncident,
   assignIncident,
   escalateIncident,
-  closeIncident
+  closeIncident,
+  getIncidents
 } from './incident.controller';
 import {
   createIncidentSchema,
@@ -17,6 +18,9 @@ import {
 
 const router = Router();
 router.use(authenticate);
+
+// Manager / Committee / Guard views incidents
+router.get('/', requireRole('MANAGER', 'COMMITTEE', 'GUARD'), getIncidents);
 
 // Guard creates an incident
 router.post('/', requireRole('GUARD'), validate(createIncidentSchema), createIncident);

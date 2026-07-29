@@ -21,19 +21,35 @@ import { vehicleRouter } from './modules/vehicles/vehicle.routes';
 import { amenityRouter } from './modules/amenities/amenity.routes';
 import { reportRouter } from './modules/reports/report.routes';
 import { offlineRouter } from './modules/offline/offline.routes';
+import { broadcastRouter } from './modules/broadcasts/broadcast.routes';
+import timelineRouter from './modules/timeline/timeline.routes';
+import { communityRouter } from './modules/community/community.routes';
+import { complaintRouter } from './modules/complaints/complaint.routes';
+import { domesticWorkerRouter } from './modules/domesticWorkers/domesticWorker.routes';
 
 const app = express();
 
 // Security headers
 app.use(helmet());
 
-// CORS — only allow known client origins
+// CORS — allow mobile apps (no Origin header) + known browser client origins
 app.use(cors({
-  origin: [
-    env.CLIENT_RESIDENT_APP_URL,
-    env.CLIENT_GUARD_APP_URL,
-    env.CLIENT_MANAGER_URL,
-  ],
+  origin: (origin, callback) => {
+    // Mobile apps (React Native / Expo) send no Origin header — always allow
+    if (!origin) return callback(null, true);
+    // In development, allow any localhost origin regardless of port (Vite assigns dynamic ports)
+    if (process.env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+      return callback(null, true);
+    }
+    // In production, allow only configured browser client origins
+    const allowed = [
+      env.CLIENT_RESIDENT_APP_URL,
+      env.CLIENT_GUARD_APP_URL,
+      env.CLIENT_MANAGER_URL,
+    ];
+    if (allowed.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
 }));
 
@@ -68,6 +84,11 @@ app.use(`${API}/vehicles`, vehicleRouter);
 app.use(`${API}/amenities`, amenityRouter);
 app.use(`${API}/reports`, reportRouter);
 app.use(`${API}/offline`, offlineRouter);
+app.use(`${API}/broadcasts`, broadcastRouter);
+app.use(`${API}/timeline`, timelineRouter);
+app.use(`${API}/community`, communityRouter);
+app.use(`${API}/complaints`, complaintRouter);
+app.use(`${API}/domestic-workers`, domesticWorkerRouter);
 
 // 404 handler
 app.use(notFoundHandler);

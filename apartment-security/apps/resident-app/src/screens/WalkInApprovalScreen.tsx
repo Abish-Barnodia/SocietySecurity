@@ -1,22 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Image } from 'react-native';
-import { colors } from '../theme/colors';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 
 export default function WalkInApprovalScreen({ route, navigation }: { route: any; navigation: any }) {
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
   const { requestId } = route.params || {};
-  const { scanRequests, updateScanRequestStatus, markAlertRead, addEntry } = useData();
+  const { pendingWalkIns, respondWalkIn } = useData();
   const [timeLeft, setTimeLeft] = useState(47);
+  const [submitting, setSubmitting] = useState(false);
 
-  const request = scanRequests.find(r => r.id === requestId);
+  const request = pendingWalkIns.find(r => r.id === requestId);
   const visitorName = request ? request.visitorName : 'Unknown Visitor';
+
+  const handleAction = async (action: 'APPROVED' | 'DENIED') => {
+    if (!requestId || submitting) {
+      navigation.goBack();
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await respondWalkIn(requestId, action);
+    } catch {
+      Alert.alert('Error', 'Failed to send your response. Please try again.');
+      setSubmitting(false);
+      return;
+    }
+    navigation.goBack();
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          if (request && request.status === 'PENDING') {
+          if (request) {
             handleAction('DENIED');
           } else {
             navigation.goBack();
@@ -28,28 +48,6 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
     }, 1000);
     return () => clearInterval(timer);
   }, [request]);
-
-  const handleAction = (action: 'APPROVED' | 'DENIED') => {
-    if (requestId) {
-      updateScanRequestStatus(requestId, action);
-      markAlertRead(requestId);
-
-      addEntry({
-        id: Math.random().toString(36).substr(2, 9),
-        name: visitorName,
-        initials: visitorName.charAt(0).toUpperCase(),
-        color: action === 'APPROVED' ? colors.primary : colors.danger,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        status: action === 'APPROVED' ? 'Entered' : 'Denied',
-        method: request?.passId ? 'QR scan' : 'Walk-in',
-        gate: 'Main Gate',
-        statusColor: action === 'APPROVED' ? colors.success : colors.danger,
-        date: 'TODAY'
-      });
-    }
-    
-    navigation.goBack();
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -68,9 +66,15 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
           </View>
           <View style={styles.divider} />
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Pass ID</Text>
-            <Text style={styles.detailValue}>{request?.passId || 'Walk-in'}</Text>
+            <Text style={styles.detailLabel}>Method</Text>
+            <Text style={styles.detailValue}>Walk-in</Text>
           </View>
+          {!!request?.purpose && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Purpose</Text>
+              <Text style={styles.detailValue}>{request.purpose}</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.timerText}>
@@ -80,10 +84,10 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.denyButton} onPress={() => handleAction('DENIED')}>
+        <TouchableOpacity style={[styles.denyButton, submitting && { opacity: 0.6 }]} onPress={() => handleAction('DENIED')} disabled={submitting}>
           <Text style={styles.denyButtonText}>✕ Deny</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.approveButton} onPress={() => handleAction('APPROVED')}>
+        <TouchableOpacity style={[styles.approveButton, submitting && { opacity: 0.6 }]} onPress={() => handleAction('APPROVED')} disabled={submitting}>
           <Text style={styles.approveButtonText}>✓ Approve</Text>
         </TouchableOpacity>
       </View>
@@ -91,7 +95,7 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -106,7 +110,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
@@ -129,7 +133,7 @@ const styles = StyleSheet.create({
   },
   detailsCard: {
     width: '100%',
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -178,7 +182,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   denyButtonText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -191,7 +195,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   approveButtonText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 18,
     fontWeight: 'bold',
   },

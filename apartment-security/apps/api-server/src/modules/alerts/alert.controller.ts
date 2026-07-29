@@ -38,8 +38,8 @@ export const broadcastAlert = async (req: Request, res: Response, next: NextFunc
       }
     });
 
-    // 1. Broadcast via WebSocket (Global to property or specific rooms based on roles)
-    io?.emit('new_alert', alert);
+    // 1. Broadcast via WebSocket scoped to this property only
+    io?.to(`property:${propertyId}`).emit('new_alert', alert);
 
     // 2. Fetch users to notify based on roles
     const targetUsers = await prisma.user.findMany({
@@ -96,8 +96,8 @@ export const triggerDuress = async (req: Request, res: Response, next: NextFunct
       }
     });
 
-    // Notify Guards and Managers immediately via sockets
-    io?.emit('duress_alert', alert);
+    // Notify Guards and Managers immediately via sockets — scoped to this property
+    io?.to(`property:${propertyId}`).emit('duress_alert', alert);
 
     // Send SMS to Emergency Contact if Resident
     if (user.resident?.emergencyContact) {

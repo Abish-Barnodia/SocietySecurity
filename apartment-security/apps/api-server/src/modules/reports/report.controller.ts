@@ -12,9 +12,6 @@ export const getOperationsOverview = async (req: Request, res: Response, next: N
       include: { manager: true, committee: true }
     });
 
-    const propertyId = user?.manager?.propertyId || user?.committee?.id; // Committees don't have propertyId strictly?
-    // Let's just find propertyId based on role
-    
     // Quick fix: For now we assume Manager
     if (!user?.manager) return next(new AppError('Only managers can access this', 403));
     const pId = user.manager.propertyId;
@@ -53,6 +50,18 @@ export const getOperationsOverview = async (req: Request, res: Response, next: N
       pendingWalkins,
       generatedAt: new Date(),
     });
+  } catch (err) { next(err); }
+};
+
+export const getAuditLogs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        user: { select: { name: true, role: true } }
+      }
+    });
+    sendSuccess(res, 200, 'Audit logs retrieved', logs);
   } catch (err) { next(err); }
 };
 

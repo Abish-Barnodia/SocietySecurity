@@ -1,30 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Button } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Button, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import { useData, Pass } from '../context/DataContext';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import api from '../utils/api';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'ScanPass'>;
 
+type EntryPoint = { id: string; name: string };
+type UnitOption = { id: string; unitNumber: string; tower: string | null };
+
 export default function ScanPassScreen({ navigation }: { navigation: NavigationProp }) {
-  const { passes, addScanRequest, addAlert, addEntry } = useData();
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
+  const { passes, addScanRequest } = useData();
   const [passId, setPassId] = useState('');
   const [visitorName, setVisitorName] = useState('');
   const [scanned, setScanned] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  
+  const [submitting, setSubmitting] = useState(false);
+
   // Step 2 State
   const [scannedPass, setScannedPass] = useState<Pass | null>(null);
   const [walkInName, setWalkInName] = useState<string | null>(null);
+
+  // Gate + destination unit — needed to log an entry / raise a walk-in request against the live backend
+  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
+  const [towers, setTowers] = useState<string[]>([]);
+  const [selectedTower, setSelectedTower] = useState<string | null>(null);
+  const [units, setUnits] = useState<UnitOption[]>([]);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get('/entries/entry-points').then((res) => setEntryPoints(res.data.data ?? [])).catch(() => {});
+    api.get('/residents/towers').then((res) => setTowers(res.data.data ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTower) {
+      setUnits([]);
+      setSelectedUnitId(null);
+      return;
+    }
+    api.get('/residents/units', { params: { tower: selectedTower } })
+      .then((res) => setUnits(res.data.data ?? []))
+      .catch(() => setUnits([]));
+    setSelectedUnitId(null);
+  }, [selectedTower]);
 
   const handleLookup = (data?: string) => {
     let pId = data || passId.trim();
     let name = visitorName.trim();
 
     if (pId) {
-      const foundPass = passes.find(p => p.id === pId || p.id.includes(pId));
+      // Issue 11 fix: strict equality — no fuzzy UUID matching
+      const foundPass = passes.find(p => p.id === pId);
       if (foundPass) {
         setScannedPass(foundPass);
         return;
@@ -37,68 +70,76 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
     }
 
     if (pId && !name) {
-      alert("Pass not found. Please try again or enter name for Walk-in.");
+      Alert.alert('Not found', 'Pass not found. Please try again or enter name for Walk-in.');
       setScanned(false);
     } else {
-      alert("Please enter a Pass ID or Visitor Name");
+      Alert.alert('Missing details', 'Please enter a Pass ID or Visitor Name');
     }
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
+    if (submitting) return;
     if (scannedPass) {
       if (scannedPass.status === 'Active') {
-        // Direct Entry
-        addEntry({
-          id: Math.random().toString(36).substr(2, 9),
-          name: scannedPass.name,
-          initials: scannedPass.name.charAt(0).toUpperCase(),
-          color: scannedPass.color,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          status: 'Entered',
-          method: 'QR scan',
-          gate: 'Main Gate',
-          statusColor: colors.success,
-          date: 'TODAY'
-        });
-        alert('Entry Logged Successfully!');
-        navigation.goBack();
+        if (!entryPoints[0]) {
+          Alert.alert('No gate configured', 'No entry point is configured for this property yet.');
+          return;
+        }
+        setSubmitting(true);
+        try {
+          await api.post('/entries', {
+            unitId: scannedPass.unitId,
+            entryPointId: entryPoints[0].id,
+            method: 'QR_SCAN',
+            visitorName: scannedPass.name,
+            qrPayload: scannedPass.qrPayload,
+          });
+          Alert.alert('Entry Logged', 'Entry logged successfully.');
+          navigation.goBack();
+        } catch (error: any) {
+          Alert.alert('Error', error.response?.data?.message ?? 'Failed to log entry.');
+        } finally {
+          setSubmitting(false);
+        }
       } else {
-        // Pass is suspended or expired, request approval anyway
-        sendApprovalRequest(scannedPass.name, scannedPass.id);
+        // Pass is suspended or expired — the pass already tells us which unit it belongs to
+        sendApprovalRequest(scannedPass.name, scannedPass.unitId);
       }
     } else if (walkInName) {
-      sendApprovalRequest(walkInName, undefined);
+      if (!selectedUnitId) {
+        Alert.alert('Select destination', 'Please select the tower and flat this visitor is going to.');
+        return;
+      }
+      sendApprovalRequest(walkInName, selectedUnitId);
     }
   };
 
-  const sendApprovalRequest = (name: string, pId?: string) => {
-    const reqId = Math.random().toString(36).substr(2, 9);
-    addScanRequest({
-      id: reqId,
-      passId: pId,
-      visitorName: name,
-      status: 'PENDING',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    });
-    addAlert({
-      id: reqId,
-      title: 'Walk-in approval requested',
-      subtitle: `Guard requested entry for ${name} at Main Gate`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      icon: '🔔',
-      unread: true,
-    });
-    
-    // Simulate push notification to resident
-    import('../utils/notifications').then(({ scheduleLocalNotification }) => {
-      scheduleLocalNotification(
-        'Walk-in approval requested',
-        `Guard requested entry for ${name} at Main Gate`
-      );
-    });
-
-    alert('Approval request sent to Resident!');
-    navigation.goBack();
+  const sendApprovalRequest = async (name: string, unitId: string) => {
+    if (!entryPoints[0]) {
+      Alert.alert('No gate configured', 'No entry point is configured for this property yet.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await api.post('/walkin/request', {
+        unitId,
+        entryPointId: entryPoints[0].id,
+        visitorName: name,
+      });
+      const entry = response.data.data;
+      addScanRequest({
+        id: entry.id,
+        visitorName: name,
+        status: 'PENDING',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      Alert.alert('Request sent', 'The resident has been notified and will respond shortly.');
+      navigation.goBack();
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message ?? 'Failed to send the approval request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetScanner = () => {
@@ -121,7 +162,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content}>
           
           {scannedPass || walkInName ? (
@@ -153,18 +194,55 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
               )}
 
               {!scannedPass && walkInName && (
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Method</Text>
-                  <Text style={styles.detailValue}>Walk-in</Text>
-                </View>
+                <>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Method</Text>
+                    <Text style={styles.detailValue}>Walk-in</Text>
+                  </View>
+
+                  <Text style={[styles.label, { marginTop: 16 }]}>Tower</Text>
+                  <View style={styles.chipRow}>
+                    {towers.map((tower) => (
+                      <TouchableOpacity
+                        key={tower}
+                        style={[styles.chip, selectedTower === tower && styles.chipActive]}
+                        onPress={() => setSelectedTower(tower)}
+                      >
+                        <Text style={[styles.chipText, selectedTower === tower && styles.chipTextActive]}>{tower}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {selectedTower && (
+                    <>
+                      <Text style={styles.label}>Flat</Text>
+                      <View style={styles.chipRow}>
+                        {units.length === 0 ? (
+                          <Text style={{ color: colors.textMuted }}>No flats found in {selectedTower}.</Text>
+                        ) : (
+                          units.map((unit) => (
+                            <TouchableOpacity
+                              key={unit.id}
+                              style={[styles.chip, selectedUnitId === unit.id && styles.chipActive]}
+                              onPress={() => setSelectedUnitId(unit.id)}
+                            >
+                              <Text style={[styles.chipText, selectedUnitId === unit.id && styles.chipTextActive]}>{unit.unitNumber}</Text>
+                            </TouchableOpacity>
+                          ))
+                        )}
+                      </View>
+                    </>
+                  )}
+                </>
               )}
 
-              <TouchableOpacity 
-                style={[styles.scanButton, { marginTop: 24, backgroundColor: (scannedPass && scannedPass.status === 'Active') ? colors.success : colors.primary }]} 
+              <TouchableOpacity
+                style={[styles.scanButton, { marginTop: 24, backgroundColor: (scannedPass && scannedPass.status === 'Active') ? colors.success : colors.primary, opacity: submitting ? 0.6 : 1 }]}
                 onPress={confirmAction}
+                disabled={submitting}
               >
                 <Text style={styles.scanButtonText}>
-                  {(scannedPass && scannedPass.status === 'Active') ? 'Allow Entry' : 'Request Resident Approval'}
+                  {submitting ? 'Please wait…' : (scannedPass && scannedPass.status === 'Active') ? 'Allow Entry' : 'Request Resident Approval'}
                 </Text>
               </TouchableOpacity>
               
@@ -228,7 +306,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -268,7 +346,7 @@ const styles = StyleSheet.create({
   scannerCornerTR: { position: 'absolute', top: 40, right: 40, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
   scannerCornerBL: { position: 'absolute', bottom: 40, left: 40, width: 40, height: 40, borderBottomWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
   scannerCornerBR: { position: 'absolute', bottom: 40, right: 40, width: 40, height: 40, borderBottomWidth: 4, borderRightWidth: 4, borderColor: colors.primary },
-  scannerText: { color: colors.white, fontWeight: 'bold' },
+  scannerText: { color: colors.card, fontWeight: 'bold' },
   scannerTextActive: { color: colors.success, fontWeight: 'bold', marginTop: 10, fontSize: 18 },
   
   title: {
@@ -285,6 +363,33 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 20,
   },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  chipTextActive: {
+    color: colors.card,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
@@ -292,7 +397,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
@@ -307,12 +412,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   scanButtonText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 16,
     fontWeight: 'bold',
   },
   detailsCard: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     padding: 24,
     borderRadius: 16,
     borderWidth: 1,

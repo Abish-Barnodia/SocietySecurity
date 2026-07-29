@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
@@ -9,8 +10,12 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'GuardTabs'>;
 
 export default function GuardHomeScreen({ navigation }: { navigation: NavigationProp }) {
-  const { userEmail, logout } = useAuth();
+  const { userPhone, logout } = useAuth();
   const { scanRequests } = useData();
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
+  const pendingCount = scanRequests.filter(r => r.status === 'PENDING').length;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -18,40 +23,40 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Security Dashboard</Text>
-            <Text style={styles.subtitle}>Logged in as {userEmail}</Text>
+            <Text style={styles.subtitle}>Logged in as {userPhone}</Text>
           </View>
           <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+            <Ionicons name="log-out-outline" size={24} color={colors.danger} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>12</Text>
-            <Text style={styles.statLabel}>Expected Visitors</Text>
+            <Text style={styles.statValue}>{scanRequests.length}</Text>
+            <Text style={styles.statLabel}>Requests Sent</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{scanRequests.length}</Text>
-            <Text style={styles.statLabel}>Total Requests</Text>
+            <Text style={styles.statValue}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Pending Approval</Text>
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
+
         <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('ScanPass')}>
-          <Ionicons name="qr-code-outline" size={32} color="#FFFFFF" />
+          <Ionicons name="qr-code-outline" size={32} color={colors.white} />
           <Text style={styles.actionText}>Scan Entry Pass</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#10B981' }]} onPress={() => navigation.navigate('ScanPass')}>
-          <Ionicons name="person-add-outline" size={32} color="#FFFFFF" />
+        <TouchableOpacity style={[styles.actionButton, { backgroundColor: colors.success }]} onPress={() => navigation.navigate('ScanPass')}>
+          <Ionicons name="person-add-outline" size={32} color={colors.white} />
           <Text style={styles.actionText}>Walk-in Entry</Text>
         </TouchableOpacity>
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Requests</Text>
         {scanRequests.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={{ color: '#6B7280' }}>No recent scan requests.</Text>
+            <Text style={{ color: colors.textMuted }}>No recent scan requests.</Text>
           </View>
         ) : (
           scanRequests.map(req => (
@@ -61,11 +66,11 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
                   <Text style={styles.requestName}>{req.visitorName}</Text>
                   <Text style={styles.requestTime}>{req.time}</Text>
                 </View>
-                <View style={[styles.statusBadge, { 
-                  backgroundColor: req.status === 'APPROVED' ? '#dcfce7' : req.status === 'DENIED' ? '#fee2e2' : '#fef9c3' 
+                <View style={[styles.statusBadge, {
+                  backgroundColor: req.status === 'APPROVED' ? colors.successLight : req.status === 'DENIED' ? colors.dangerLight : colors.warningLight
                 }]}>
-                  <Text style={[styles.statusText, { 
-                    color: req.status === 'APPROVED' ? '#16a34a' : req.status === 'DENIED' ? '#dc2626' : '#ca8a04' 
+                  <Text style={[styles.statusText, {
+                    color: req.status === 'APPROVED' ? colors.success : req.status === 'DENIED' ? colors.danger : colors.warning
                   }]}>{req.status}</Text>
                 </View>
               </View>
@@ -77,10 +82,10 @@ export default function GuardHomeScreen({ navigation }: { navigation: Navigation
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.background,
   },
   content: {
     padding: 24,
@@ -95,16 +100,16 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#1F2937',
+    color: colors.text,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginTop: 4,
   },
   logoutBtn: {
     padding: 8,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.dangerLight,
     borderRadius: 12,
   },
   statsContainer: {
@@ -113,65 +118,61 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   statCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 20,
     borderRadius: 16,
     width: '48%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#4F46E5',
+    color: colors.primary,
   },
   statLabel: {
     fontSize: 14,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginTop: 8,
     fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#374151',
+    color: colors.text,
     marginBottom: 16,
   },
   actionButton: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
     borderRadius: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   actionText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 20,
     fontWeight: '700',
     marginLeft: 16,
   },
   emptyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 24,
     borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   requestCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   requestRow: {
     flexDirection: 'row',
@@ -181,11 +182,11 @@ const styles = StyleSheet.create({
   requestName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#1F2937',
+    color: colors.text,
   },
   requestTime: {
     fontSize: 12,
-    color: '#6B7280',
+    color: colors.textMuted,
     marginTop: 4,
   },
   statusBadge: {

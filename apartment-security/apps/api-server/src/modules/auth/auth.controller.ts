@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/prisma';
 import { createOTP, verifyOTP } from '../../utils/otp.util';
 import { signAccessToken, signRefreshToken, rotateRefreshToken } from '../../utils/jwt.util';
@@ -103,7 +104,14 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
       return next(new AppError('Invalid or expired refresh token', 401));
     }
 
-    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: 'UNKNOWN' }); // Ideally fetch role
+    // Fetch user to get real role (never trust stored token payload for role)
+    const user = await prisma.user.findUnique({
+      where: { id: storedToken.userId },
+      select: { role: true }
+    });
+    if (!user) return next(new AppError('User no longer exists', 401));
+
+    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: user.role });
     const newRefreshToken = await rotateRefreshToken(refreshToken);
 
     // Update DB
@@ -147,6 +155,23 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
+export const logoutAllDevices = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!.userId;
+
+    await prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await auditLog(userId, 'LOGOUT_ALL_DEVICES', 'User', userId);
+
+    return sendSuccess(res, 200, 'Logged out of all devices');
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const registerFcmToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { token } = req.body;
@@ -164,6 +189,109 @@ export const registerFcmToken = async (req: Request, res: Response, next: NextFu
     }
 
     return sendSuccess(res, 200, 'FCM token registered');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) return next(new AppError('Unauthorized', 401));
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        phone: true,
+        email: true,
+        role: true,
+        isActive: true,
+        resident: {
+          select: {
+            id: true,
+            name: true,
+            unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }
+          }
+        }
+      }
+    });
+
+    if (!user) return next(new AppError('User not found', 404));
+    if (!user.isActive) return next(new AppError('Account deactivated', 403));
+
+    return sendSuccess(res, 200, 'Authenticated', user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const signupEmail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password, name, role } = req.body;
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return next(new AppError('Email already in use', 400));
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const resolvedRole = role === 'MANAGER' ? 'MANAGER' : 'RESIDENT';
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: resolvedRole,
+      }
+    });
+
+    if (resolvedRole === 'MANAGER') {
+      const property = await prisma.property.findFirst();
+      if (property) {
+        await prisma.manager.create({
+          data: {
+            userId: user.id,
+            propertyId: property.id,
+            name: name || 'Admin',
+          }
+        });
+      }
+    }
+
+    return sendSuccess(res, 201, 'Signup successful', { id: user.id, email: user.email, role: user.role });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const loginEmail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.passwordHash) {
+      return next(new AppError('Invalid email or password', 401));
+    }
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) {
+      return next(new AppError('Invalid email or password', 401));
+    }
+    
+    const payload = { userId: user.id, role: user.role };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
+    
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 30);
+    await prisma.refreshToken.create({
+      data: { userId: user.id, token: refreshToken, expiresAt: expiryDate }
+    });
+    
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    
+    return sendSuccess(res, 200, 'Login successful', {
+      accessToken,
+      refreshToken,
+      user: { id: user.id, email: user.email, role: user.role }
+    });
   } catch (error) {
     next(error);
   }

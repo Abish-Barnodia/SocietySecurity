@@ -95,6 +95,12 @@ export const suspendPass = async (req: Request, res: Response, next: NextFunctio
     const pass = await prisma.pass.findUnique({ where: { id } });
     if (!pass) return next(new AppError('Pass not found', 404));
 
+    // Ownership check — only the resident who owns the unit can suspend this pass
+    const resident = await prisma.resident.findUnique({ where: { userId: req.user!.userId } });
+    if (!resident || pass.unitId !== resident.unitId) {
+      return next(new AppError('Forbidden: You do not own this pass', 403));
+    }
+
     const updatedPass = await prisma.pass.update({
       where: { id },
       data: { status: 'SUSPENDED', suspendedAt: new Date() }
@@ -112,6 +118,14 @@ export const revokePass = async (req: Request, res: Response, next: NextFunction
     const pass = await prisma.pass.findUnique({ where: { id } });
     if (!pass) return next(new AppError('Pass not found', 404));
 
+    // Residents may only revoke their own unit's passes; managers can revoke any
+    if (req.user!.role === 'RESIDENT') {
+      const resident = await prisma.resident.findUnique({ where: { userId: req.user!.userId } });
+      if (!resident || pass.unitId !== resident.unitId) {
+        return next(new AppError('Forbidden: You do not own this pass', 403));
+      }
+    }
+
     const updatedPass = await prisma.pass.update({
       where: { id },
       data: { status: 'REVOKED', revokedAt: new Date(), revokedBy: req.user!.userId }
@@ -124,13 +138,24 @@ export const revokePass = async (req: Request, res: Response, next: NextFunction
 
 export const getAllPasses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Used by MANAGER
-    const passes = await prisma.pass.findMany({
-      include: { unit: true, resident: true },
-      orderBy: { createdAt: 'desc' },
-      take: 100 // pagination could be added here
-    });
+    // Used by MANAGER — with offset pagination
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
 
-    return sendSuccess(res, 200, 'All passes fetched', passes);
+    const [passes, total] = await prisma.$transaction([
+      prisma.pass.findMany({
+        include: { unit: true, resident: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.pass.count(),
+    ]);
+
+    return sendSuccess(res, 200, 'All passes fetched', {
+      passes,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
   } catch (err) { next(err); }
 };

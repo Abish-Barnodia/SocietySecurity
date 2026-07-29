@@ -6,7 +6,8 @@ import {
   logEntry,
   logExit,
   getUnitEntries,
-  getAllEntries
+  getAllEntries,
+  getEntryPoints
 } from './entry.controller';
 import {
   logEntrySchema,
@@ -15,6 +16,9 @@ import {
 
 const router = Router();
 router.use(authenticate);
+
+// Gate list — used by guards to log entries and residents/guards to display gate names
+router.get('/entry-points', requireRole('GUARD', 'RESIDENT'), getEntryPoints);
 
 // Guard logging
 router.post('/',           requireRole('GUARD'), validate(logEntrySchema), logEntry);

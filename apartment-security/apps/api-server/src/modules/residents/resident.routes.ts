@@ -11,11 +11,15 @@ import {
   updateAlertPreferences,
   getAllResidents,
   onboardResident,
+  onboardSelf,
+  getTowers,
+  getUnitsByTower,
   deactivateResident,
   getUnitSummary,
 } from './resident.controller';
 import {
   onboardResidentSchema,
+  onboardSelfSchema,
   updateProfileSchema,
   alertPreferencesSchema,
 } from './resident.schema';
@@ -25,6 +29,9 @@ const router = Router();
 router.use(authenticate);
 
 // Resident self-service
+router.get('/towers',        getTowers);
+router.get('/units',         getUnitsByTower);
+router.post('/me/onboard',   requireRole('RESIDENT'), validate(onboardSelfSchema), onboardSelf);
 router.get('/me',            requireRole('RESIDENT'), getMyProfile);
 router.put('/me',            requireRole('RESIDENT'), validate(updateProfileSchema), updateMyProfile);
 router.put('/me/alerts',     requireRole('RESIDENT'), validate(alertPreferencesSchema), updateAlertPreferences);

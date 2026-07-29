@@ -21,3 +21,16 @@ export const checkInPostSchema = z.object({
     longitude: z.number().optional()
   })
 });
+
+export const createGuardSchema = z.object({
+  body: z.object({
+    name: z.string().min(2),
+    phone: z.string().min(10),
+    badgeNumber: z.string().min(2),
+    status: z.string().optional(),
+    shift: z.string().optional(),
+    post: z.string().optional(),
+    dateOfJoining: z.string().optional(),
+    photoUrl: z.string().optional()
+  })
+});

@@ -1,13 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 
 const passTypes = ['One-time visitor', 'Delivery / service', 'Recurring', 'Contractor'];
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+// UI labels the backend's createPassSchema doesn't know about — it only accepts these enum values.
+const PASS_TYPE_TO_API: Record<string, string> = {
+  'One-time visitor': 'ONE_TIME',
+  'Delivery / service': 'DELIVERY',
+  'Recurring': 'RECURRING',
+  'Contractor': 'CONTRACTOR',
+};
+
+const DAY_TO_API: Record<string, string> = {
+  Mon: 'MONDAY', Tue: 'TUESDAY', Wed: 'WEDNESDAY', Thu: 'THURSDAY', Fri: 'FRIDAY', Sat: 'SATURDAY', Sun: 'SUNDAY',
+};
+
 export default function CreatePassScreen({ navigation }: { navigation: any }) {
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
   const { createPass } = useData();
   const [selectedType, setSelectedType] = useState('One-time visitor');
   const [name, setName] = useState('');
@@ -48,6 +62,12 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     return `${d.getDate()} ${months[d.getMonth()]}, ${d.getFullYear()}`;
   };
 
+  const formatTime24 = (d: Date) => {
+    const hh = d.getHours().toString().padStart(2, '0');
+    const mm = d.getMinutes().toString().padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
   // Recurring specific
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
 
@@ -59,30 +79,40 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     }
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleCreate = async () => {
     if (!name) {
-      alert('Please enter visitor name');
+      Alert.alert('Missing name', 'Please enter visitor name');
       return;
     }
 
-    const timeString = selectedType === 'Recurring' 
-      ? `${formatTime(dates.entryStart)} - ${formatTime(dates.entryEnd)}`
-      : `${formatDate(dates.validFrom)} ${formatTime(dates.validFrom)}`;
-
-    const newPass = {
-      name,
-      type: selectedType,
-      time: timeString,
+    const newPass: Record<string, unknown> = {
+      visitorName: name,
+      type: PASS_TYPE_TO_API[selectedType] ?? 'ONE_TIME',
       purpose: purpose || 'Visit',
-      phone,
+      visitorPhone: phone,
+      validFrom: selectedType === 'Recurring' ? new Date().toISOString() : dates.validFrom.toISOString(),
+      validUntil: selectedType === 'Recurring' ? dates.expiresOn.toISOString() : dates.validUntil.toISOString(),
     };
 
+    if (selectedType === 'Recurring') {
+      newPass.recurringRule = {
+        allowedDays: selectedDays.map(day => DAY_TO_API[day]),
+        windowStartTime: formatTime24(dates.entryStart),
+        windowEndTime: formatTime24(dates.entryEnd),
+      };
+    }
+
+    setIsSubmitting(true);
     try {
       await createPass(newPass);
-      alert('Pass created successfully!');
+      Alert.alert('Success', 'Pass created successfully!');
       navigation.goBack();
-    } catch (error) {
-      alert('Failed to create pass. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message ?? 'Failed to create pass. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -194,7 +224,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
                 value={shareWhatsApp}
                 onValueChange={setShareWhatsApp}
                 trackColor={{ false: colors.border, true: colors.success }}
-                thumbColor={colors.white}
+                thumbColor={colors.card}
               />
             </View>
           </>
@@ -216,9 +246,9 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.button} onPress={handleCreate}>
+        <TouchableOpacity style={[styles.button, isSubmitting && { opacity: 0.6 }]} onPress={handleCreate} disabled={isSubmitting}>
           <Text style={styles.buttonText}>
-            {selectedType === 'Recurring' ? 'Create recurring pass' : 'Create pass'}
+            {isSubmitting ? 'Creating…' : selectedType === 'Recurring' ? 'Create recurring pass' : 'Create pass'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -226,14 +256,14 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
     padding: 16,
-    paddingBottom: 400, // Large padding to allow scrolling past the keyboard
+    paddingBottom: 40,
   },
   label: {
     fontSize: 14,
@@ -255,7 +285,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 12,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
   },
   typeButtonActive: {
     borderColor: colors.primary,
@@ -270,7 +300,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   input: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
@@ -306,7 +336,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
     justifyContent: 'center',
@@ -322,7 +352,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   dayTextActive: {
-    color: colors.white,
+    color: colors.card,
   },
   timeRow: {
     flexDirection: 'row',
@@ -335,7 +365,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 16,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -346,7 +376,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 16,
     fontWeight: 'bold',
   },

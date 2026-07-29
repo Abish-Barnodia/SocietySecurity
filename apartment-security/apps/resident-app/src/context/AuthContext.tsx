@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import api from '../utils/api';
+import tokenStorage from '../utils/tokenStorage';
 
 type Role = 'RESIDENT' | 'GUARD' | 'MANAGER' | null;
 
@@ -9,13 +9,18 @@ type UserProfile = {
   phone: string;
   wing: string;
   flat: string;
+  propertyName: string;
   photoUri: string | null;
 };
 
 type AuthContextType = {
   isAuthenticated: boolean;
-  login: (email: string, password?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  logoutAllDevices: () => Promise<void>;
+  userId: string | null;
+  userPhone: string | null;
   userEmail: string | null;
   userRole: Role;
   isOnboarded: boolean;
@@ -28,72 +33,74 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userPhone, setUserPhone] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<Role>(null);
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for stored token on mount
+  // Hydrates auth state from GET /auth/me — the single source of truth for
+  // role/resident/onboarding status, used both on app launch and right after login.
+  const hydrateFromMe = async () => {
+    const response = await api.get('/auth/me');
+    const { data } = response.data; // sendSuccess wraps payload in { data }
+    setIsAuthenticated(true);
+    setUserId(data.id ?? null);
+    setUserRole(data.role as Role);
+    setUserPhone(data.phone ?? null);
+    setUserEmail(data.email ?? null);
+    setIsOnboarded(data.role !== 'RESIDENT' || !!data.resident);
+    if (data.resident) {
+      setUserProfile({
+        name: data.resident.name ?? '',
+        phone: data.phone ?? '',
+        wing: data.resident.unit?.tower ?? '',
+        flat: data.resident.unit?.unitNumber ?? '',
+        propertyName: data.resident.unit?.property?.name ?? '',
+        photoUri: null,
+      });
+    } else {
+      setUserProfile(null);
+    }
+  };
+
   useEffect(() => {
     const bootstrapAsync = async () => {
       try {
-        const token = await SecureStore.getItemAsync('userToken');
+        const token = await tokenStorage.getItemAsync('userToken');
         if (token) {
-          // Verify token or fetch user profile here if you have a /me endpoint
-          // For now, assume token is valid and they are a RESIDENT
-          setIsAuthenticated(true);
-          setUserRole('RESIDENT');
-          setIsOnboarded(true); // Assuming they are onboarded if they have a token
+          await hydrateFromMe();
         }
-      } catch (e) {
-        // Restoring token failed
-        console.error('Failed to restore token', e);
+      } catch {
+        await tokenStorage.deleteItemAsync('userToken').catch(() => {});
       }
       setIsLoading(false);
     };
-
     bootstrapAsync();
   }, []);
 
-  const login = async (email: string, password?: string) => {
-    if (!password) {
-      alert("Password is required for secure login.");
-      return;
-    }
-    
+  const login = async (email: string, password: string): Promise<void> => {
+    setIsLoading(true);
     try {
-      const response = await api.post('/auth/login', {
-        email,
-        password
-      });
+      const response = await api.post('/auth/login', { email, password });
+      const { data } = response.data;
+      await tokenStorage.setItemAsync('userToken', data.accessToken);
+      await tokenStorage.setItemAsync('refreshToken', data.refreshToken);
+      await hydrateFromMe();
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      const { token, user } = response.data;
-      
-      // Store token securely
-      await SecureStore.setItemAsync('userToken', token);
-
-      let role: Role = user.role || 'RESIDENT';
-
-      setIsAuthenticated(true);
-      setUserEmail(user.email || email);
-      setUserRole(role);
-      // For development/mock, we assume they are onboarded. 
-      // Ideally, the backend would tell us if their profile is complete.
-      setIsOnboarded(role !== 'RESIDENT' || !!user.resident); 
-      
-      if (user.resident) {
-        setUserProfile({
-          name: user.resident.name,
-          phone: user.phone,
-          wing: user.resident.unit?.tower || '',
-          flat: user.resident.unit?.unitNumber || '',
-          photoUri: null,
-        });
-      }
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      alert(error.response?.data?.message || 'Login failed. Please check your credentials.');
+  const signup = async (email: string, password: string): Promise<void> => {
+    setIsLoading(true);
+    try {
+      await api.post('/auth/signup', { email, password, role: 'RESIDENT' });
+      await login(email, password);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -104,19 +111,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await SecureStore.deleteItemAsync('userToken');
-    } catch (error) {
-      console.error('Failed to clear secure store:', error);
+      const refreshToken = await tokenStorage.getItemAsync('refreshToken');
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken }).catch(() => {});
+      }
+      await tokenStorage.deleteItemAsync('userToken');
+      await tokenStorage.deleteItemAsync('refreshToken');
+    } catch {
+      // Silently ignore — local state is still cleared
     }
     setIsAuthenticated(false);
+    setUserId(null);
+    setUserPhone(null);
     setUserEmail(null);
     setUserRole(null);
     setIsOnboarded(false);
     setUserProfile(null);
   };
 
+  // Revokes every refresh token issued to this account (all devices), then
+  // clears local session state the same way a normal logout does.
+  const logoutAllDevices = async () => {
+    try {
+      await api.post('/auth/logout-all');
+    } catch {
+      // Still proceed to clear the local session even if the request failed.
+    }
+    await logout();
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, userEmail, userRole, isOnboarded, userProfile, updateProfile, isLoading }}>
+    <AuthContext.Provider value={{
+      isAuthenticated, login, signup, logout, logoutAllDevices,
+      userId, userPhone, userEmail, userRole, isOnboarded, userProfile, updateProfile, isLoading
+    }}>
       {children}
     </AuthContext.Provider>
   );

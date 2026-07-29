@@ -6,17 +6,19 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().default('5000').transform(Number),
-  DATABASE_URL: z.string().url().optional(), // Made optional for now so dev can start without it immediately crashing if absent
+  DATABASE_URL: z.string().url({ message: 'DATABASE_URL must be a valid URL' }),
+  DIRECT_URL: z.string().url({ message: 'DIRECT_URL must be a valid URL' }).optional(),
   REDIS_URL: z.string().default('redis://localhost:6379'),
-  JWT_SECRET: z.string().min(32).default('your_super_secret_key_min_32_chars_override_me'),
+  JWT_SECRET: z.string().min(32, { message: 'JWT_SECRET must be at least 32 characters — set it in .env' }),
   JWT_EXPIRES_IN: z.string().default('7d'),
-  JWT_REFRESH_SECRET: z.string().min(32).default('your_refresh_secret_key_override_me_please'),
+  JWT_REFRESH_SECRET: z.string().min(32, { message: 'JWT_REFRESH_SECRET must be at least 32 characters — set it in .env' }),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
   
   // Third party services (optional for local dev, required in prod)
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
+  FIREBASE_STORAGE_BUCKET: z.string().optional(),
   
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
@@ -29,7 +31,7 @@ const envSchema = z.object({
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_ID: z.string().optional(),
   
-  QR_HMAC_SECRET: z.string().min(32).default('your_qr_signing_secret_override_me_please'),
+  QR_HMAC_SECRET: z.string().min(32, { message: 'QR_HMAC_SECRET must be at least 32 characters — set it in .env' }),
   OTP_EXPIRY_MINUTES: z.string().default('10').transform(Number),
   EMERGENCY_SMS_NUMBER: z.string().optional(),
   

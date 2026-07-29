@@ -1,10 +1,27 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
-import { colors } from '../theme/colors';
+import { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 
 export default function EntriesScreen() {
-  const { entries } = useData();
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
+  const { entries, fetchEntries } = useData();
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchEntries();
+    }, [fetchEntries])
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchEntries();
+    setRefreshing(false);
+  };
 
   const renderEntry = (item: any) => (
     <View key={item.id} style={styles.card}>
@@ -31,13 +48,17 @@ export default function EntriesScreen() {
 
   const entriesToday = entries.filter(e => e.date === 'TODAY');
   const entriesYesterday = entries.filter(e => e.date === 'YESTERDAY');
+  const entriesEarlier = entries.filter(e => e.date === 'EARLIER');
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Entry log</Text>
       </View>
-      <ScrollView contentContainerStyle={styles.listContent}>
+      <ScrollView
+        contentContainerStyle={styles.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      >
         {entries.length === 0 ? (
           <View style={{ padding: 24, alignItems: 'center', marginTop: 40 }}>
             <Text style={{ fontSize: 48, marginBottom: 16 }}>📜</Text>
@@ -59,6 +80,13 @@ export default function EntriesScreen() {
                 {entriesYesterday.map(renderEntry)}
               </>
             )}
+
+            {entriesEarlier.length > 0 && (
+              <>
+                <Text style={[styles.sectionHeader, { marginTop: (entriesToday.length > 0 || entriesYesterday.length > 0) ? 16 : 0 }]}>EARLIER</Text>
+                {entriesEarlier.map(renderEntry)}
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -66,7 +94,7 @@ export default function EntriesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -91,7 +119,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -111,7 +139,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 20,
     fontWeight: 'bold',
   },

@@ -49,6 +49,7 @@ export const alertEscalationJob = cron.schedule('*/1 * * * *', async () => {
         // SMS escalation for P1
         if (priority === 'P1') {
           for (const target of escalationTargets) {
+            if (!target.phone) continue;
             await sendSMS(target.phone, `ESCALATED P1: ${alert.title}. ${alert.body}. Check the app immediately.`);
           }
         }

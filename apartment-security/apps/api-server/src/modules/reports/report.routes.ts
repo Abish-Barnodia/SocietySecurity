@@ -3,7 +3,8 @@ import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
 import {
   getOperationsOverview,
-  generateMonthlyReport
+  generateMonthlyReport,
+  getAuditLogs
 } from './report.controller';
 
 const router = Router();
@@ -14,5 +15,8 @@ router.get('/overview', requireRole('MANAGER', 'COMMITTEE'), getOperationsOvervi
 
 // Managers can generate monthly reports
 router.get('/monthly', requireRole('MANAGER'), generateMonthlyReport);
+
+// Managers / Committee can view audit logs
+router.get('/audit', requireRole('MANAGER', 'COMMITTEE'), getAuditLogs);
 
 export { router as reportRouter };

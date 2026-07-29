@@ -24,3 +24,19 @@ export const registerFcmTokenSchema = z.object({
     token: z.string().min(1),
   })
 });
+
+export const signupEmailSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+    password: z.string().min(6),
+    name: z.string().min(2).optional(),
+    role: z.enum(['RESIDENT', 'MANAGER']).optional(),
+  })
+});
+
+export const loginEmailSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+    password: z.string().min(1),
+  })
+});

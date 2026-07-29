@@ -4,6 +4,65 @@ import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 
+export const getDirectory = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guards = await prisma.guard.findMany({
+      include: {
+        user: { select: { phone: true } },
+        shifts: {
+          orderBy: { startedAt: 'desc' },
+          take: 1
+        },
+        postCheckIns: {
+          orderBy: { checkedInAt: 'desc' },
+          take: 1,
+          include: { entryPoint: true }
+        }
+      }
+    });
+
+    const formatted = guards.map(g => ({
+      id: g.id,
+      name: g.name,
+      phone: g.user.phone,
+      badgeNumber: g.badgeNumber,
+      isOnDuty: g.isOnDuty,
+      lastShift: g.shifts[0] || null,
+      lastPost: g.postCheckIns[0] || null
+    }));
+
+    return sendSuccess(res, 200, 'Guard directory', formatted);
+  } catch (err) { next(err); }
+};
+
+export const getActiveGuards = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guards = await prisma.guard.findMany({
+      where: { isOnDuty: true },
+      include: {
+        user: { select: { phone: true } },
+        postCheckIns: {
+          orderBy: { checkedInAt: 'desc' },
+          take: 1,
+          include: { entryPoint: true }
+        }
+      }
+    });
+
+    const formatted = guards.map(g => ({
+      id: g.id,
+      name: g.name,
+      phone: g.user.phone,
+      badgeNumber: g.badgeNumber,
+      status: 'On Post', // default, could be computed based on time
+      entryPoint: g.postCheckIns[0]?.entryPoint || null,
+      checkedInAt: g.postCheckIns[0]?.checkedInAt || null
+    }));
+
+    return sendSuccess(res, 200, 'Active guards', formatted);
+  } catch (err) { next(err); }
+};
+
 export const startShift = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { entryPointId, latitude, longitude } = req.body;
@@ -108,5 +167,129 @@ export const checkInPost = async (req: Request, res: Response, next: NextFunctio
 
     await auditLog(req.user!.userId, 'POST_CHECK_IN', 'GuardPost', post.id);
     return sendSuccess(res, 201, 'Checked into post', post);
+  } catch (err) { next(err); }
+};
+
+export const createGuard = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, phone, badgeNumber, status, shift, post, dateOfJoining, photoUrl } = req.body;
+    
+    // We assume the admin creating the guard belongs to a property
+    const manager = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
+    const propertyId = manager ? manager.propertyId : (await prisma.property.findFirst())?.id;
+    
+    if (!propertyId) return next(new AppError('No property found to associate guard', 400));
+
+    // Check if badge is already in use
+    const existingBadge = await prisma.guard.findUnique({ where: { badgeNumber } });
+    if (existingBadge) return next(new AppError('Badge number already in use', 400));
+
+    // Upsert User
+    let user = await prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          phone,
+          role: 'GUARD',
+          passwordHash: '123456', // default password
+          isActive: true
+        }
+      });
+    }
+
+    // Check if guard already exists for this user
+    const existingGuard = await prisma.guard.findUnique({ where: { userId: user.id } });
+    if (existingGuard) return next(new AppError('A guard with this phone number already exists', 400));
+
+    // Create Guard
+    const guard = await prisma.guard.create({
+      data: {
+        userId: user.id,
+        propertyId,
+        name,
+        badgeNumber,
+        isOnDuty: status === 'On Post'
+      }
+    });
+
+    await auditLog(req.user!.userId, 'CREATE_GUARD', 'Guard', guard.id);
+    return sendSuccess(res, 201, 'Guard created successfully', guard);
+  } catch (err) { next(err); }
+};
+
+export const getGuardProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    
+    const guard = await prisma.guard.findUnique({
+      where: { id },
+      include: {
+        user: { select: { phone: true, email: true } },
+        property: { select: { name: true } },
+        shifts: {
+          orderBy: { startedAt: 'desc' },
+          take: 3
+        },
+        postCheckIns: {
+          orderBy: { checkedInAt: 'desc' },
+          take: 5,
+          include: { entryPoint: true }
+        },
+        incidents: {
+          orderBy: { createdAt: 'desc' },
+          take: 5
+        },
+        entries: {
+          orderBy: { entryAt: 'desc' },
+          take: 5,
+          include: { entryPoint: true }
+        }
+      }
+    });
+
+    if (!guard) return next(new AppError('Guard not found', 404));
+
+    // Compute basic timeline from post check-ins and entries
+    const timeline = [
+      ...guard.postCheckIns.map(p => ({
+        type: 'check_in',
+        title: 'Post Check-in',
+        description: `Regular check-in at ${p.entryPoint.name}`,
+        timestamp: p.checkedInAt
+      })),
+      ...guard.entries.map(e => ({
+        type: 'entry_scan',
+        title: `Entry Scan — ${e.visitorName || 'Visitor'}`,
+        description: `Processed at ${e.entryPoint.name}`,
+        timestamp: e.entryAt
+      })),
+      ...guard.incidents.map(i => ({
+        type: 'incident',
+        title: `Incident: ${i.type}`,
+        description: i.description,
+        timestamp: i.createdAt
+      }))
+    ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    const profileData = {
+      id: guard.id,
+      name: guard.name,
+      badgeNumber: guard.badgeNumber,
+      isOnDuty: guard.isOnDuty,
+      phone: guard.user.phone,
+      createdAt: guard.createdAt,
+      lastPost: guard.postCheckIns[0] || null,
+      lastShift: guard.shifts[0] || null,
+      recentShifts: guard.shifts,
+      timeline,
+      stats: {
+        monthlyScans: 1247, // could be computed dynamically
+        compliance: 98,
+        rating: 4.5,
+        incidents: guard.incidents.length
+      }
+    };
+
+    return sendSuccess(res, 200, 'Guard profile', profileData);
   } catch (err) { next(err); }
 };

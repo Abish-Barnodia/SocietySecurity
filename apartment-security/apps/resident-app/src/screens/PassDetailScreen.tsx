@@ -1,25 +1,43 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Linking, Alert } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { colors } from '../theme/colors';
+import * as FileSystem from 'expo-file-system/legacy';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
 
 type RoutePropType = RouteProp<RootStackParamList, 'PassDetail'>;
 
 export default function PassDetailScreen({ navigation, route }: { navigation: any, route: RoutePropType }) {
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
   const { passId } = route.params;
-  const { passes, updatePassStatus } = useData();
+  const { passes, suspendPass, revokePass } = useData();
+  const { userProfile } = useAuth();
   const [isSharing, setIsSharing] = React.useState(false);
-  
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
+
   const pass = passes.find(p => p.id === passId);
+  const propertyName = userProfile?.propertyName || 'the property';
 
   const generateAndSharePDF = async () => {
     if (!pass || isSharing) return;
     setIsSharing(true);
+    
+    const qrData = JSON.stringify({
+      id: pass.id,
+      name: pass.name,
+      type: pass.type,
+      purpose: pass.purpose,
+      time: pass.time,
+      phone: pass.phone || 'N/A',
+      gate: pass.gate || 'Main Gate'
+    });
+
     try {
       const html = `
         <html>
@@ -29,7 +47,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
               <p style="color: #64748b; font-size: 18px; margin-top: 0;">${pass.purpose}</p>
               
               <div style="margin: 40px 0;">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://apartment-security.com/pass/${pass.id}" width="250" height="250" />
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}" width="250" height="250" />
               </div>
               
               <h2 style="color: #16a34a; margin-bottom: 5px;">Valid: ${pass.time}</h2>
@@ -42,11 +60,26 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           </body>
         </html>
       `;
-      const { uri } = await Print.printToFileAsync({ html });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf', dialogTitle: 'Share Visitor Pass' });
+      const { base64 } = await Print.printToFileAsync({ html, base64: true });
+      
+      const safeFilename = `VisitorPass_${pass.id.substring(pass.id.length - 8)}.pdf`;
+      const newUri = FileSystem.documentDirectory + safeFilename;
+      
+      await FileSystem.writeAsStringAsync(newUri, base64 || '', {
+        encoding: FileSystem.EncodingType.Base64
+      });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(newUri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Share Visitor Pass',
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        Alert.alert('Sharing is not available on your device');
+      }
     } catch (error) {
-      console.error(error);
-      alert('Error sharing pass as PDF');
+      Alert.alert('Error', 'Error sharing pass as PDF');
     } finally {
       setIsSharing(false);
     }
@@ -73,217 +106,272 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
     );
   }
 
-  const handleStatusUpdate = (status: 'Suspended' | 'Expired') => {
-    updatePassStatus(pass.id, status);
-    alert(`Pass has been ${status.toLowerCase()}`);
-    navigation.goBack();
+  const handleStatusUpdate = async (status: 'Suspended' | 'Expired') => {
+    setIsUpdatingStatus(true);
+    try {
+      if (status === 'Suspended') {
+        await suspendPass(pass.id);
+      } else {
+        await revokePass(pass.id);
+      }
+      Alert.alert('Success', `Pass has been ${status.toLowerCase()}.`);
+      navigation.goBack();
+    } catch {
+      Alert.alert('Error', `Failed to ${status === 'Suspended' ? 'suspend' : 'revoke'} pass. Please try again.`);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const getPassCode = () => `PASS-${pass.id.substring(pass.id.length - 8).toUpperCase()}`;
+
+  const shareViaSMS = async () => {
+    const message = `Hello ${pass.name}, your visitor pass for ${propertyName} is: ${getPassCode()}`;
+    const phoneNum = pass.phone ? pass.phone.replace(/\D/g, '') : '';
+    const url = `sms:${phoneNum}?body=${encodeURIComponent(message)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('SMS is not available.');
+      }
+    } catch {
+      Alert.alert('Could not open SMS app');
+    }
+  };
+
+  const copyPassCode = async () => {
+    try {
+      await Share.share({
+        message: getPassCode(),
+      });
+    } catch {
+      Alert.alert('Could not share pass code');
+    }
   };
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         
-        <View style={styles.card}>
-          <View style={styles.badgeContainer}>
-            <View style={[styles.badgeSuccess, { backgroundColor: pass.color + '20' }]}>
-              {pass.status === 'Active' && <View style={[styles.dot, { backgroundColor: pass.color }]} />}
-              <Text style={[styles.badgeSuccessText, { color: pass.color }]}>{pass.status}</Text>
+        {/* User Info Card */}
+        <View style={styles.infoCard}>
+          <View style={styles.userInfoRow}>
+            <View style={styles.userIconBg}>
+              <Text style={styles.userIcon}>👤</Text>
+            </View>
+            <View>
+              <Text style={styles.name}>{pass.name}</Text>
+              <Text style={styles.phoneText}>{pass.phone || 'No phone on file'}</Text>
             </View>
           </View>
 
-          <Text style={styles.name}>{pass.name}</Text>
+          <View style={styles.detailsGrid}>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Purpose</Text>
+              <Text style={styles.gridValue}>{pass.purpose}</Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Date</Text>
+              <Text style={styles.gridValue}>{pass.created}</Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Time</Text>
+              <Text style={styles.gridValue}>{pass.time}</Text>
+            </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Gate</Text>
+              <Text style={styles.gridValue}>{pass.gate || 'Main Gate'}</Text>
+            </View>
+          </View>
+        </View>
 
-          <View style={styles.qrContainer}>
+        <Text style={styles.sectionTitle}>{pass.status.toUpperCase()}</Text>
+
+        {/* QR Code Card */}
+        <View style={styles.qrCard}>
+          <View style={styles.qrCodeWrapper}>
             <QRCode
-              value={`https://apartment-security.com/pass/${pass.id}`}
+              value={JSON.stringify({
+                id: pass.id,
+                name: pass.name,
+                type: pass.type,
+                purpose: pass.purpose,
+                time: pass.time,
+                phone: pass.phone || 'N/A',
+                gate: pass.gate || 'Main Gate'
+              })}
               size={200}
               color={colors.text}
               backgroundColor="white"
             />
-            {/* Logo overlay on QR mock */}
-            <View style={styles.qrLogo}>
-              <Text style={{fontSize: 20}}>🏢</Text>
-            </View>
           </View>
 
-          <Text style={styles.qrSubtitle}>Show at gate • HMAC signed</Text>
-          <Text style={styles.validText}>{pass.time}</Text>
-
-          <View style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Purpose</Text>
-            <Text style={styles.detailValue}>{pass.purpose}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Entry gate</Text>
-            <Text style={styles.detailValue}>{pass.gate || 'Main Gate'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Phone</Text>
-            <Text style={styles.detailValue}>{pass.phone || 'N/A'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Created</Text>
-            <Text style={styles.detailValue}>{pass.created}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Used</Text>
-            <Text style={styles.detailValue}>0 times</Text>
-          </View>
+          <Text style={styles.passIdText}>{getPassCode()}</Text>
+          <Text style={styles.qrSubtitle}>Show this QR code at the gate</Text>
         </View>
 
-      </ScrollView>
+        {/* Action Buttons */}
+        <TouchableOpacity style={styles.primaryActionBtn} onPress={generateAndSharePDF}>
+          <Text style={styles.primaryActionText}>📤 Share Pass PDF</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.secondaryActionBtn} onPress={shareViaSMS}>
+          <Text style={styles.secondaryActionText}>Share via SMS</Text>
+        </TouchableOpacity>
 
-      <View style={styles.footer}>
+        <TouchableOpacity style={styles.secondaryActionBtn} onPress={copyPassCode}>
+          <Text style={styles.secondaryActionText}>Share Pass Code</Text>
+        </TouchableOpacity>
+
         {pass.status === 'Active' && (
-          <TouchableOpacity style={styles.suspendButton} onPress={() => handleStatusUpdate('Suspended')}>
-            <Text style={styles.suspendButtonText}>⏸ Suspend</Text>
+          <TouchableOpacity
+            style={[styles.secondaryActionBtn, { opacity: isUpdatingStatus ? 0.6 : 1 }]}
+            onPress={() => handleStatusUpdate('Suspended')}
+            disabled={isUpdatingStatus}
+          >
+            <Text style={styles.secondaryActionText}>Suspend Pass</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.revokeButton} onPress={() => handleStatusUpdate('Expired')}>
-          <Text style={styles.revokeButtonText}>✕ Revoke</Text>
-        </TouchableOpacity>
-      </View>
+        {(pass.status === 'Active' || pass.status === 'Suspended') && (
+          <TouchableOpacity
+            style={[styles.secondaryActionBtn, { opacity: isUpdatingStatus ? 0.6 : 1 }]}
+            onPress={() => handleStatusUpdate('Expired')}
+            disabled={isUpdatingStatus}
+          >
+            <Text style={[styles.secondaryActionText, { color: colors.danger }]}>Revoke Pass</Text>
+          </TouchableOpacity>
+        )}
+
+      </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
   content: {
     padding: 16,
-    paddingBottom: 400, // Extra space to force scrolling on Android
+    paddingBottom: 40,
   },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
+  infoCard: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
     padding: 24,
+    marginBottom: 24,
+  },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  userIconBg: {
+    width: 56,
+    height: 56,
+    backgroundColor: '#EBEBEB',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  userIcon: {
+    fontSize: 28,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  phoneText: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridItem: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  gridLabel: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  gridValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  qrCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 32,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
-  },
-  badgeContainer: {
-    width: '100%',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  badgeSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.successLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-    marginRight: 4,
-  },
-  badgeSuccessText: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
     marginBottom: 24,
   },
-  qrContainer: {
+  qrCodeWrapper: {
     padding: 16,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 12,
     elevation: 4,
-    marginBottom: 16,
-    position: 'relative',
+    marginBottom: 24,
   },
-  qrLogo: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -16 }, { translateY: -16 }],
-    backgroundColor: colors.white,
-    padding: 4,
-    borderRadius: 8,
+  passIdText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 8,
+    letterSpacing: 2,
   },
   qrSubtitle: {
     fontSize: 14,
     color: colors.textMuted,
-    marginBottom: 8,
   },
-  validText: {
+  primaryActionBtn: {
+    backgroundColor: '#B67318',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  primaryActionText: {
+    color: colors.card,
     fontSize: 16,
-    color: colors.success,
     fontWeight: '600',
-    marginBottom: 24,
   },
-  divider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: colors.border,
-    marginBottom: 24,
+  secondaryActionBtn: {
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  detailValue: {
-    fontSize: 14,
+  secondaryActionText: {
     color: colors.text,
-    fontWeight: '500',
-  },
-  footer: {
-    flexDirection: 'row',
-    padding: 16,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  suspendButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  suspendButtonText: {
-    color: colors.warning,
     fontSize: 16,
-    fontWeight: 'bold',
-  },
-  revokeButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.dangerLight,
-    backgroundColor: colors.dangerLight,
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  revokeButtonText: {
-    color: colors.danger,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });

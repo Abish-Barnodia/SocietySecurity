@@ -1,0 +1,11 @@
+{
+  "name": "@apartment-security/visitor-access-service",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,9 +1,16 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { colors } from '../theme/colors';
-import api from '../utils/api';
+import api, { API_URL } from '../utils/api';
+import tokenStorage from '../utils/tokenStorage';
+import { useAuth } from './AuthContext';
+import { scheduleLocalNotification } from '../utils/notifications';
+
+const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
 
 export type Pass = {
   id: string;
+  unitId: string;
   name: string;
   type: string;
   status: 'Active' | 'Suspended' | 'Expired';
@@ -13,6 +20,7 @@ export type Pass = {
   color: string;
   created: string;
   gate?: string;
+  qrPayload?: string | null;
 };
 
 export type Alert = {
@@ -24,17 +32,115 @@ export type Alert = {
   unread: boolean;
 };
 
+const PASS_STATUS_COLOR: Record<string, string> = {
+  ACTIVE: colors.primary,
+  SUSPENDED: colors.warning,
+  EXPIRED: colors.textMuted,
+  REVOKED: colors.danger,
+};
+
+const PASS_STATUS_LABEL: Record<string, Pass['status']> = {
+  ACTIVE: 'Active',
+  SUSPENDED: 'Suspended',
+  EXPIRED: 'Expired',
+  REVOKED: 'Expired',
+};
+
+const formatTimeRange = (validFrom: string, validUntil: string) => {
+  const opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+  const from = new Date(validFrom).toLocaleTimeString([], opts);
+  const until = new Date(validUntil).toLocaleTimeString([], opts);
+  return `${from} - ${until}`;
+};
+
+// Maps the backend Pass record (visitorName/validFrom/validUntil/status enum, etc.)
+// to the simpler shape the pass screens render.
+const mapPass = (raw: any): Pass => ({
+  id: raw.id,
+  unitId: raw.unitId,
+  name: raw.visitorName,
+  type: raw.type,
+  status: PASS_STATUS_LABEL[raw.status] ?? 'Active',
+  time: raw.validFrom && raw.validUntil ? formatTimeRange(raw.validFrom, raw.validUntil) : '',
+  purpose: raw.purpose ?? '',
+  phone: raw.visitorPhone ?? undefined,
+  color: PASS_STATUS_COLOR[raw.status] ?? colors.primary,
+  created: raw.createdAt ? new Date(raw.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '',
+  gate: raw.gate ?? undefined,
+  qrPayload: raw.qrPayload ?? null,
+});
+
+const ALERT_PRIORITY_ICON: Record<string, string> = {
+  P1: '🚨',
+  P2: '⚠️',
+  P3: '🔔',
+};
+
+const mapAlert = (raw: any): Alert => ({
+  id: raw.id,
+  title: raw.title,
+  subtitle: raw.body,
+  time: raw.createdAt ? new Date(raw.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '',
+  icon: ALERT_PRIORITY_ICON[raw.priority] ?? '🔔',
+  unread: !raw.acknowledgedAt,
+});
+
 export type Entry = {
   id: string;
   name: string;
   initials: string;
   color: string;
   time: string;
-  status: 'Entered' | 'Exited' | 'Denied';
+  status: 'Entered' | 'Exited' | 'Denied' | 'Pending';
   method: string;
   gate?: string;
   statusColor: string;
-  date: 'TODAY' | 'YESTERDAY';
+  date: 'TODAY' | 'YESTERDAY' | 'EARLIER';
+};
+
+const ENTRY_METHOD_LABEL: Record<string, string> = {
+  QR_SCAN: 'QR scan',
+  OTP: 'OTP',
+  MANUAL_GUARD: 'Walk-in',
+  VEHICLE_ANPR: 'Vehicle',
+};
+
+const ENTRY_STATUS: Record<string, { label: Entry['status']; color: string }> = {
+  APPROVED: { label: 'Entered', color: colors.success },
+  DENIED: { label: 'Denied', color: colors.danger },
+  NO_RESPONSE: { label: 'Denied', color: colors.danger },
+  PENDING_APPROVAL: { label: 'Pending', color: colors.warning },
+};
+
+const AVATAR_PALETTE = ['#8b5cf6', '#10b981', '#f59e0b', '#3b82f6', '#ec4899', '#0ea5e9'];
+const colorForId = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+};
+
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+const mapEntry = (raw: any): Entry => {
+  const entryDate = new Date(raw.entryAt);
+  const today = startOfDay(new Date());
+  const diffDays = Math.round((today - startOfDay(entryDate)) / 86400000);
+  const status = raw.exitAt
+    ? { label: 'Exited' as const, color: colors.textMuted }
+    : ENTRY_STATUS[raw.status] ?? { label: 'Entered' as const, color: colors.success };
+
+  return {
+    id: raw.id,
+    name: raw.visitorName,
+    initials: (raw.visitorName || '?').charAt(0).toUpperCase(),
+    color: colorForId(raw.id),
+    time: entryDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    status: status.label,
+    method: ENTRY_METHOD_LABEL[raw.method] ?? raw.method,
+    gate: raw.entryPoint?.name ?? undefined,
+    statusColor: status.color,
+    date: diffDays === 0 ? 'TODAY' : diffDays === 1 ? 'YESTERDAY' : 'EARLIER',
+  };
 };
 
 export type Member = {
@@ -46,6 +152,15 @@ export type Member = {
   isPrimary: boolean;
 };
 
+const mapMember = (raw: any): Member => ({
+  id: raw.id,
+  name: raw.name,
+  phone: raw.user?.phone ?? '',
+  initials: (raw.name || '?').charAt(0).toUpperCase(),
+  color: colorForId(raw.id),
+  isPrimary: !!raw.isPrimary,
+});
+
 export type ScanRequest = {
   id: string;
   passId?: string;
@@ -53,6 +168,55 @@ export type ScanRequest = {
   status: 'PENDING' | 'APPROVED' | 'DENIED';
   time: string;
 };
+
+export type PendingWalkIn = {
+  id: string;
+  visitorName: string;
+  purpose?: string;
+  gatePhotoUrl?: string;
+  time: string;
+};
+
+export type Amenity = {
+  id: string;
+  name: string;
+  capacity: number;
+  status: string;
+  openTime: string;
+  closeTime: string;
+  timeLabel: string;
+  icon: string;
+};
+
+const format12h = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h)) return hhmm;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 || 12;
+  return `${hour}:${String(m ?? 0).padStart(2, '0')} ${period}`;
+};
+
+const AMENITY_ICON: [RegExp, string][] = [
+  [/gym/i, '💪'],
+  [/pool/i, '🏊‍♂️'],
+  [/club/i, '🎉'],
+  [/guest/i, '🛏️'],
+  [/park/i, '🅿️'],
+  [/court|tennis|badminton/i, '🏸'],
+  [/garden|park(?!ing)/i, '🌳'],
+];
+const iconForAmenity = (name: string) => AMENITY_ICON.find(([re]) => re.test(name))?.[1] ?? '🏢';
+
+const mapAmenity = (raw: any): Amenity => ({
+  id: raw.id,
+  name: raw.name,
+  capacity: raw.capacity,
+  status: raw.status,
+  openTime: raw.openTime,
+  closeTime: raw.closeTime,
+  timeLabel: `${format12h(raw.openTime)} – ${format12h(raw.closeTime)}`,
+  icon: iconForAmenity(raw.name),
+});
 
 export type EmergencyContact = {
   id: string;
@@ -67,29 +231,52 @@ export type AlertPreferences = {
   staffEnabled: boolean;
 };
 
+const DEFAULT_ALERT_PREFERENCES: AlertPreferences = {
+  pushEnabled: true,
+  smsEnabled: false,
+  staffEnabled: true,
+};
+
+// The backend stores alertPreferences as a free-form JSON blob (Resident.alertPreferences)
+// — merge onto defaults so keys never previously saved still get a sane value.
+const mapAlertPreferences = (raw: any): AlertPreferences => ({
+  ...DEFAULT_ALERT_PREFERENCES,
+  ...(raw && typeof raw === 'object' ? raw : {}),
+});
+
 type DataContextType = {
   passes: Pass[];
-  addPass: (pass: Pass) => void;
-  updatePassStatus: (id: string, status: Pass['status']) => void;
   fetchPasses: () => Promise<void>;
   createPass: (data: Partial<Pass>) => Promise<void>;
+  suspendPass: (id: string) => Promise<void>;
+  revokePass: (id: string) => Promise<void>;
   alerts: Alert[];
   addAlert: (alert: Alert) => void;
   markAlertRead: (id: string) => void;
+  markAllAlertsRead: () => void;
   fetchAlerts: () => Promise<void>;
+  triggerDuressAlert: () => Promise<void>;
   entries: Entry[];
-  addEntry: (entry: Entry) => void;
+  fetchEntries: () => Promise<void>;
   members: Member[];
-  addMember: (member: Member) => void;
-  deleteMember: (id: string) => void;
+  fetchMembers: () => Promise<void>;
+  addMember: (name: string, phone: string) => Promise<void>;
+  deleteMember: (id: string) => Promise<void>;
+  amenities: Amenity[];
+  fetchAmenities: () => Promise<void>;
+  bookAmenity: (amenityId: string, date: Date, startTime: string, endTime: string) => Promise<void>;
   scanRequests: ScanRequest[];
   addScanRequest: (request: ScanRequest) => void;
-  updateScanRequestStatus: (id: string, status: ScanRequest['status']) => void;
+  pendingWalkIns: PendingWalkIn[];
+  respondWalkIn: (id: string, status: 'APPROVED' | 'DENIED') => Promise<void>;
   emergencyContacts: EmergencyContact[];
-  addEmergencyContact: (contact: EmergencyContact) => void;
-  removeEmergencyContact: (id: string) => void;
+  updateEmergencyContact: (name: string, phone: string) => Promise<void>;
+  clearEmergencyContact: () => Promise<void>;
   alertPreferences: AlertPreferences;
-  updateAlertPreferences: (prefs: Partial<AlertPreferences>) => void;
+  updateAlertPreferences: (prefs: Partial<AlertPreferences>) => Promise<void>;
+  showUnitInCommunity: boolean;
+  updateShowUnitInCommunity: (value: boolean) => Promise<void>;
+  fetchProfileSettings: () => Promise<void>;
 };
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -99,19 +286,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [scanRequests, setScanRequests] = useState<ScanRequest[]>([]);
+  const [pendingWalkIns, setPendingWalkIns] = useState<PendingWalkIn[]>([]);
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
-  const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>({
-    pushEnabled: true,
-    smsEnabled: false,
-    staffEnabled: true,
-  });
+  const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(DEFAULT_ALERT_PREFERENCES);
+  const [showUnitInCommunity, setShowUnitInCommunity] = useState<boolean>(true);
+
+  const { isAuthenticated, userRole } = useAuth();
+  const socketRef = useRef<Socket | null>(null);
 
   const fetchPasses = async () => {
     try {
       const response = await api.get('/passes');
-      // Assuming backend returns an array of passes directly matching this structure or needing mapping
-      setPasses(response.data.passes || response.data);
+      const raw: any[] = response.data.data ?? [];
+      setPasses(raw.map(mapPass));
     } catch (error) {
       console.error('Failed to fetch passes:', error);
     }
@@ -120,7 +309,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createPass = async (data: Partial<Pass>) => {
     try {
       const response = await api.post('/passes', data);
-      const newPass = response.data.pass || response.data;
+      const newPass = mapPass(response.data.data.pass);
       setPasses((prev) => [newPass, ...prev]);
     } catch (error) {
       console.error('Failed to create pass:', error);
@@ -128,55 +317,219 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addPass = (pass: Pass) => setPasses((prev) => [pass, ...prev]);
-  
-  const updatePassStatus = (id: string, status: Pass['status']) => {
-    setPasses((prev) => prev.map(p => p.id === id ? { ...p, status } : p));
+  const suspendPass = async (id: string) => {
+    const response = await api.put(`/passes/${id}/suspend`);
+    const updated = mapPass(response.data.data);
+    setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
+  };
+
+  const revokePass = async (id: string) => {
+    const response = await api.put(`/passes/${id}/revoke`);
+    const updated = mapPass(response.data.data);
+    setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
   };
 
   const fetchAlerts = async () => {
     try {
       const response = await api.get('/alerts');
-      setAlerts(response.data.alerts || response.data);
+      const raw: any[] = response.data.data ?? [];
+      setAlerts(raw.map(mapAlert));
     } catch (error) {
       console.error('Failed to fetch alerts:', error);
     }
   };
 
   const addAlert = (alert: Alert) => setAlerts((prev) => [alert, ...prev]);
-  
+
   const markAlertRead = (id: string) => {
     setAlerts((prev) => prev.map(a => a.id === id ? { ...a, unread: false } : a));
   };
 
-  const addEntry = (entry: Entry) => setEntries((prev) => [entry, ...prev]);
+  const markAllAlertsRead = () => {
+    setAlerts((prev) => prev.map(a => ({ ...a, unread: false })));
+  };
 
-  const addMember = (member: Member) => setMembers((prev) => [...prev, member]);
-  
-  const deleteMember = (id: string) => setMembers((prev) => prev.filter(m => m.id !== id));
+  const triggerDuressAlert = async () => {
+    await api.post('/alerts/duress', {});
+  };
+
+  const fetchEntries = useCallback(async () => {
+    try {
+      const response = await api.get('/entries');
+      const raw: any[] = response.data.data ?? [];
+      setEntries(raw.map(mapEntry));
+    } catch (error) {
+      console.error('Failed to fetch entries:', error);
+    }
+  }, []);
+
+  const fetchMembers = useCallback(async () => {
+    try {
+      const response = await api.get('/residents/unit');
+      const raw: any[] = response.data.data ?? [];
+      setMembers(raw.map(mapMember).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)));
+    } catch (error) {
+      console.error('Failed to fetch household members:', error);
+    }
+  }, []);
+
+  const addMember = async (name: string, phone: string) => {
+    await api.post('/residents/unit/members', { name, phone });
+    await fetchMembers();
+  };
+
+  const deleteMember = async (id: string) => {
+    await api.delete(`/residents/unit/members/${id}`);
+    setMembers((prev) => prev.filter(m => m.id !== id));
+  };
+
+  const fetchAmenities = useCallback(async () => {
+    try {
+      const response = await api.get('/amenities');
+      const raw: any[] = response.data.data ?? [];
+      setAmenities(raw.map(mapAmenity));
+    } catch (error) {
+      console.error('Failed to fetch amenities:', error);
+    }
+  }, []);
+
+  const bookAmenity = async (amenityId: string, date: Date, startTime: string, endTime: string) => {
+    await api.post('/amenities/book', {
+      amenityId,
+      date: date.toISOString(),
+      startTime,
+      endTime,
+    });
+  };
 
   const addScanRequest = (request: ScanRequest) => setScanRequests((prev) => [request, ...prev]);
 
-  const updateScanRequestStatus = (id: string, status: ScanRequest['status']) => {
-    setScanRequests((prev) => prev.map(req => req.id === id ? { ...req, status } : req));
+  const respondWalkIn = async (id: string, status: 'APPROVED' | 'DENIED') => {
+    await api.post(`/walkin/${id}/respond`, { status });
+    setPendingWalkIns((prev) => prev.filter((w) => w.id !== id));
+    markAlertRead(id);
+    await fetchEntries();
   };
 
-  const addEmergencyContact = (contact: EmergencyContact) => setEmergencyContacts((prev) => [...prev, contact]);
-  const removeEmergencyContact = (id: string) => setEmergencyContacts((prev) => prev.filter(c => c.id !== id));
-  const updateAlertPreferences = (prefs: Partial<AlertPreferences>) => setAlertPreferences((prev) => ({ ...prev, ...prefs }));
+  // The backend only stores a single emergency contact on the Resident record
+  // (emergencyContact/emergencyContactName) — exposed here as a 0-or-1-item
+  // array so existing read-only consumers (e.g. HomeScreen's SOS summary)
+  // keep working unchanged.
+  const fetchProfileSettings = async () => {
+    try {
+      const response = await api.get('/residents/me');
+      const resident = response.data.data;
+      setAlertPreferences(mapAlertPreferences(resident?.alertPreferences));
+      setShowUnitInCommunity(resident?.showUnitInCommunity ?? true);
+      setEmergencyContacts(
+        resident?.emergencyContact
+          ? [{ id: resident.id, name: resident.emergencyContactName || 'Emergency contact', phone: resident.emergencyContact, relation: '' }]
+          : []
+      );
+    } catch (error) {
+      console.error('Failed to fetch profile settings:', error);
+    }
+  };
 
-  // Optionally fetch initial data on mount (if authenticated context allows it)
-  // useEffect(() => { fetchPasses(); fetchAlerts(); }, []);
+  const updateEmergencyContact = async (name: string, phone: string) => {
+    const response = await api.put('/residents/me', { emergencyContactName: name, emergencyContact: phone });
+    const resident = response.data.data;
+    setEmergencyContacts([{ id: resident.id, name: resident.emergencyContactName, phone: resident.emergencyContact, relation: '' }]);
+  };
+
+  const clearEmergencyContact = async () => {
+    await api.put('/residents/me', { emergencyContactName: '', emergencyContact: '' });
+    setEmergencyContacts([]);
+  };
+
+  const updateAlertPreferences = async (prefs: Partial<AlertPreferences>) => {
+    const merged = { ...alertPreferences, ...prefs };
+    setAlertPreferences(merged);
+    try {
+      await api.put('/residents/me/alerts', { preferences: merged });
+    } catch (error) {
+      console.error('Failed to update alert preferences:', error);
+      setAlertPreferences(alertPreferences);
+      throw error;
+    }
+  };
+
+  const updateShowUnitInCommunity = async (value: boolean) => {
+    const previous = showUnitInCommunity;
+    setShowUnitInCommunity(value);
+    try {
+      await api.put('/residents/me', { showUnitInCommunity: value });
+    } catch (error) {
+      console.error('Failed to update privacy setting:', error);
+      setShowUnitInCommunity(previous);
+      throw error;
+    }
+  };
+
+  // Only hit protected endpoints once logged in — firing these while still on
+  // the login screen produced 401s and noisy LogBox console.error stack traces.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchPasses();
+    fetchAlerts();
+    fetchProfileSettings();
+    if (userRole === 'RESIDENT') {
+      fetchEntries();
+      fetchMembers();
+      fetchAmenities();
+    }
+  }, [isAuthenticated, userRole]);
+
+  // Guard-initiated walk-in requests arrive over the resident's `unit_{id}`
+  // socket room (see api-server socket.handler.ts) — surface them as a real
+  // Alert + local notification so AlertsScreen's existing tap-through to
+  // WalkInApproval works with a real backend entry id, not a client-faked one.
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== 'RESIDENT') return;
+    let cancelled = false;
+
+    (async () => {
+      const token = await tokenStorage.getItemAsync('userToken');
+      if (!token || cancelled) return;
+
+      const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+      socketRef.current = socket;
+
+      socket.on('walkin_request', (payload: { entryId: string; visitorName: string; purpose?: string; gatePhotoUrl?: string }) => {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
+        addAlert({
+          id: payload.entryId,
+          title: 'Walk-in approval requested',
+          subtitle: payload.purpose ? `Guard requested entry for ${payload.visitorName} — ${payload.purpose}` : `Guard requested entry for ${payload.visitorName}`,
+          time,
+          icon: '🔔',
+          unread: true,
+        });
+        scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
+  }, [isAuthenticated, userRole]);
 
   return (
-    <DataContext.Provider value={{ 
-      passes, addPass, updatePassStatus, fetchPasses, createPass,
-      alerts, addAlert, markAlertRead, fetchAlerts,
-      entries, addEntry,
-      members, addMember, deleteMember,
-      scanRequests, addScanRequest, updateScanRequestStatus,
-      emergencyContacts, addEmergencyContact, removeEmergencyContact,
-      alertPreferences, updateAlertPreferences
+    <DataContext.Provider value={{
+      passes, fetchPasses, createPass, suspendPass, revokePass,
+      alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, triggerDuressAlert,
+      entries, fetchEntries,
+      members, fetchMembers, addMember, deleteMember,
+      amenities, fetchAmenities, bookAmenity,
+      scanRequests, addScanRequest,
+      pendingWalkIns, respondWalkIn,
+      emergencyContacts, updateEmergencyContact, clearEmergencyContact,
+      alertPreferences, updateAlertPreferences,
+      showUnitInCommunity, updateShowUnitInCommunity,
+      fetchProfileSettings,
     }}>
       {children}
     </DataContext.Provider>

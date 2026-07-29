@@ -1,50 +1,74 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput } from 'react-native';
-import { colors } from '../theme/colors';
+import { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, TextInput, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
-import { useAuth } from '../context/AuthContext';
 
 export default function HouseholdScreen() {
-  const { members, addMember, deleteMember } = useData();
-  const { userProfile, userEmail } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
+  const { members, fetchMembers, addMember, deleteMember } = useData();
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const name = userProfile?.name || 'Resident';
-  const phone = userProfile?.phone || userEmail || '';
-  const initial = name.charAt(0).toUpperCase();
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchMembers().finally(() => setLoading(false));
+    }, [fetchMembers])
+  );
 
-  const primaryMember = {
-    id: 'primary',
-    name,
-    phone,
-    initials: initial,
-    color: colors.primary,
-    isPrimary: true
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchMembers();
+    setRefreshing(false);
   };
 
-  const allMembers = [primaryMember, ...members];
-
-  const handleAdd = () => {
-    if (!newName) return;
-    const randomColors = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899'];
-    addMember({
-      id: Math.random().toString(36).substr(2, 9),
-      name: newName,
-      phone: newPhone,
-      initials: newName.charAt(0).toUpperCase(),
-      color: randomColors[Math.floor(Math.random() * randomColors.length)],
-      isPrimary: false
-    });
-    setShowModal(false);
-    setNewName('');
-    setNewPhone('');
+  const handleAdd = async () => {
+    if (!newName.trim() || !newPhone.trim()) return;
+    setSaving(true);
+    try {
+      await addMember(newName.trim(), newPhone.trim());
+      setShowModal(false);
+      setNewName('');
+      setNewPhone('');
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message ?? 'Failed to add household member.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const handleDelete = (id: string, name: string) => {
+    Alert.alert('Remove member', `Remove ${name} from your household?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => deleteMember(id).catch(() => Alert.alert('Error', 'Failed to remove member.')),
+      },
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      >
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
@@ -52,7 +76,7 @@ export default function HouseholdScreen() {
           </Text>
         </View>
 
-        {allMembers.map((member) => (
+        {members.map((member) => (
           <View key={member.id} style={styles.card}>
             <View style={styles.cardRow}>
               <View style={[styles.avatar, { backgroundColor: member.color }]}>
@@ -68,7 +92,7 @@ export default function HouseholdScreen() {
                 )}
               </View>
               {!member.isPrimary && (
-                <TouchableOpacity style={styles.deleteButton} onPress={() => deleteMember(member.id)}>
+                <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(member.id, member.name)}>
                   <Text style={styles.deleteIcon}>🗑️</Text>
                 </TouchableOpacity>
               )}
@@ -76,7 +100,7 @@ export default function HouseholdScreen() {
           </View>
         ))}
 
-        {allMembers.length < 6 && (
+        {members.length < 6 && (
           <TouchableOpacity style={styles.addButton} onPress={() => setShowModal(true)}>
             <Text style={styles.addButtonText}>+ Add household member</Text>
           </TouchableOpacity>
@@ -85,15 +109,17 @@ export default function HouseholdScreen() {
 
       <Modal visible={showModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
+          <TouchableOpacity style={{flex: 1}} activeOpacity={1} onPress={() => setShowModal(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Member</Text>
-            
+
             <Text style={styles.label}>Name</Text>
-            <TextInput 
-              style={styles.input} 
+            <TextInput
+              style={styles.input}
               placeholder="Full Name"
               value={newName}
               onChangeText={setNewName}
+              placeholderTextColor="#9ca3af"
             />
             
             <Text style={styles.label}>Phone Number</Text>
@@ -103,14 +129,15 @@ export default function HouseholdScreen() {
               keyboardType="phone-pad"
               value={newPhone}
               onChangeText={setNewPhone}
+              placeholderTextColor="#9ca3af"
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowModal(false)}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowModal(false)} disabled={saving}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleAdd}>
-                <Text style={styles.saveText}>Save</Text>
+              <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleAdd} disabled={saving}>
+                {saving ? <ActivityIndicator color={colors.card} /> : <Text style={styles.saveText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -120,7 +147,7 @@ export default function HouseholdScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -148,7 +175,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   card: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -168,7 +195,7 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   avatarText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -195,7 +222,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryBadgeText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -212,7 +239,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.primary,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
     alignItems: 'center',
   },
   addButtonText: {
@@ -223,16 +250,17 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   modalContent: {
-    width: '85%',
-    backgroundColor: colors.white,
-    borderRadius: 16,
+    width: '100%',
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
@@ -282,7 +310,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   saveText: {
-    color: colors.white,
+    color: colors.card,
     fontSize: 16,
     fontWeight: '600',
   },

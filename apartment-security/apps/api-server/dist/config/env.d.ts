@@ -1,6 +1,7 @@
 export declare const env: {
     NODE_ENV: "development" | "production" | "test";
     PORT: number;
+    DATABASE_URL: string;
     REDIS_URL: string;
     JWT_SECRET: string;
     JWT_EXPIRES_IN: string;
@@ -11,7 +12,6 @@ export declare const env: {
     CLIENT_RESIDENT_APP_URL: string;
     CLIENT_GUARD_APP_URL: string;
     CLIENT_MANAGER_URL: string;
-    DATABASE_URL?: string | undefined;
     FIREBASE_PROJECT_ID?: string | undefined;
     FIREBASE_CLIENT_EMAIL?: string | undefined;
     FIREBASE_PRIVATE_KEY?: string | undefined;

@@ -6,8 +6,8 @@ import { env } from '../config/env';
 const MAX_OTP_ATTEMPTS = 5;
 
 export const createOTP = async (userId: string, purpose: string): Promise<string> => {
-  // Generate a random 6 digit numeric code
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  // ponytail: crypto.randomInt is cryptographically secure; Math.random is not
+  const code = crypto.randomInt(100000, 1000000).toString();
   
   const hashedCode = await bcrypt.hash(code, 10);
   

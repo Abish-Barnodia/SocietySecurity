@@ -1,1 +1,0 @@
-// HMAC-signed QR payload

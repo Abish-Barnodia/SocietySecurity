@@ -27,7 +27,9 @@ const verifySignedQRPayload = (signedPayload) => {
         .createHmac('sha256', env_1.env.QR_HMAC_SECRET)
         .update(dataString)
         .digest('hex');
-    if (signature !== expectedSignature) {
+    const signatureBuffer = Buffer.from(signature);
+    const expectedSignatureBuffer = Buffer.from(expectedSignature);
+    if (signatureBuffer.length !== expectedSignatureBuffer.length || !crypto_1.default.timingSafeEqual(signatureBuffer, expectedSignatureBuffer)) {
         return null; // Signature mismatch, tampered QR
     }
     try {

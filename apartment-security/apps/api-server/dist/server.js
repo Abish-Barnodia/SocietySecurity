@@ -13,11 +13,19 @@ const server = http_1.default.createServer(app_1.default);
 // Attach Socket.io for Real-time alerts
 exports.io = new socket_io_1.Server(server, {
     cors: {
-        origin: [
-            env_1.env.CLIENT_RESIDENT_APP_URL,
-            env_1.env.CLIENT_GUARD_APP_URL,
-            env_1.env.CLIENT_MANAGER_URL,
-        ],
+        // Mobile apps send no Origin header — allow them alongside browser dashboards
+        origin: (origin, callback) => {
+            if (!origin)
+                return callback(null, true); // mobile / server-to-server
+            const allowed = [
+                env_1.env.CLIENT_RESIDENT_APP_URL,
+                env_1.env.CLIENT_GUARD_APP_URL,
+                env_1.env.CLIENT_MANAGER_URL,
+            ];
+            if (allowed.includes(origin))
+                return callback(null, true);
+            callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
+        },
         credentials: true,
     },
 });
@@ -31,7 +39,7 @@ const startServer = async () => {
         // await prisma.$connect();
         // Start cron jobs
         (0, jobs_1.startAllJobs)();
-        server.listen(env_1.env.PORT, () => {
+        server.listen(env_1.env.PORT, '0.0.0.0', () => {
             logger_util_1.logger.info(`🚀 Server running in ${env_1.env.NODE_ENV} mode on port ${env_1.env.PORT}`);
         });
     }
@@ -45,6 +53,12 @@ startServer();
 process.on('unhandledRejection', (err) => {
     logger_util_1.logger.error('UNHANDLED REJECTION! 💥 Shutting down...');
     logger_util_1.logger.error(err.name, err.message);
+    // Force-kill after 5 seconds in case keep-alive connections block server.close()
+    const forceKill = setTimeout(() => {
+        logger_util_1.logger.error('Forced shutdown after timeout.');
+        process.exit(1);
+    }, 5000);
+    forceKill.unref(); // Don't let this timer keep the event loop alive
     server.close(() => {
         process.exit(1);
     });

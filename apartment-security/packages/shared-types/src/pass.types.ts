@@ -1,1 +1,0 @@
-// PassType, PassStatus, Rules

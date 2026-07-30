@@ -9,11 +9,27 @@ import { Role } from '@prisma/client';
 
 export const getIncidents = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Scope to the caller's own property — mirrors the same resolution
+    // pattern used by getPendingWalkins/getAlerts in the sibling modules.
+    let propertyId: string | undefined;
+    if (req.user!.role === 'GUARD') {
+      const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+      propertyId = guard?.propertyId;
+    } else if (req.user!.role === 'MANAGER') {
+      const manager = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
+      propertyId = manager?.propertyId;
+    }
+
+    if (!propertyId && req.user!.role !== 'COMMITTEE') {
+      return next(new AppError('No property context found', 400));
+    }
+
     const incidents = await prisma.incident.findMany({
+      where: propertyId ? { propertyId } : undefined,
       include: {
         guard: {
           include: {
-            user: { select: { name: true } }
+            user: { select: { phone: true } }
           }
         }
       },

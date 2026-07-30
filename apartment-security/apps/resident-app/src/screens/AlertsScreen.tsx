@@ -1,13 +1,25 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useData } from '../context/DataContext';
 
 export default function AlertsScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { alerts, markAllAlertsRead } = useData();
+  const { alerts, markAllAlertsRead, fetchAlerts } = useData();
+
+  // Alerts otherwise only ever come from the one-time fetch at login plus
+  // whatever arrives live over the socket while this screen happens to be
+  // mounted — if the resident wasn't connected at the exact moment a visitor
+  // scanned in, the alert exists in the DB but never shows up. Refetch on
+  // every focus so opening this tab is always a reliable way to see it.
+  useFocusEffect(
+    useCallback(() => {
+      fetchAlerts();
+    }, [fetchAlerts])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -34,8 +46,9 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
             key={alert.id} 
             style={styles.card}
             onPress={() => {
-              // Pass the request ID to WalkInApproval to approve/deny
-              navigation.navigate('WalkInApproval', { requestId: alert.id });
+              if (alert.entryId) {
+                navigation.navigate('WalkInApproval', { requestId: alert.entryId });
+              }
             }}
           >
             <View style={styles.alertRow}>

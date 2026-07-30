@@ -213,6 +213,15 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
             name: true,
             unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }
           }
+        },
+        guard: {
+          select: {
+            id: true,
+            name: true,
+            badgeNumber: true,
+            isOnDuty: true,
+            property: { select: { name: true } }
+          }
         }
       }
     });

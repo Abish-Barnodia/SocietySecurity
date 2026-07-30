@@ -77,6 +77,41 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
     }
   };
 
+  // A guard's own `passes` list is always empty (GET /passes is resident-only),
+  // and the scanned QR is now the signed payload, not the plain pass id — so
+  // local matching (handleLookup) can never resolve a camera scan. Verify the
+  // signed payload through the backend directly instead, same as guard-app's
+  // dedicated scanner.
+  const handleQrScan = async (data: string) => {
+    if (!entryPoints[0]) {
+      Alert.alert('No gate configured', 'No entry point is configured for this property yet.');
+      setScanned(false);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await api.post('/entries', {
+        entryPointId: entryPoints[0].id,
+        method: 'QR_SCAN',
+        qrPayload: data,
+      });
+      const result = response.data.data;
+      const title = result.status === 'PENDING_APPROVAL' ? 'Awaiting approval' : result.status === 'DENIED' ? 'Denied' : 'Entry Logged';
+      const message = result.status === 'PENDING_APPROVAL'
+        ? 'The resident has been notified and has 2 minutes to respond.'
+        : result.status === 'DENIED'
+          ? (result.reason ?? 'This pass could not be verified.')
+          : 'Entry logged successfully.';
+      Alert.alert(title, message);
+      navigation.goBack();
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.message ?? 'Failed to verify this QR code.');
+      setScanned(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const confirmAction = async () => {
     if (submitting) return;
     if (scannedPass) {
@@ -87,14 +122,18 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
         }
         setSubmitting(true);
         try {
-          await api.post('/entries', {
-            unitId: scannedPass.unitId,
+          const response = await api.post('/entries', {
             entryPointId: entryPoints[0].id,
             method: 'QR_SCAN',
-            visitorName: scannedPass.name,
             qrPayload: scannedPass.qrPayload,
           });
-          Alert.alert('Entry Logged', 'Entry logged successfully.');
+          const status = response.data?.data?.status;
+          Alert.alert(
+            status === 'PENDING_APPROVAL' ? 'Awaiting approval' : 'Entry Logged',
+            status === 'PENDING_APPROVAL'
+              ? 'The resident has been notified and has 2 minutes to respond.'
+              : 'Entry logged successfully.'
+          );
           navigation.goBack();
         } catch (error: any) {
           Alert.alert('Error', error.response?.data?.message ?? 'Failed to log entry.');
@@ -121,7 +160,7 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
     }
     setSubmitting(true);
     try {
-      const response = await api.post('/walkin/request', {
+      const response = await api.post('/walkins/request', {
         unitId,
         entryPointId: entryPoints[0].id,
         visitorName: name,
@@ -253,22 +292,21 @@ export default function ScanPassScreen({ navigation }: { navigation: NavigationP
           ) : (
             <>
               <View style={styles.scannerBox}>
-                <CameraView 
-                  style={styles.camera} 
+                <CameraView
+                  style={StyleSheet.absoluteFill}
                   facing="back"
                   onBarcodeScanned={scanned ? undefined : ({ data }) => {
                     setScanned(true);
-                    handleLookup(data);
+                    handleQrScan(data);
                   }}
-                >
-                  <View style={styles.scannerOverlay}>
-                    <View style={styles.scannerCornerTL} />
-                    <View style={styles.scannerCornerTR} />
-                    <View style={styles.scannerCornerBL} />
-                    <View style={styles.scannerCornerBR} />
-                    <Text style={styles.scannerText}>Align QR Code</Text>
-                  </View>
-                </CameraView>
+                />
+                <View style={[StyleSheet.absoluteFill, styles.scannerOverlay]} pointerEvents="none">
+                  <View style={styles.scannerCornerTL} />
+                  <View style={styles.scannerCornerTR} />
+                  <View style={styles.scannerCornerBL} />
+                  <View style={styles.scannerCornerBR} />
+                  <Text style={styles.scannerText}>{submitting ? 'Verifying…' : 'Align QR Code'}</Text>
+                </View>
               </View>
 
               <Text style={styles.title}>Manual Entry</Text>
@@ -332,15 +370,10 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 32,
   },
-  camera: {
-    flex: 1,
-  },
   scannerOverlay: {
-    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
   },
   scannerCornerTL: { position: 'absolute', top: 40, left: 40, width: 40, height: 40, borderTopWidth: 4, borderLeftWidth: 4, borderColor: colors.primary },
   scannerCornerTR: { position: 'absolute', top: 40, right: 40, width: 40, height: 40, borderTopWidth: 4, borderRightWidth: 4, borderColor: colors.primary },

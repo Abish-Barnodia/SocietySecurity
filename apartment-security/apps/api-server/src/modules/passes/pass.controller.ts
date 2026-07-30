@@ -136,6 +136,56 @@ export const revokePass = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+export const deletePass = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+
+    const pass = await prisma.pass.findUnique({ where: { id } });
+    if (!pass) return next(new AppError('Pass not found', 404));
+
+    // Ownership check — only the resident who owns the unit can delete this pass
+    const resident = await prisma.resident.findUnique({ where: { userId: req.user!.userId } });
+    if (!resident || pass.unitId !== resident.unitId) {
+      return next(new AppError('Forbidden: You do not own this pass', 403));
+    }
+
+    const isExpired = pass.status === 'EXPIRED' || pass.validUntil < new Date();
+    if (!isExpired) {
+      return next(new AppError('Only expired passes can be deleted', 400));
+    }
+
+    await prisma.pass.delete({ where: { id } });
+
+    await auditLog(req.user!.userId, 'DELETE_PASS', 'Pass', id);
+    return sendSuccess(res, 200, 'Pass deleted');
+  } catch (err) { next(err); }
+};
+
+export const verifyPass = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+
+    const pass = await prisma.pass.findUnique({
+      where: { id },
+      include: {
+        resident: { select: { name: true, phone: true } },
+        unit: { select: { unitNumber: true, tower: true } },
+      }
+    });
+    if (!pass) return next(new AppError('Pass not found', 404));
+
+    const now = new Date();
+    const isWithinWindow = now >= pass.validFrom && now <= pass.validUntil;
+    const isClear = pass.status === 'ACTIVE' && isWithinWindow;
+
+    return sendSuccess(res, 200, 'Pass verified', {
+      pass,
+      clearance: isClear ? 'CLEAR' : 'DENIED',
+      reason: isClear ? null : (pass.status !== 'ACTIVE' ? `Pass is ${pass.status.toLowerCase()}` : 'Outside valid time window'),
+    });
+  } catch (err) { next(err); }
+};
+
 export const getAllPasses = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Used by MANAGER — with offset pagination

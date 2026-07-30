@@ -36,13 +36,24 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     entryEnd: new Date(new Date().setHours(13, 0, 0, 0)),
     expiresOn: new Date(),
     validFrom: new Date(),
-    validUntil: new Date(),
+    // Defaults to a real multi-hour window, not "now" — validFrom===validUntil
+    // meant every pass expired within seconds of creation, before a guard
+    // could ever scan it (the date pickers below only pick a day, not a
+    // time, so an untouched field stays exactly at this initial value).
+    validUntil: new Date(Date.now() + 4 * 60 * 60 * 1000),
   });
 
   const onChangeDate = (event: any, selectedDate?: Date) => {
     const currentShow = showPicker;
     setShowPicker(null);
     if (selectedDate && currentShow) {
+      if (currentShow === 'validUntil' || currentShow === 'expiresOn') {
+        // Make it valid until the very end of the selected day
+        selectedDate.setHours(23, 59, 59, 999);
+      } else if (currentShow === 'validFrom') {
+        // Make it valid from the start of the selected day
+        selectedDate.setHours(0, 0, 0, 0);
+      }
       setDates(prev => ({ ...prev, [currentShow]: selectedDate }));
     }
   };

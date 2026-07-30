@@ -124,12 +124,35 @@ async function main() {
     });
   }
 
+  // ── Manager ─────────────────────────────────────────────────
+  const managerUser = await prisma.user.upsert({
+    where: { email: 'manager@demo.com' },
+    update: { passwordHash },
+    create: {
+      email: 'manager@demo.com',
+      passwordHash,
+      role: 'MANAGER',
+    },
+  });
+
+  const existingManager = await prisma.manager.findUnique({ where: { userId: managerUser.id } });
+  if (!existingManager) {
+    await prisma.manager.create({
+      data: {
+        userId: managerUser.id,
+        propertyId: property.id,
+        name: 'Admin Manager',
+      },
+    });
+  }
+
   console.log(`
 ✅ Seed complete. Login with:
 
    Resident (onboarded)  resident@demo.com  / ${DEMO_PASSWORD}
    Resident (new)        newuser@demo.com   / ${DEMO_PASSWORD}
    Guard                 guard@demo.com     / ${DEMO_PASSWORD}
+   Manager               manager@demo.com   / ${DEMO_PASSWORD}
 `);
 }
 

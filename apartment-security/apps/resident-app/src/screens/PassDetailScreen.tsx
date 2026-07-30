@@ -26,17 +26,13 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
 
   const generateAndSharePDF = async () => {
     if (!pass || isSharing) return;
+    if (!pass.qrPayload) {
+      Alert.alert('QR unavailable', 'This pass has no scannable QR code to share.');
+      return;
+    }
     setIsSharing(true);
-    
-    const qrData = JSON.stringify({
-      id: pass.id,
-      name: pass.name,
-      type: pass.type,
-      purpose: pass.purpose,
-      time: pass.time,
-      phone: pass.phone || 'N/A',
-      gate: pass.gate || 'Main Gate'
-    });
+
+    const qrData = pass.qrPayload;
 
     try {
       const html = `
@@ -193,20 +189,16 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
         {/* QR Code Card */}
         <View style={styles.qrCard}>
           <View style={styles.qrCodeWrapper}>
-            <QRCode
-              value={JSON.stringify({
-                id: pass.id,
-                name: pass.name,
-                type: pass.type,
-                purpose: pass.purpose,
-                time: pass.time,
-                phone: pass.phone || 'N/A',
-                gate: pass.gate || 'Main Gate'
-              })}
-              size={200}
-              color={colors.text}
-              backgroundColor="white"
-            />
+            {pass.qrPayload ? (
+              <QRCode
+                value={pass.qrPayload}
+                size={200}
+                color={colors.text}
+                backgroundColor="white"
+              />
+            ) : (
+              <Text style={styles.qrSubtitle}>QR unavailable for this pass</Text>
+            )}
           </View>
 
           <Text style={styles.passIdText}>{getPassCode()}</Text>

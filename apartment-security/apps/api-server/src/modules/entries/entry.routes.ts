@@ -7,7 +7,10 @@ import {
   logExit,
   getUnitEntries,
   getAllEntries,
-  getEntryPoints
+  getEntryPoints,
+  getRecentEntries,
+  getFrequentVisitors,
+  getUnitsForGuard
 } from './entry.controller';
 import {
   logEntrySchema,
@@ -21,6 +24,9 @@ router.use(authenticate);
 router.get('/entry-points', requireRole('GUARD', 'RESIDENT'), getEntryPoints);
 
 // Guard logging
+router.get('/units',             requireRole('GUARD'), getUnitsForGuard);
+router.get('/frequent-visitors', requireRole('GUARD'), getFrequentVisitors);
+router.get('/recent',            requireRole('GUARD'), getRecentEntries);
 router.post('/',           requireRole('GUARD'), validate(logEntrySchema), logEntry);
 router.put('/:id/exit',    requireRole('GUARD'), validate(logExitSchema), logExit);
 

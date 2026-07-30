@@ -30,6 +30,7 @@ export type Alert = {
   time: string;
   icon: string;
   unread: boolean;
+  entryId?: string;
 };
 
 const PASS_STATUS_COLOR: Record<string, string> = {
@@ -83,6 +84,7 @@ const mapAlert = (raw: any): Alert => ({
   time: raw.createdAt ? new Date(raw.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '',
   icon: ALERT_PRIORITY_ICON[raw.priority] ?? '🔔',
   unread: !raw.acknowledgedAt,
+  entryId: raw.entryId ?? undefined,
 });
 
 export type Entry = {
@@ -175,6 +177,17 @@ export type PendingWalkIn = {
   purpose?: string;
   gatePhotoUrl?: string;
   time: string;
+  // Only present for QR-scan-originated approval requests — a real
+  // server-issued deadline, unlike the old manual-walkin items which have
+  // no timeout at all (WalkInApprovalScreen falls back to its original
+  // client-only behavior when this is absent).
+  timeoutAt?: string;
+  visitorPhoto?: string | null;
+  vehicleNumber?: string | null;
+  expectedTime?: string | null;
+  apartment?: string | null;
+  tower?: string | null;
+  gateName?: string | null;
 };
 
 export type Amenity = {
@@ -405,7 +418,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addScanRequest = (request: ScanRequest) => setScanRequests((prev) => [request, ...prev]);
 
   const respondWalkIn = async (id: string, status: 'APPROVED' | 'DENIED') => {
-    await api.post(`/walkin/${id}/respond`, { status });
+    await api.post(`/walkins/${id}/respond`, { status });
     setPendingWalkIns((prev) => prev.filter((w) => w.id !== id));
     markAlertRead(id);
     await fetchEntries();
@@ -500,6 +513,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
         addAlert({
           id: payload.entryId,
+          entryId: payload.entryId,
           title: 'Walk-in approval requested',
           subtitle: payload.purpose ? `Guard requested entry for ${payload.visitorName} — ${payload.purpose}` : `Guard requested entry for ${payload.visitorName}`,
           time,
@@ -507,6 +521,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           unread: true,
         });
         scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
+      });
+
+      // QR-scan arrivals — same shape/handling as a manual walk-in request,
+      // plus the extra pass-derived fields and a real server timeoutAt.
+      socket.on('visitor_approval_request', (payload: {
+        entryId: string; visitorName: string; purpose?: string; visitorPhoto?: string | null;
+        vehicleNumber?: string | null; expectedTime?: string | null; apartment?: string | null;
+        tower?: string | null; gateName?: string | null; timeoutAt: string;
+      }) => {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setPendingWalkIns((prev) => [{
+          id: payload.entryId,
+          visitorName: payload.visitorName,
+          purpose: payload.purpose,
+          gatePhotoUrl: payload.visitorPhoto ?? undefined,
+          time,
+          timeoutAt: payload.timeoutAt,
+          visitorPhoto: payload.visitorPhoto,
+          vehicleNumber: payload.vehicleNumber,
+          expectedTime: payload.expectedTime,
+          apartment: payload.apartment,
+          tower: payload.tower,
+          gateName: payload.gateName,
+        }, ...prev]);
+        addAlert({
+          id: payload.entryId,
+          entryId: payload.entryId,
+          title: 'Visitor scanned in at the gate',
+          subtitle: `${payload.visitorName} is waiting — respond within 2 minutes`,
+          time,
+          icon: '🔔',
+          unread: true,
+        });
+        scheduleLocalNotification('Visitor scanned in at the gate', `${payload.visitorName} is waiting — respond within 2 minutes`);
+      });
+
+      socket.on('visitor_approval_timeout', (payload: { entryId: string }) => {
+        setPendingWalkIns((prev) => prev.filter((w) => w.id !== payload.entryId));
+        markAlertRead(payload.entryId);
       });
     })();
 

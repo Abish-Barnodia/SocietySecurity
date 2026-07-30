@@ -25,44 +25,41 @@ export const registerSocketHandlers = (io: Server) => {
     // Personal room for direct messages
     socket.join(`user:${user.userId}`);
 
-    // Role-based rooms
-    if (user.propertyId) {
-      socket.join(`property:${user.propertyId}`);
-    }
-    if (user.guardId) {
-      socket.join(`guard:${user.guardId}`);
-    }
+    let resolvedPropertyId: string | undefined = undefined;
 
-    // Residents' access tokens don't carry propertyId today, so resolve it
-    // from the DB (Resident -> Unit -> Property) instead — this is what puts
-    // a resident's socket into the room the Community chat broadcasts to.
-    // Kept in a local var (not trusting client-supplied input) so the typing
-    // relay below always targets the socket's own real property room.
-    let residentPropertyId: string | undefined = user.propertyId;
-    if (user.role === 'RESIDENT') {
-      try {
+    try {
+      if (user.role === 'RESIDENT') {
         const resident = await prisma.resident.findUnique({
           where: { userId: user.userId },
           select: { unitId: true, unit: { select: { propertyId: true } } },
         });
-        residentPropertyId = residentPropertyId ?? resident?.unit.propertyId;
-        if (!user.propertyId && resident?.unit.propertyId) {
-          socket.join(`property:${resident.unit.propertyId}`);
-        }
-        // Matches the `unit_${unitId}` room the walk-in module broadcasts
-        // guard-initiated approval requests to (see walkin.controller.ts).
-        if (resident?.unitId) {
-          socket.join(`unit_${resident.unitId}`);
-        }
-      } catch (err) {
-        logger.error('Failed to resolve resident unit/property for socket room join', { err });
+        resolvedPropertyId = resident?.unit.propertyId;
+        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
+        if (resident?.unitId) socket.join(`unit_${resident.unitId}`);
+      } else if (user.role === 'GUARD') {
+        const guard = await prisma.guard.findUnique({
+          where: { userId: user.userId },
+          select: { id: true, propertyId: true },
+        });
+        resolvedPropertyId = guard?.propertyId;
+        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
+        if (guard?.id) socket.join(`guard:${guard.id}`);
+      } else if (user.role === 'MANAGER' || user.role === 'COMMITTEE') {
+        const manager = await prisma.manager.findUnique({
+          where: { userId: user.userId },
+          select: { propertyId: true },
+        });
+        resolvedPropertyId = manager?.propertyId;
+        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
       }
+    } catch (err) {
+      logger.error('Failed to resolve context for socket room join', { err });
     }
 
     // Community chat typing indicator — relayed to everyone else in the room.
     socket.on('community:typing', () => {
-      if (!residentPropertyId) return;
-      socket.to(`property:${residentPropertyId}`).emit('community:typing', { userId: user.userId });
+      if (!resolvedPropertyId) return;
+      socket.to(`property:${resolvedPropertyId}`).emit('community:typing', { userId: user.userId });
     });
 
     socket.on('disconnect', () => {

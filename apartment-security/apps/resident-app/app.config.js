@@ -35,6 +35,9 @@ module.exports = {
       'expo-video',
     ],
     extra: {
+      eas: {
+        projectId: "a95570a2-6033-4d11-935b-468dc7567fe6"
+      },
       // Override via API_URL env var — never hardcode an IP here.
       // Left undefined when unset so src/utils/api.ts can derive the right
       // host per-platform from the Metro debugger host (works for physical

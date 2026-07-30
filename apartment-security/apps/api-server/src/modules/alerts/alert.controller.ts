@@ -154,7 +154,15 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
     const alerts = await prisma.alert.findMany({
       where: {
         propertyId,
-        targetRoles: { has: req.user!.role as any },
+        // Role-wide broadcasts (targetRoles) and alerts aimed at this specific
+        // user (targetUserIds — e.g. a visitor-approval request for one
+        // resident) are both valid ways an alert can be "for" this caller;
+        // matching only targetRoles meant any targetUserIds-only alert
+        // (walk-in requests, visitor QR approvals) was never fetchable here.
+        OR: [
+          { targetRoles: { has: req.user!.role as any } },
+          { targetUserIds: { has: req.user!.userId } },
+        ],
       },
       orderBy: { createdAt: 'desc' },
       take: 50

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, StatusBar, Alert, ActivityIndicator, ScrollView
+  KeyboardAvoidingView, Platform, StatusBar, Alert, ActivityIndicator, ScrollView, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -17,6 +18,42 @@ export default function LoginScreen() {
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
   const { login, signup } = useAuth();
+
+  // Signature element: the key turns while a sign-in is checked against the
+  // gate, and rattles if it doesn't fit — the resident's own version of a
+  // clearance check, told through the one object this app is always about:
+  // the key to the community.
+  const turn = useRef(new Animated.Value(0)).current;
+  const shake = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (loading) {
+      turn.setValue(0);
+      Animated.loop(
+        Animated.timing(turn, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      turn.stopAnimation(() => turn.setValue(0));
+    }
+  }, [loading]);
+
+  const rattle = () => {
+    shake.setValue(0);
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const keyRotation = turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '75deg'] });
+  const keyShake = shake.interpolate({ inputRange: [-1, 1], outputRange: ['-8deg', '8deg'] });
 
   const validateForm = () => {
     const trimmedEmail = email.trim();
@@ -45,6 +82,7 @@ export default function LoginScreen() {
     } catch (error: any) {
       const message = error.response?.data?.message ?? `Failed to ${mode}. Please check your credentials or server connection.`;
       Alert.alert(mode === 'login' ? 'Login Failed' : 'Sign Up Failed', message);
+      rattle();
     } finally {
       setLoading(false);
     }
@@ -54,22 +92,28 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
         {/* Header */}
         <View style={styles.headerContainer}>
-          <View style={styles.iconContainer}>
-            <Text style={styles.emoji}>🏠</Text>
-          </View>
-          <Text style={styles.title}>{mode === 'login' ? 'Welcome Back' : 'Create Account'}</Text>
+          <Animated.View
+            style={[
+              styles.iconContainer,
+              { transform: [{ rotate: loading ? keyRotation : keyShake }] },
+            ]}
+          >
+            <Ionicons name="key-outline" size={30} color={colors.primary} />
+          </Animated.View>
+          <Text style={styles.eyebrow}>RESIDENT ACCESS</Text>
+          <Text style={styles.title}>{mode === 'login' ? 'Welcome home' : 'Join your community'}</Text>
           <Text style={styles.subtitle}>
             {mode === 'login'
               ? 'Sign in with your email and password to access\nyour account.'
@@ -169,22 +213,27 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  emoji: {
-    fontSize: 32,
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: colors.primary,
+    marginBottom: 10,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontSize: 30,
+    fontWeight: Platform.OS === 'ios' ? '700' : 'normal',
     color: colors.text,
     marginBottom: 12,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
   },
   formContainer: {
     width: '100%',
@@ -211,11 +260,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   inputWrapperFocused: {
     borderColor: colors.primary,
     backgroundColor: colors.card,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   input: {
     flex: 1,

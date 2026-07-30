@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 export const logEntrySchema = z.object({
   body: z.object({
-    unitId: z.string().cuid(),
+    // Required for every method except QR_SCAN (enforced in the controller,
+    // since a QR scan derives both fields from the signed pass itself).
+    unitId: z.string().cuid().optional(),
     entryPointId: z.string().cuid(),
     method: z.enum(['QR_SCAN', 'OTP', 'MANUAL_GUARD', 'VEHICLE_ANPR']),
-    visitorName: z.string().min(2),
+    visitorName: z.string().min(2).optional(),
     visitorPhone: z.string().optional(),
     vehicleNumber: z.string().optional(),
     

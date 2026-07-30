@@ -1,18 +1,47 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import LoginScreen from './src/screens/LoginScreen';
+import GuardDetailsScreen from './src/screens/GuardDetailsScreen';
+import GuardShell from './src/screens/GuardShell';
+
+function Root() {
+  const { isAuthenticated, isLoading, guardProfile } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color="#F2A900" />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
+  if (!guardProfile?.isOnDuty) {
+    return <GuardDetailsScreen />;
+  }
+
+  return <GuardShell />;
+}
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Guard App - Initialized!</Text>
-    </View>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <Root />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  center: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0B0E11',
     alignItems: 'center',
     justifyContent: 'center',
   },

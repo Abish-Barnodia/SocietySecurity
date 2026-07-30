@@ -9,7 +9,10 @@ import {
   getDirectory,
   getActiveGuards,
   createGuard,
-  getGuardProfile
+  getGuardProfile,
+  getShiftSummary,
+  getRoster,
+  getMyProfile
 } from './guard.controller';
 import {
   startShiftSchema,
@@ -23,7 +26,11 @@ router.use(authenticate);
 
 router.post('/shift/start', requireRole('GUARD'), validate(startShiftSchema), startShift);
 router.post('/shift/end',   requireRole('GUARD'), validate(endShiftSchema), endShift);
+router.get('/shift/summary', requireRole('GUARD'), getShiftSummary);
 router.post('/post/checkin', requireRole('GUARD'), validate(checkInPostSchema), checkInPost);
+
+router.get('/roster', requireRole('GUARD'), getRoster);
+router.get('/me', requireRole('GUARD'), getMyProfile);
 
 router.get('/directory', requireRole('MANAGER', 'COMMITTEE'), getDirectory);
 router.get('/active', requireRole('MANAGER', 'COMMITTEE'), getActiveGuards);

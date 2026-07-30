@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const colors = {
   bg: '#0B0E11',
@@ -24,6 +25,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
+  const { t } = useLanguage();
 
   // Signature element: a status LED echoing the app's own clearance
   // indicator (green/red = access granted/denied) — here repurposed for
@@ -69,7 +71,7 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !password) {
-      setError('Enter your badge email and password to continue.');
+      setError(t('login_missingCreds'));
       flashDenied();
       return;
     }
@@ -78,7 +80,7 @@ export default function LoginScreen() {
     try {
       await login(trimmedEmail, password);
     } catch (err: any) {
-      setError(err.response?.data?.message ?? err.message ?? 'Sign-in failed. Check your credentials or network.');
+      setError(err.response?.data?.message ?? err.message ?? t('login_signinFailed'));
       flashDenied();
     } finally {
       setLoading(false);
@@ -102,14 +104,14 @@ export default function LoginScreen() {
                   ]}
                 />
               </Animated.View>
-              <Text style={styles.eyebrow}>GATE ACCESS TERMINAL</Text>
+              <Text style={styles.eyebrow}>{t('login_eyebrow')}</Text>
             </View>
-            <Text style={styles.title}>Guard Sign-In</Text>
-            <Text style={styles.subtitle}>Authenticate with your badge credentials to open the duty console.</Text>
+            <Text style={styles.title}>{t('login_title')}</Text>
+            <Text style={styles.subtitle}>{t('login_subtitle')}</Text>
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.label}>BADGE EMAIL</Text>
+            <Text style={styles.label}>{t('login_badgeEmail')}</Text>
             <View style={[styles.inputWrapper, focusedField === 'email' && styles.inputWrapperFocused]}>
               <TextInput
                 style={[styles.input, styles.mono]}
@@ -125,7 +127,7 @@ export default function LoginScreen() {
               />
             </View>
 
-            <Text style={[styles.label, { marginTop: 20 }]}>PASSWORD</Text>
+            <Text style={[styles.label, { marginTop: 20 }]}>{t('login_password')}</Text>
             <View style={[styles.inputWrapper, focusedField === 'password' && styles.inputWrapperFocused]}>
               <TextInput
                 style={[styles.input, styles.mono]}
@@ -150,11 +152,11 @@ export default function LoginScreen() {
               disabled={isSubmitDisabled}
               activeOpacity={0.85}
             >
-              <Text style={styles.buttonText}>{loading ? 'VERIFYING…' : 'SIGN IN'}</Text>
+              <Text style={styles.buttonText}>{loading ? t('login_verifying') : t('login_signIn')}</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.footer}>Badge issues? Contact your shift supervisor.</Text>
+          <Text style={styles.footer}>{t('login_footer')}</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

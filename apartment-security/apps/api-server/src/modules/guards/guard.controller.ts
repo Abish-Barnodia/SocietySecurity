@@ -4,6 +4,43 @@ import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 
+export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guard = await prisma.guard.findUnique({
+      where: { userId: req.user!.userId },
+      include: {
+        user: { select: { phone: true, email: true } },
+        property: { select: { name: true } },
+      },
+    });
+    if (!guard) return next(new AppError('Guard profile not found', 404));
+
+    const activeShift = guard.isOnDuty
+      ? await prisma.shift.findFirst({ where: { guardId: guard.id, endedAt: null }, orderBy: { startedAt: 'desc' } })
+      : null;
+
+    const currentPost = activeShift
+      ? await prisma.guardPost.findFirst({
+          where: { shiftId: activeShift.id },
+          orderBy: { checkedInAt: 'desc' },
+          include: { entryPoint: { select: { name: true } } },
+        })
+      : null;
+
+    return sendSuccess(res, 200, 'Guard profile', {
+      id: guard.id,
+      name: guard.name,
+      badgeNumber: guard.badgeNumber,
+      phone: guard.user.phone,
+      email: guard.user.email,
+      isOnDuty: guard.isOnDuty,
+      propertyName: guard.property.name,
+      shiftStartedAt: activeShift?.startedAt ?? null,
+      currentPostName: currentPost?.entryPoint.name ?? null,
+    });
+  } catch (err) { next(err); }
+};
+
 export const getDirectory = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const guards = await prisma.guard.findMany({
@@ -110,14 +147,70 @@ export const startShift = async (req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 };
 
+// Shared by getShiftSummary and endShift — both need the same breakdown of
+// what happened during the shift, just at different points in its life.
+const buildShiftStats = async (guardId: string, since: Date) => {
+  const [entriesByMethod, totalIncidents] = await Promise.all([
+    prisma.entry.groupBy({
+      by: ['method'],
+      where: { guardId, entryAt: { gte: since } },
+      _count: true,
+    }),
+    prisma.incident.count({ where: { guardId, createdAt: { gte: since } } }),
+  ]);
+
+  const entryBreakdown = entriesByMethod.map((e) => ({ method: e.method, count: e._count }));
+  const totalEntries = entryBreakdown.reduce((sum, e) => sum + e.count, 0);
+
+  return { totalEntries, totalIncidents, entryBreakdown };
+};
+
+export const getShiftSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+    if (!guard) return next(new AppError('Guard profile not found', 404));
+
+    const activeShift = await prisma.shift.findFirst({
+      where: { guardId: guard.id, endedAt: null },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!activeShift) return next(new AppError('You are not on an active shift', 400));
+
+    const stats = await buildShiftStats(guard.id, activeShift.startedAt);
+    return sendSuccess(res, 200, 'Shift summary', { startedAt: activeShift.startedAt, ...stats });
+  } catch (err) { next(err); }
+};
+
+export const getRoster = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+    if (!guard) return next(new AppError('Guard profile not found', 404));
+
+    const guards = await prisma.guard.findMany({
+      where: { propertyId: guard.propertyId, id: { not: guard.id } },
+      select: { id: true, name: true, badgeNumber: true, isOnDuty: true },
+      orderBy: { name: 'asc' },
+    });
+    return sendSuccess(res, 200, 'Guard roster', guards);
+  } catch (err) { next(err); }
+};
+
 export const endShift = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { handoverNote } = req.body;
-    
+    const { handoverNote, handedOverToId } = req.body;
+
     const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
     if (!guard) return next(new AppError('Guard profile not found', 404));
 
     if (!guard.isOnDuty) return next(new AppError('You are not on an active shift', 400));
+
+    const handoverTarget = await prisma.guard.findUnique({ where: { id: handedOverToId } });
+    if (!handoverTarget || handoverTarget.propertyId !== guard.propertyId) {
+      return next(new AppError('Selected guard not found in your property', 400));
+    }
+    if (handoverTarget.id === guard.id) {
+      return next(new AppError('Cannot hand over a shift to yourself', 400));
+    }
 
     // Find active shift
     const activeShift = await prisma.shift.findFirst({
@@ -127,10 +220,20 @@ export const endShift = async (req: Request, res: Response, next: NextFunction) 
 
     if (!activeShift) return next(new AppError('Active shift record not found', 404));
 
+    const { totalEntries, totalIncidents } = await buildShiftStats(guard.id, activeShift.startedAt);
+
     await prisma.$transaction([
       prisma.shift.update({
         where: { id: activeShift.id },
-        data: { endedAt: new Date(), signedOffAt: new Date(), handoverNote }
+        data: {
+          endedAt: new Date(),
+          signedOffAt: new Date(),
+          handoverNote,
+          handedOverToId: handoverTarget.id,
+          handedOverToName: handoverTarget.name,
+          totalEntries,
+          totalIncidents,
+        }
       }),
       prisma.guard.update({
         where: { id: guard.id },

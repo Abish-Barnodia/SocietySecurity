@@ -1,6 +1,7 @@
 {
   "expo": {
     "extra": {
+      "apiUrl": "http://192.168.1.35:5000/api/v1",
       "eas": {
         "projectId": "06646b3f-0f76-44b2-bc6f-bb8ef2a3e50b"
       }

@@ -31,6 +31,9 @@ export type Alert = {
   icon: string;
   unread: boolean;
   entryId?: string;
+  imageUrl?: string | null;
+  claimedByUserId?: string | null;
+  claimedByName?: string | null;
 };
 
 const PASS_STATUS_COLOR: Record<string, string> = {
@@ -85,6 +88,9 @@ const mapAlert = (raw: any): Alert => ({
   icon: ALERT_PRIORITY_ICON[raw.priority] ?? '🔔',
   unread: !raw.acknowledgedAt,
   entryId: raw.entryId ?? undefined,
+  imageUrl: raw.imageUrl ?? null,
+  claimedByUserId: raw.claimedByUserId ?? null,
+  claimedByName: raw.claimedByName ?? null,
 });
 
 export type Entry = {
@@ -268,6 +274,7 @@ type DataContextType = {
   markAlertRead: (id: string) => void;
   markAllAlertsRead: () => void;
   fetchAlerts: () => Promise<void>;
+  claimVehicleAlert: (id: string) => Promise<void>;
   triggerDuressAlert: () => Promise<void>;
   entries: Entry[];
   fetchEntries: () => Promise<void>;
@@ -360,6 +367,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const markAllAlertsRead = () => {
     setAlerts((prev) => prev.map(a => ({ ...a, unread: false })));
+  };
+
+  const claimVehicleAlert = async (id: string) => {
+    const response = await api.post(`/alerts/${id}/claim`);
+    const updated = mapAlert(response.data.data);
+    setAlerts((prev) => prev.map((a) => (a.id === id ? updated : a)));
   };
 
   const triggerDuressAlert = async () => {
@@ -573,7 +586,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <DataContext.Provider value={{
       passes, fetchPasses, createPass, suspendPass, revokePass,
-      alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, triggerDuressAlert,
+      alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
       entries, fetchEntries,
       members, fetchMembers, addMember, deleteMember,
       amenities, fetchAmenities, bookAmenity,

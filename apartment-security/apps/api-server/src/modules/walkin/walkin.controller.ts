@@ -11,7 +11,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
     
     let finalPhotoUrl = gatePhotoUrl;
     if (gatePhotoBase64) {
-      const { uploadBuffer } = await import('../../utils/firebaseStorage.util');
+      const { uploadBuffer } = await import('../../utils/objectStorage.util');
       const buffer = Buffer.from(gatePhotoBase64, 'base64');
       finalPhotoUrl = await uploadBuffer(buffer, `entries/${Date.now()}.jpg`, 'image/jpeg');
     }

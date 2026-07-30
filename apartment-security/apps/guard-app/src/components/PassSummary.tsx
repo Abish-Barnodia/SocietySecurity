@@ -1,5 +1,7 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { ThemeColors } from '../theme/colors';
 
 type Props = {
   visitorName: string;
@@ -16,6 +18,10 @@ type Props = {
 export default function PassSummary({
   visitorName, visitorPhoto, visitorPhone, purpose, vehicleNumber, expectedTime, apartment, tower, gateName,
 }: Props) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -32,16 +38,21 @@ export default function PassSummary({
         </View>
       </View>
 
-      <Row label="Phone" value={visitorPhone} />
-      <Row label="Resident unit" value={[tower, apartment].filter(Boolean).join(' - ') || undefined} />
-      <Row label="Gate" value={gateName} />
-      <Row label="Vehicle" value={vehicleNumber} />
-      <Row label="Expected until" value={expectedTime ? new Date(expectedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined} last />
+      <Row styles={styles} label={t('pass_phone')} value={visitorPhone} />
+      <Row styles={styles} label={t('pass_unit')} value={[tower, apartment].filter(Boolean).join(' - ') || undefined} />
+      <Row styles={styles} label={t('pass_gate')} value={gateName} />
+      <Row styles={styles} label={t('pass_vehicle')} value={vehicleNumber} />
+      <Row
+        styles={styles}
+        label={t('pass_expectedUntil')}
+        value={expectedTime ? new Date(expectedTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined}
+        last
+      />
     </View>
   );
 }
 
-function Row({ label, value, last }: { label: string; value?: string | null; last?: boolean }) {
+function Row({ styles, label, value, last }: { styles: ReturnType<typeof getStyles>; label: string; value?: string | null; last?: boolean }) {
   if (!value) return null;
   return (
     <View style={[styles.row, last && styles.rowLast]}>
@@ -51,7 +62,7 @@ function Row({ label, value, last }: { label: string; value?: string | null; las
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: colors.card,
     borderWidth: 1,

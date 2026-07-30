@@ -10,6 +10,7 @@ export const startShiftSchema = z.object({
 
 export const endShiftSchema = z.object({
   body: z.object({
+    handedOverToId: z.string().cuid(),
     handoverNote: z.string().optional()
   })
 });

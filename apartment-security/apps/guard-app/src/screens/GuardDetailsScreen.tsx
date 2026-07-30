@@ -6,8 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import api from '../utils/api';
-import { colors } from '../theme/colors';
+import { ThemeColors } from '../theme/colors';
 
 type EntryPoint = { id: string; name: string };
 
@@ -22,6 +24,9 @@ const SHIFTS = [
 // to /guards/shift/start. Persist it if rosters need to read it back later.
 export default function GuardDetailsScreen() {
   const { guardProfile, refreshProfile } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = getStyles(colors);
   const [step, setStep] = useState<'details' | 'confirm'>('details');
 
   const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
@@ -41,7 +46,7 @@ export default function GuardDetailsScreen() {
         const fetched: EntryPoint[] = response.data.data ?? [];
         setEntryPoints(fetched);
       } catch {
-        Alert.alert('Error', 'Could not load the list of gates. Please try again.');
+        Alert.alert(t('details_loadPostsErrorTitle'), t('details_loadPostsErrorMsg'));
       } finally {
         setLoadingPosts(false);
       }
@@ -60,7 +65,7 @@ export default function GuardDetailsScreen() {
       await refreshProfile();
     } catch (error: any) {
       const message = error.response?.data?.message ?? 'Failed to start duty. Please try again.';
-      Alert.alert('Error', message);
+      Alert.alert(t('common_error'), message);
     } finally {
       setSubmitting(false);
     }
@@ -72,52 +77,52 @@ export default function GuardDetailsScreen() {
         <View style={styles.iconContainer}>
           <Ionicons name="shield-checkmark" size={30} color={colors.primary} />
         </View>
-        <Text style={styles.title}>Sentinel Guard</Text>
-        <Text style={styles.subtitle}>Apartment Security Platform</Text>
+        <Text style={styles.title}>{t('details_appName')}</Text>
+        <Text style={styles.subtitle}>{t('details_subtitle')}</Text>
 
         <View style={styles.stepper}>
           <View style={styles.stepperItem}>
             <View style={[styles.stepCircle, step === 'details' ? styles.stepCircleActive : styles.stepCircleDone]}>
               <Text style={styles.stepCircleText}>1</Text>
             </View>
-            <Text style={styles.stepLabel}>Your Details</Text>
+            <Text style={styles.stepLabel}>{t('details_stepDetails')}</Text>
           </View>
           <View style={[styles.stepLine, step === 'confirm' && styles.stepLineActive]} />
           <View style={styles.stepperItem}>
             <View style={[styles.stepCircle, step === 'confirm' ? styles.stepCircleActive : styles.stepCirclePending]}>
               <Text style={[styles.stepCircleText, step === 'details' && styles.stepCircleTextPending]}>2</Text>
             </View>
-            <Text style={styles.stepLabel}>Confirm</Text>
+            <Text style={styles.stepLabel}>{t('details_stepConfirm')}</Text>
           </View>
         </View>
 
         {step === 'details' ? (
           <View style={styles.form}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>{t('details_fullName')}</Text>
             <TextInput style={styles.inputDisabled} value={guardProfile?.name} editable={false} />
 
-            <Text style={styles.label}>Badge / ID Number</Text>
+            <Text style={styles.label}>{t('details_badgeId')}</Text>
             <TextInput style={styles.inputDisabled} value={guardProfile?.badgeNumber} editable={false} />
 
-            <Text style={styles.label}>Phone Number</Text>
+            <Text style={styles.label}>{t('details_phoneNumber')}</Text>
             <TextInput style={styles.inputDisabled} value={guardProfile?.phone || '—'} editable={false} />
 
-            <Text style={styles.label}>Assigned Post</Text>
+            <Text style={styles.label}>{t('details_assignedPost')}</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => setPostPickerOpen(true)} disabled={loadingPosts}>
               {loadingPosts ? (
                 <ActivityIndicator size="small" color={colors.primary} />
               ) : (
                 <Text style={[styles.dropdownText, !post && styles.placeholderText]}>
-                  {post?.name ?? 'Select your post'}
+                  {post?.name ?? t('details_selectPost')}
                 </Text>
               )}
               <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
             </TouchableOpacity>
 
-            <Text style={styles.label}>Shift</Text>
+            <Text style={styles.label}>{t('details_shift')}</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => setShiftPickerOpen(true)}>
               <Text style={[styles.dropdownText, !shift && styles.placeholderText]}>
-                {shift || 'Select your shift'}
+                {shift || t('details_selectShift')}
               </Text>
               <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
             </TouchableOpacity>
@@ -127,30 +132,30 @@ export default function GuardDetailsScreen() {
               onPress={() => setStep('confirm')}
               disabled={!canContinue}
             >
-              <Text style={styles.buttonText}>Continue</Text>
+              <Text style={styles.buttonText}>{t('details_continue')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.form}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Confirm Your Details</Text>
-              <SummaryRow label="Name" value={guardProfile?.name ?? ''} />
-              <SummaryRow label="Badge" value={guardProfile?.badgeNumber ?? ''} />
-              <SummaryRow label="Phone" value={guardProfile?.phone || '—'} />
-              <SummaryRow label="Post" value={post?.name ?? ''} />
-              <SummaryRow label="Shift" value={shift} />
-              <SummaryRow label="Date" value={today} last />
+              <Text style={styles.summaryTitle}>{t('details_confirmTitle')}</Text>
+              <SummaryRow styles={styles} label={t('details_fullName')} value={guardProfile?.name ?? ''} />
+              <SummaryRow styles={styles} label={t('details_badgeId')} value={guardProfile?.badgeNumber ?? ''} />
+              <SummaryRow styles={styles} label={t('details_phoneNumber')} value={guardProfile?.phone || '—'} />
+              <SummaryRow styles={styles} label={t('details_assignedPost')} value={post?.name ?? ''} />
+              <SummaryRow styles={styles} label={t('details_shift')} value={shift} />
+              <SummaryRow styles={styles} label={t('details_date')} value={today} last />
             </View>
 
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.backButton} onPress={() => setStep('details')} disabled={submitting}>
-                <Text style={styles.backButtonText}>Back</Text>
+                <Text style={styles.backButtonText}>{t('details_back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.startButton} onPress={handleStartDuty} disabled={submitting}>
                 {submitting ? (
                   <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text style={styles.startButtonText}>Start Duty</Text>
+                  <Text style={styles.startButtonText}>{t('details_startDuty')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -201,29 +206,16 @@ export default function GuardDetailsScreen() {
   );
 }
 
-function SummaryRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function SummaryRow({ styles, label, value, last }: { styles: ReturnType<typeof getStyles>; label: string; value: string; last?: boolean }) {
   return (
-    <View style={[summaryRowStyles.row, last && summaryRowStyles.rowLast]}>
-      <Text style={summaryRowStyles.label}>{label}</Text>
-      <Text style={summaryRowStyles.value}>{value}</Text>
+    <View style={[styles.summaryRow, last && styles.summaryRowLast]}>
+      <Text style={styles.summaryRowLabel}>{label}</Text>
+      <Text style={styles.summaryRowValue}>{value}</Text>
     </View>
   );
 }
 
-const summaryRowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowLast: { borderBottomWidth: 0 },
-  label: { fontSize: 14, color: colors.textMuted },
-  value: { fontSize: 15, fontWeight: '700', color: colors.text },
-});
-
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 24, paddingTop: 32, alignItems: 'center' },
   iconContainer: {
@@ -253,7 +245,7 @@ const styles = StyleSheet.create({
   form: { width: '100%' },
   label: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginBottom: 8, letterSpacing: 0.5 },
   inputDisabled: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.border,
     borderRadius: 16,
     padding: 16,
     fontSize: 16,
@@ -264,7 +256,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.border,
     borderRadius: 16,
     padding: 16,
     marginBottom: 20,
@@ -273,7 +265,7 @@ const styles = StyleSheet.create({
   placeholderText: { color: colors.textMuted },
 
   button: { backgroundColor: colors.primary, padding: 18, borderRadius: 16, alignItems: 'center', marginTop: 8 },
-  buttonDisabled: { backgroundColor: '#EBE3DB' },
+  buttonDisabled: { backgroundColor: colors.border },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '700' },
 
   summaryCard: {
@@ -285,6 +277,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   summaryTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 8 },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  summaryRowLast: { borderBottomWidth: 0 },
+  summaryRowLabel: { fontSize: 14, color: colors.textMuted },
+  summaryRowValue: { fontSize: 15, fontWeight: '700', color: colors.text },
 
   confirmActions: { flexDirection: 'row', gap: 12 },
   backButton: {
@@ -292,7 +294,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 16,
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.border,
   },
   backButtonText: { color: colors.text, fontSize: 16, fontWeight: '700' },
   startButton: {

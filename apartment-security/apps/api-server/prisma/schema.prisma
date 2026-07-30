@@ -266,6 +266,10 @@ model Alert {
   targetRoles    Role[]
   targetUserIds  String[]
   channel        AlertChannel
+  imageUrl       String?
+  claimedByUserId String?
+  claimedByName  String?
+  claimedAt      DateTime?
   acknowledgedAt DateTime?
   acknowledgedBy String?
   escalatedAt    DateTime?
@@ -361,6 +365,8 @@ model Shift {
   totalIncidents Int         @default(0)
   openItems      String?
   handoverNote   String?
+  handedOverToId String?
+  handedOverToName String?
   signedOffAt    DateTime?
   createdAt      DateTime    @default(now())
   postCheckIns   GuardPost[]

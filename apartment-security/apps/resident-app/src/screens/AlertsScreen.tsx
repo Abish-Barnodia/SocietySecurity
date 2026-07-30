@@ -1,14 +1,17 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert as RNAlert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
-import { useData } from '../context/DataContext';
+import { useData, Alert } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function AlertsScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { alerts, markAllAlertsRead, fetchAlerts } = useData();
+  const { alerts, markAllAlertsRead, markAlertRead, fetchAlerts, claimVehicleAlert } = useData();
+  const { userId } = useAuth();
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   // Alerts otherwise only ever come from the one-time fetch at login plus
   // whatever arrives live over the socket while this screen happens to be
@@ -20,6 +23,17 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
       fetchAlerts();
     }, [fetchAlerts])
   );
+
+  const handleClaim = async (alert: Alert) => {
+    setClaimingId(alert.id);
+    try {
+      await claimVehicleAlert(alert.id);
+    } catch (error: any) {
+      RNAlert.alert('Error', error.response?.data?.message ?? 'Failed to record your response');
+    } finally {
+      setClaimingId(null);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,9 +56,10 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
         )}
 
         {alerts.map((alert) => (
-          <TouchableOpacity 
-            key={alert.id} 
+          <TouchableOpacity
+            key={alert.id}
             style={styles.card}
+            activeOpacity={alert.entryId ? 0.7 : 1}
             onPress={() => {
               if (alert.entryId) {
                 navigation.navigate('WalkInApproval', { requestId: alert.entryId });
@@ -60,6 +75,37 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
               </View>
               {alert.unread && <View style={styles.unreadDot} />}
             </View>
+
+            {alert.imageUrl && (
+              <>
+                <Image source={{ uri: alert.imageUrl }} style={styles.vehicleImage} />
+                {alert.claimedByUserId ? (
+                  <Text style={styles.claimStatus}>
+                    {alert.claimedByUserId === userId ? 'You confirmed this is your vehicle' : `Claimed by ${alert.claimedByName ?? 'another resident'}`}
+                  </Text>
+                ) : (
+                  <View style={styles.claimActions}>
+                    <TouchableOpacity
+                      style={styles.notMineButton}
+                      onPress={() => markAlertRead(alert.id)}
+                    >
+                      <Text style={styles.notMineText}>Not mine</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.claimButton}
+                      onPress={() => handleClaim(alert)}
+                      disabled={claimingId === alert.id}
+                    >
+                      {claimingId === alert.id ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.claimButtonText}>This is my vehicle</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -136,5 +182,47 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.primary,
     marginTop: 6,
+  },
+  vehicleImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  claimActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  notMineButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  notMineText: {
+    color: colors.textMuted,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  claimButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+  },
+  claimButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  claimStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: 12,
   },
 });

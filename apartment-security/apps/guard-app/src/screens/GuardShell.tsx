@@ -5,31 +5,28 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from './HomeScreen';
 import ScanScreen from './ScanScreen';
 import WalkInScreen from './WalkInScreen';
-import { colors } from '../theme/colors';
+import AlertsScreen from './AlertsScreen';
+import ShiftHandoverScreen from './ShiftHandoverScreen';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { ThemeColors } from '../theme/colors';
+import { TranslationKey } from '../i18n/translations';
 
-type Tab = 'home' | 'scan' | 'walkin' | 'directory' | 'alerts';
+type Tab = 'home' | 'scan' | 'walkin' | 'handover' | 'alerts';
 
-const TABS: { key: Tab; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
-  { key: 'home', icon: 'home', label: 'Home' },
-  { key: 'scan', icon: 'scan-outline', label: 'Scan' },
-  { key: 'walkin', icon: 'person-add-outline', label: 'Walk-In' },
-  { key: 'directory', icon: 'id-card-outline', label: 'Directory' },
-  { key: 'alerts', icon: 'warning-outline', label: 'Alerts' },
+const TAB_CONFIG: { key: Tab; icon: keyof typeof Ionicons.glyphMap; labelKey: TranslationKey }[] = [
+  { key: 'home', icon: 'home', labelKey: 'tab_home' },
+  { key: 'scan', icon: 'scan-outline', labelKey: 'tab_scan' },
+  { key: 'walkin', icon: 'person-add-outline', labelKey: 'tab_walkin' },
+  { key: 'handover', icon: 'swap-horizontal-outline', labelKey: 'tab_handover' },
+  { key: 'alerts', icon: 'warning-outline', labelKey: 'tab_alerts' },
 ];
-
-// ponytail: Walk-In/Directory/Alerts are still placeholders — the underlying
-// screens aren't built yet. Swap them in once they exist; the tab wiring
-// here won't need to change.
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <View style={styles.comingSoon}>
-      <Text style={styles.comingSoonText}>{label} is coming soon.</Text>
-    </View>
-  );
-}
 
 export default function GuardShell() {
   const [tab, setTab] = useState<Tab>('home');
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = getStyles(colors);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -37,17 +34,17 @@ export default function GuardShell() {
         {tab === 'home' && <HomeScreen onNavigate={setTab} />}
         {tab === 'scan' && <ScanScreen />}
         {tab === 'walkin' && <WalkInScreen navigation={{ goBack: () => setTab('home') }} />}
-        {tab === 'directory' && <ComingSoon label="Resident directory" />}
-        {tab === 'alerts' && <ComingSoon label="Raise Alert" />}
+        {tab === 'handover' && <ShiftHandoverScreen onNavigate={setTab} />}
+        {tab === 'alerts' && <AlertsScreen />}
       </View>
 
       <View style={styles.tabBar}>
-        {TABS.map((t) => {
-          const active = t.key === tab;
+        {TAB_CONFIG.map((tabItem) => {
+          const active = tabItem.key === tab;
           return (
-            <TouchableOpacity key={t.key} style={styles.tabItem} onPress={() => setTab(t.key)}>
-              <Ionicons name={t.icon} size={22} color={active ? colors.primary : colors.textMuted} />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t.label}</Text>
+            <TouchableOpacity key={tabItem.key} style={styles.tabItem} onPress={() => setTab(tabItem.key)}>
+              <Ionicons name={tabItem.icon} size={22} color={active ? colors.primary : colors.textMuted} />
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t(tabItem.labelKey)}</Text>
             </TouchableOpacity>
           );
         })}
@@ -56,11 +53,9 @@ export default function GuardShell() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
-  comingSoon: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  comingSoonText: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },
   tabBar: {
     flexDirection: 'row',
     borderTopWidth: 1,

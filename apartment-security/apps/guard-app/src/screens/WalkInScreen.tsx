@@ -7,16 +7,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import api from '../utils/api';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { ThemeColors } from '../theme/colors';
 
-type Unit = { id: string; unitNumber: string; residents: { name: string }[] };
+type Unit = { id: string; unitNumber: string; tower: string | null; residents: { name: string }[] };
 type RecentVisitor = { visitorName: string; vehicleNumber: string | null };
 
 export default function WalkInScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = getStyles(colors);
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [entryPoints, setEntryPoints] = useState<{ id: string; name: string }[]>([]);
   const [recentVisitors, setRecentVisitors] = useState<RecentVisitor[]>([]);
-  
+
   const [visitorName, setVisitorName] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [purpose, setPurpose] = useState('');
@@ -25,12 +31,12 @@ export default function WalkInScreen({ navigation }: any) {
   const [blockPickerOpen, setBlockPickerOpen] = useState(false);
   const [flatPickerOpen, setFlatPickerOpen] = useState(false);
   const [selectedGateId, setSelectedGateId] = useState('');
-  
+
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
-  
+
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -43,7 +49,7 @@ export default function WalkInScreen({ navigation }: any) {
       const gates = gatesRes.data.data ?? [];
       setEntryPoints(gates);
       if (gates.length > 0) setSelectedGateId(gates[0].id);
-      
+
       setUnits(unitsRes.data.data ?? []);
       setRecentVisitors(visRes.data.data ?? []);
     }).catch(console.error);
@@ -51,25 +57,25 @@ export default function WalkInScreen({ navigation }: any) {
 
   const handleSubmit = async () => {
     if (!visitorName.trim() || !flatInput.trim()) {
-      Alert.alert('Missing Fields', 'Please fill in visitor name and flat number.');
+      Alert.alert(t('walkin_missingFieldsTitle'), t('walkin_missingFieldsMsg'));
       return;
     }
     if (!selectedGateId) {
-      Alert.alert('System Error', 'No gate selected. Are gates configured for this property?');
+      Alert.alert(t('walkin_systemErrorTitle'), t('walkin_systemErrorMsg'));
       return;
     }
-    
+
     // Find the unit ID from the pre-loaded units list
-    const unit = units.find(u => 
-      (u.tower || '').toLowerCase() === blockInput.trim().toLowerCase() && 
+    const unit = units.find(u =>
+      (u.tower || '').toLowerCase() === blockInput.trim().toLowerCase() &&
       u.unitNumber.toLowerCase() === flatInput.trim().toLowerCase()
     );
-    
+
     if (!unit) {
-      Alert.alert('Unit Not Found', 'Could not find a flat matching that block and flat number.');
+      Alert.alert(t('walkin_unitNotFoundTitle'), t('walkin_unitNotFoundMsg'));
       return;
     }
-    
+
     setSubmitting(true);
     try {
       await api.post('/walkins/request', {
@@ -81,15 +87,15 @@ export default function WalkInScreen({ navigation }: any) {
         visitorPhone: '0000000000',
         gatePhotoBase64: photoBase64,
       });
-      Alert.alert('Success', 'Approval request sent to resident!', [
-        { text: 'OK', onPress: () => {
-          setVisitorName(''); setVehicleNumber(''); setPurpose(''); 
+      Alert.alert(t('walkin_successTitle'), t('walkin_successMsg'), [
+        { text: t('common_ok'), onPress: () => {
+          setVisitorName(''); setVehicleNumber(''); setPurpose('');
           setBlockInput(''); setFlatInput(''); setPhotoBase64(null);
           navigation.goBack();
         }}
       ]);
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.message ?? 'Failed to send request');
+      Alert.alert(t('common_error'), error.response?.data?.message ?? t('walkin_errorMsg'));
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +110,7 @@ export default function WalkInScreen({ navigation }: any) {
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!res.granted) {
-        Alert.alert('Permission required', 'Camera permission is needed to take photos.');
+        Alert.alert(t('walkin_permissionRequiredTitle'), t('walkin_permissionRequiredMsg'));
         return;
       }
     }
@@ -120,7 +126,7 @@ export default function WalkInScreen({ navigation }: any) {
           setIsCameraOpen(false);
         }
       } catch (e) {
-        Alert.alert('Error', 'Failed to take photo');
+        Alert.alert(t('common_error'), t('walkin_cameraFailedMsg'));
       }
     }
   };
@@ -131,7 +137,7 @@ export default function WalkInScreen({ navigation }: any) {
         <CameraView style={{ flex: 1 }} facing="back" ref={ref => setCameraRef(ref)}>
           <View style={styles.cameraControls}>
             <TouchableOpacity style={styles.cameraCancel} onPress={() => setIsCameraOpen(false)}>
-              <Text style={{ color: 'white', fontSize: 16 }}>Cancel</Text>
+              <Text style={{ color: 'white', fontSize: 16 }}>{t('common_cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cameraCapture} onPress={takePicture}>
               <View style={styles.cameraCaptureInner} />
@@ -149,16 +155,16 @@ export default function WalkInScreen({ navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 8 }}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Walk-In Visitor</Text>
+        <Text style={styles.headerTitle}>{t('walkin_headerTitle')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          
+
           {recentVisitors.length > 0 && (
             <View style={{ marginBottom: 16 }}>
-              <Text style={styles.label}>Recent Visitors (Tap to auto-fill)</Text>
+              <Text style={styles.label}>{t('walkin_recentVisitors')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                 {recentVisitors.map((v, i) => (
                   <TouchableOpacity key={i} style={styles.chip} onPress={() => autofill(v)}>
@@ -169,71 +175,71 @@ export default function WalkInScreen({ navigation }: any) {
             </View>
           )}
 
-          <Text style={styles.label}>Visitor Name</Text>
+          <Text style={styles.label}>{t('walkin_visitorName')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Full name of the visitor"
+            placeholder={t('walkin_visitorNamePlaceholder')}
             value={visitorName}
             onChangeText={setVisitorName}
             placeholderTextColor={colors.textMuted}
           />
 
-          <Text style={styles.label}>Vehicle Number (optional)</Text>
+          <Text style={styles.label}>{t('walkin_vehicleNumber')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="e.g. MH-02-AB-1234"
+            placeholder={t('walkin_vehicleNumberPlaceholder')}
             value={vehicleNumber}
             onChangeText={setVehicleNumber}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
           />
 
-          <Text style={styles.label}>Visiting Resident</Text>
+          <Text style={styles.label}>{t('walkin_visitingResident')}</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => setBlockPickerOpen(true)}>
               <Text style={{ color: blockInput ? colors.text : colors.textMuted }}>
-                {blockInput || 'Block / Tower'}
+                {blockInput || t('walkin_blockTower')}
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.input, { flex: 1, justifyContent: 'center' }]} onPress={() => {
               const hasBlocks = units.some(u => u.tower && u.tower.trim() !== '');
               if (!blockInput && hasBlocks) {
-                Alert.alert('Select Block', 'Please select a block first.');
+                Alert.alert(t('walkin_selectBlockTitle'), t('walkin_selectBlockMsg'));
                 return;
               }
               setFlatPickerOpen(true);
             }}>
               <Text style={{ color: flatInput ? colors.text : colors.textMuted }}>
-                {flatInput || 'Flat no.'}
+                {flatInput || t('walkin_flatNo')}
               </Text>
             </TouchableOpacity>
           </View>
-          {units.length === 0 && <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>Loading flats in background...</Text>}
+          {units.length === 0 && <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>{t('walkin_loadingFlats')}</Text>}
 
-          <Text style={styles.label}>Purpose of Visit</Text>
+          <Text style={styles.label}>{t('walkin_purposeOfVisit')}</Text>
           <TextInput
             style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-            placeholder="e.g. Food delivery, guest, maintenance..."
+            placeholder={t('walkin_purposePlaceholder')}
             value={purpose}
             onChangeText={setPurpose}
             placeholderTextColor={colors.textMuted}
             multiline
           />
 
-          <Text style={styles.label}>Visitor Photo (optional)</Text>
+          <Text style={styles.label}>{t('walkin_visitorPhoto')}</Text>
           <TouchableOpacity style={styles.photoBox} onPress={handleCameraPress}>
             {photoBase64 ? (
               <Image source={{ uri: `data:image/jpeg;base64,${photoBase64}` }} style={{ width: 100, height: 100, borderRadius: 8 }} />
             ) : (
               <>
                 <Ionicons name="camera-outline" size={32} color={colors.textMuted} />
-                <Text style={styles.photoBoxText}>Tap to capture photo</Text>
-                <Text style={styles.photoBoxSub}>Uses device camera</Text>
+                <Text style={styles.photoBoxText}>{t('walkin_tapToCapture')}</Text>
+                <Text style={styles.photoBoxSub}>{t('walkin_usesCamera')}</Text>
               </>
             )}
           </TouchableOpacity>
-          
+
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -246,7 +252,7 @@ export default function WalkInScreen({ navigation }: any) {
           {submitting ? (
             <ActivityIndicator color={colors.card} />
           ) : (
-            <Text style={styles.submitButtonText}>Send Approval Request</Text>
+            <Text style={styles.submitButtonText}>{t('walkin_sendRequest')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -262,7 +268,7 @@ export default function WalkInScreen({ navigation }: any) {
                   style={styles.modalItem}
                   onPress={() => { setBlockInput(item); setFlatInput(''); setBlockPickerOpen(false); }}
                 >
-                  <Text style={styles.modalItemText}>{item || '(No Block)'}</Text>
+                  <Text style={styles.modalItemText}>{item || t('walkin_noBlock')}</Text>
                   {item === blockInput && <Ionicons name="checkmark" size={20} color={colors.primary} />}
                 </TouchableOpacity>
               )}
@@ -294,7 +300,7 @@ export default function WalkInScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: colors.text },
@@ -340,21 +346,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   chipText: { color: colors.text, fontSize: 14 },
-  unitsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  unitChip: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  unitChipSelected: {
-    backgroundColor: colors.primaryLight,
-    borderColor: colors.primary,
-  },
-  unitChipText: { color: colors.text, fontSize: 14 },
-  unitChipTextSelected: { color: colors.primary, fontWeight: 'bold' },
   cameraControls: {
     position: 'absolute',
     bottom: 40,

@@ -11,11 +11,17 @@ import { getSocket } from '../utils/socket';
 import { submitScan, callResident, ScanResult } from '../services/scannerService';
 import PassSummary from '../components/PassSummary';
 import ClearanceCard, { ClearanceState } from '../components/ClearanceCard';
-import { colors } from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
+import { ThemeColors } from '../theme/colors';
 
 type EntryPoint = { id: string; name: string };
 
 export default function ScanScreen() {
+  const { colors } = useTheme();
+  const { t } = useLanguage();
+  const styles = getStyles(colors);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
   const [gate, setGate] = useState<EntryPoint | null>(null);
@@ -65,7 +71,7 @@ export default function ScanScreen() {
       setResult(scan);
       setClearance(scan.status === 'PENDING_APPROVAL' ? 'PENDING' : (scan.status as ClearanceState));
     } catch (error: any) {
-      Alert.alert('Scan failed', error.response?.data?.message ?? 'Could not verify this pass. Check your connection and try again.');
+      Alert.alert(t('scan_scanFailedTitle'), error.response?.data?.message ?? t('scan_scanFailedMsg'));
       setScanned(false);
     } finally {
       setSubmitting(false);
@@ -76,7 +82,7 @@ export default function ScanScreen() {
     if (!result?.id) return;
     const phone = result.residentPhone;
     if (!phone) {
-      Alert.alert('No phone on file', "This resident doesn't have a phone number on record.");
+      Alert.alert(t('scan_noPhoneTitle'), t('scan_noPhoneMsg'));
       return;
     }
     setCalling(true);
@@ -84,7 +90,7 @@ export default function ScanScreen() {
       await Linking.openURL(`tel:${phone}`);
       await callResident(result.id);
     } catch {
-      Alert.alert('Could not call', 'Your device could not open the dialer.');
+      Alert.alert(t('scan_couldNotCallTitle'), t('scan_couldNotCallMsg'));
     } finally {
       setCalling(false);
     }
@@ -101,8 +107,8 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <SafeAreaView style={[styles.container, styles.center]}>
-        <Text style={styles.permissionText}>Camera access is needed to scan visitor passes.</Text>
-        <Button onPress={requestPermission} title="Grant permission" color={colors.primary} />
+        <Text style={styles.permissionText}>{t('scan_cameraPermission')}</Text>
+        <Button onPress={requestPermission} title={t('scan_grantPermission')} color={colors.primary} />
       </SafeAreaView>
     );
   }
@@ -112,7 +118,7 @@ export default function ScanScreen() {
       {result ? (
         <View style={styles.content}>
           <PassSummary
-            visitorName={result.visitorName ?? 'Unknown visitor'}
+            visitorName={result.visitorName ?? t('scan_unknownVisitor')}
             visitorPhoto={result.visitorPhoto}
             visitorPhone={result.visitorPhone}
             vehicleNumber={result.vehicleNumber}
@@ -126,20 +132,20 @@ export default function ScanScreen() {
           {clearance === 'TIMEOUT' && (
             <TouchableOpacity style={styles.callButton} onPress={handleCallResident} disabled={calling}>
               {calling ? <ActivityIndicator color={colors.white} /> : (
-                <Text style={styles.callButtonText}>Call Resident</Text>
+                <Text style={styles.callButtonText}>{t('scan_callResident')}</Text>
               )}
             </TouchableOpacity>
           )}
 
           <TouchableOpacity style={styles.resetButton} onPress={resetScanner}>
-            <Text style={styles.resetButtonText}>Scan Next</Text>
+            <Text style={styles.resetButtonText}>{t('scan_scanNext')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.content}>
           <TouchableOpacity style={styles.gatePicker} onPress={() => setGatePickerOpen(true)}>
             <Text style={[styles.gatePickerText, !gate && styles.placeholderText]}>
-              {gate?.name ?? 'Select the gate you are scanning at'}
+              {gate?.name ?? t('scan_selectGate')}
             </Text>
             <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
           </TouchableOpacity>
@@ -147,17 +153,17 @@ export default function ScanScreen() {
           {gate ? (
             <View style={{ gap: 16 }}>
               <View style={styles.segmentContainer}>
-                <TouchableOpacity 
-                  style={[styles.segmentButton, mode === 'qr' && styles.segmentActive]} 
+                <TouchableOpacity
+                  style={[styles.segmentButton, mode === 'qr' && styles.segmentActive]}
                   onPress={() => setMode('qr')}
                 >
-                  <Text style={[styles.segmentText, mode === 'qr' && styles.segmentTextActive]}>Scan QR</Text>
+                  <Text style={[styles.segmentText, mode === 'qr' && styles.segmentTextActive]}>{t('scan_scanQr')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.segmentButton, mode === 'otp' && styles.segmentActive]} 
+                <TouchableOpacity
+                  style={[styles.segmentButton, mode === 'otp' && styles.segmentActive]}
                   onPress={() => setMode('otp')}
                 >
-                  <Text style={[styles.segmentText, mode === 'otp' && styles.segmentTextActive]}>Enter OTP</Text>
+                  <Text style={[styles.segmentText, mode === 'otp' && styles.segmentTextActive]}>{t('scan_enterOtp')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -178,27 +184,27 @@ export default function ScanScreen() {
                       ) : submitting ? (
                         <ActivityIndicator color={colors.white} size="large" />
                       ) : (
-                        <Text style={styles.overlayText}>Align QR code within frame</Text>
+                        <Text style={styles.overlayText}>{t('scan_alignQr')}</Text>
                       )}
                     </View>
                   </>
                 ) : (
                   <>
-                    <TextInput 
-                      style={styles.otpInput} 
-                      placeholder="Enter 6-digit OTP" 
+                    <TextInput
+                      style={styles.otpInput}
+                      placeholder={t('scan_otpPlaceholder')}
                       placeholderTextColor={colors.textMuted}
                       value={otp}
                       onChangeText={setOtp}
                       keyboardType="number-pad"
                       maxLength={6}
                     />
-                    <TouchableOpacity 
-                      style={[styles.simulateButton, !otp && { opacity: 0.5 }]} 
+                    <TouchableOpacity
+                      style={[styles.simulateButton, !otp && { opacity: 0.5 }]}
                       onPress={() => handleScan(`OTP:${otp}`)}
                       disabled={submitting || !otp}
                     >
-                      {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.simulateButtonText}>Verify OTP</Text>}
+                      {submitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.simulateButtonText}>{t('scan_verifyOtp')}</Text>}
                     </TouchableOpacity>
                   </>
                 )}
@@ -206,7 +212,7 @@ export default function ScanScreen() {
             </View>
           ) : (
             <View style={styles.scannerPlaceholder}>
-              <Text style={styles.placeholderText}>Pick a gate to start scanning</Text>
+              <Text style={styles.placeholderText}>{t('scan_pickGate')}</Text>
             </View>
           )}
         </View>
@@ -235,7 +241,7 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   content: { flex: 1, padding: 20 },
@@ -277,11 +283,8 @@ const styles = StyleSheet.create({
     height: 280, borderRadius: 20, backgroundColor: colors.border, borderWidth: 2,
     borderColor: colors.textMuted, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', padding: 24,
   },
-  iconBox: {
-    backgroundColor: colors.primaryLight, padding: 16, borderRadius: 16, marginBottom: 16,
-  },
-  simulatedText: {
-    fontSize: 15, color: colors.textMuted, marginBottom: 24,
+  otpInput: {
+    width: '80%', backgroundColor: colors.white, borderRadius: 12, padding: 16, fontSize: 18, textAlign: 'center', marginBottom: 24, borderWidth: 1, borderColor: colors.border, color: colors.text
   },
   simulateButton: {
     backgroundColor: colors.primaryDark, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 30, width: '80%', alignItems: 'center',
@@ -289,16 +292,13 @@ const styles = StyleSheet.create({
   simulateButtonText: {
     color: colors.white, fontSize: 15, fontWeight: '700',
   },
-  otpInput: {
-    width: '80%', backgroundColor: colors.white, borderRadius: 12, padding: 16, fontSize: 18, textAlign: 'center', marginBottom: 24, borderWidth: 1, borderColor: colors.border, color: colors.text
-  },
 
   callButton: {
     backgroundColor: colors.danger, borderRadius: 16, padding: 16, alignItems: 'center', marginBottom: 12,
   },
   callButtonText: { color: colors.white, fontSize: 15, fontWeight: '700' },
   resetButton: {
-    backgroundColor: '#F5F5F5', borderRadius: 16, padding: 16, alignItems: 'center',
+    backgroundColor: colors.border, borderRadius: 16, padding: 16, alignItems: 'center',
   },
   resetButtonText: { color: colors.text, fontSize: 15, fontWeight: '700' },
 

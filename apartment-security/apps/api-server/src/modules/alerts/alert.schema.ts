@@ -16,3 +16,13 @@ export const triggerDuressSchema = z.object({
     longitude: z.number().optional()
   })
 });
+
+export const vehicleAlertSchema = z.object({
+  body: z.object({
+    photoBase64: z.string().min(1, 'Vehicle photo is required'),
+    plateNumber: z.string().min(1),
+    vehicleDetails: z.string().min(1),
+    location: z.string().min(1),
+    notes: z.string().optional(),
+  })
+});

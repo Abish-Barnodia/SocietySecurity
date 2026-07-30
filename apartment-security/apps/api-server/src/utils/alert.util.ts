@@ -13,6 +13,7 @@ interface TriggerAlertParams {
   entryId?: string;
   incidentId?: string;
   propertyId: string;
+  imageUrl?: string;
 }
 
 export const triggerAlert = async (params: TriggerAlertParams) => {
@@ -25,6 +26,7 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
     entryId,
     incidentId,
     propertyId,
+    imageUrl,
   } = params;
 
   // Determine all target users
@@ -67,6 +69,7 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
       targetUserIds: userIds,
       channel: 'PUSH',
       status: 'SENT',
+      imageUrl,
     },
   });
 

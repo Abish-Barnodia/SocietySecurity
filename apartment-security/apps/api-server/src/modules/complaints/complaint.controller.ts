@@ -4,7 +4,7 @@ import { sendSuccess } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 import { io } from '../../server';
-import { uploadBuffer } from '../../utils/firebaseStorage.util';
+import { uploadBuffer } from '../../utils/objectStorage.util';
 import { getResidentContext } from '../../utils/residentContext.util';
 import { Role } from '@prisma/client';
 

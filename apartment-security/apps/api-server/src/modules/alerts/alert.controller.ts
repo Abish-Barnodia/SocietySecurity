@@ -6,6 +6,7 @@ import { auditLog } from '../../utils/audit.util';
 import { io } from '../../server';
 import { sendSMS } from '../../utils/sms.util';
 import { env } from '../../config/env';
+import { acknowledgeAlert } from '../../utils/alert.util';
 
 export const broadcastAlert = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -169,5 +170,102 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
     });
 
     return sendSuccess(res, 200, 'Alerts fetched', alerts);
+  } catch (err) { next(err); }
+};
+
+export const broadcastVehicleAlert = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { photoBase64, plateNumber, vehicleDetails, location, notes } = req.body;
+
+    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
+    if (!guard) return next(new AppError('Guard profile not found', 404));
+
+    const { uploadBuffer } = await import('../../utils/objectStorage.util');
+    const buffer = Buffer.from(photoBase64, 'base64');
+    const imageUrl = await uploadBuffer(buffer, `vehicle-alerts/${Date.now()}.jpg`, 'image/jpeg');
+
+    const body = `${vehicleDetails} — Plate ${plateNumber} — spotted at ${location}.${notes ? ` ${notes}` : ''}`;
+
+    const { triggerAlert } = await import('../../utils/alert.util');
+    const alert = await triggerAlert({
+      priority: 'P2',
+      title: 'Unknown Vehicle Alert',
+      body,
+      targetRoles: ['RESIDENT'],
+      propertyId: guard.propertyId,
+      imageUrl,
+    });
+
+    io?.to(`property:${guard.propertyId}`).emit('new_alert', alert);
+
+    await auditLog(req.user!.userId, 'BROADCAST_VEHICLE_ALERT', 'Alert', alert.id);
+    return sendSuccess(res, 201, 'Vehicle alert sent to all residents', alert);
+  } catch (err) { next(err); }
+};
+
+export const claimVehicleAlert = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) return next(new AppError('Alert not found', 404));
+    // First claim wins — this is a broadcast to many residents, only one of
+    // them actually owns the vehicle.
+    if (alert.claimedByUserId) return next(new AppError('This vehicle has already been claimed by another resident', 400));
+
+    const resident = await prisma.resident.findUnique({
+      where: { userId: req.user!.userId },
+      include: { unit: true },
+    });
+    if (!resident) return next(new AppError('Resident context not found', 404));
+    if (resident.unit.propertyId !== alert.propertyId) return next(new AppError('Unauthorized', 403));
+
+    const updated = await prisma.alert.update({
+      where: { id },
+      data: {
+        claimedByUserId: req.user!.userId,
+        claimedByName: resident.name,
+        claimedAt: new Date(),
+      },
+    });
+
+    const { triggerAlert } = await import('../../utils/alert.util');
+    const guardAlert = await triggerAlert({
+      priority: 'P3',
+      title: 'Vehicle Claimed',
+      body: `${resident.name} (Unit ${resident.unit.unitNumber}) says this vehicle is theirs: ${alert.body}`,
+      targetRoles: ['GUARD'],
+      propertyId: alert.propertyId,
+      imageUrl: alert.imageUrl ?? undefined,
+    });
+    io?.to(`property:${alert.propertyId}`).emit('new_alert', guardAlert);
+
+    await auditLog(req.user!.userId, 'CLAIM_VEHICLE_ALERT', 'Alert', id);
+    return sendSuccess(res, 200, 'Vehicle claim recorded', updated);
+  } catch (err) { next(err); }
+};
+
+export const acknowledgeAlertRoute = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) return next(new AppError('Alert not found', 404));
+
+    // Same propertyId-scoping as getAlerts — a caller can only acknowledge
+    // an alert that belongs to their own property.
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: { manager: true, guard: true, resident: { include: { unit: true } } },
+    });
+    const propertyId =
+      user?.manager?.propertyId ??
+      user?.guard?.propertyId ??
+      user?.resident?.unit.propertyId;
+
+    if (!propertyId || alert.propertyId !== propertyId) {
+      return next(new AppError('Unauthorized', 403));
+    }
+
+    const updated = await acknowledgeAlert(id, req.user!.userId);
+    return sendSuccess(res, 200, 'Alert acknowledged', updated);
   } catch (err) { next(err); }
 };

@@ -264,7 +264,7 @@ export const getUnitsForGuard = async (req: Request, res: Response, next: NextFu
         propertyId: guard.propertyId,
         residents: { some: {} }
       },
-      select: { id: true, unitNumber: true, tower: true },
+      select: { id: true, unitNumber: true, tower: true, _count: { select: { residents: true } } },
       orderBy: { unitNumber: 'asc' },
     });
     return sendSuccess(res, 200, 'Units fetched', units);

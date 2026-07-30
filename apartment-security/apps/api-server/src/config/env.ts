@@ -19,6 +19,10 @@ const envSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_STORAGE_BUCKET: z.string().optional(),
+
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
   
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),

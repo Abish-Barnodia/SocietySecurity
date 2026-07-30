@@ -3,7 +3,7 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { io } from '../../server';
-import { uploadBuffer } from '../../utils/firebaseStorage.util';
+import { uploadBuffer } from '../../utils/objectStorage.util';
 import { getResidentContext } from '../../utils/residentContext.util';
 
 const messageInclude = {

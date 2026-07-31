@@ -12,20 +12,36 @@ import {
   listMembers,
   uploadMedia,
   deleteMessage,
+  reportMessage,
+  listReports,
+  dismissReport,
+  resolveReport,
+  listMembersForManager,
+  setMemberMute,
 } from './community.controller';
-import { createMessageSchema, reactionSchema, voteSchema } from './community.schema';
+import { createMessageSchema, reactionSchema, voteSchema, reportSchema, muteSchema } from './community.schema';
 
 const router = Router();
 router.use(authenticate);
-router.use(requireRole('RESIDENT'));
 
-router.get('/messages', listMessages);
-router.post('/messages', validate(createMessageSchema), createMessage);
-router.delete('/messages/:id', deleteMessage);
-router.post('/messages/:id/reactions', validate(reactionSchema), toggleReaction);
-router.post('/polls/:pollId/vote', validate(voteSchema), votePoll);
-router.get('/search', searchMessages);
-router.get('/members', listMembers);
-router.post('/uploads', upload.single('file'), uploadMedia);
+// Resident-only: participate in the chat
+router.post('/messages', requireRole('RESIDENT'), validate(createMessageSchema), createMessage);
+router.post('/messages/:id/reactions', requireRole('RESIDENT'), validate(reactionSchema), toggleReaction);
+router.post('/messages/:id/report', requireRole('RESIDENT'), validate(reportSchema), reportMessage);
+router.post('/polls/:pollId/vote', requireRole('RESIDENT'), validate(voteSchema), votePoll);
+router.get('/search', requireRole('RESIDENT'), searchMessages);
+router.get('/members', requireRole('RESIDENT'), listMembers);
+router.post('/uploads', requireRole('RESIDENT'), upload.single('file'), uploadMedia);
+
+// Resident + Manager: read the feed, moderate messages
+router.get('/messages', requireRole('RESIDENT', 'MANAGER'), listMessages);
+router.delete('/messages/:id', requireRole('RESIDENT', 'MANAGER'), deleteMessage);
+
+// Manager-only: moderation queue + member roster
+router.get('/reports', requireRole('MANAGER'), listReports);
+router.post('/reports/:id/dismiss', requireRole('MANAGER'), dismissReport);
+router.post('/reports/:id/resolve', requireRole('MANAGER'), resolveReport);
+router.get('/members/manage', requireRole('MANAGER'), listMembersForManager);
+router.put('/members/:id/mute', requireRole('MANAGER'), validate(muteSchema), setMemberMute);
 
 export { router as communityRouter };

@@ -26,6 +26,7 @@ model Property {
   invoices     Invoice[]
   managers     Manager[]
   units        Unit[]
+  escalationChains EscalationChain[]
 }
 
 model EntryPoint {
@@ -84,6 +85,8 @@ model User {
   otps            OTP[]
   refreshTokens   RefreshToken[]
   resident        Resident?
+  escalationSteps EscalationStep[]
+  chatReports     ChatReport[]
 }
 
 model Resident {
@@ -97,6 +100,7 @@ model Resident {
   emergencyContactName String?
   alertPreferences     Json             @default("{}")
   showUnitInCommunity  Boolean          @default(true)
+  mutedFromCommunity   Boolean          @default(false)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   complaints           Complaint[]
@@ -274,9 +278,55 @@ model Alert {
   acknowledgedBy String?
   escalatedAt    DateTime?
   resolvedAt     DateTime?
+  // How many EscalationStep entries (in order) have already fired for this
+  // alert — lets the escalation job resume where it left off instead of
+  // re-notifying earlier steps every tick.
+  escalationStep Int           @default(0)
   createdAt      DateTime      @default(now())
   entry          Entry?        @relation(fields: [entryId], references: [id])
   incident       Incident?     @relation(fields: [incidentId], references: [id])
+}
+
+// A per-property, per-priority ordered list of who gets notified as an alert
+// ages unacknowledged, and how (push/SMS/email), replacing the old flat
+// "notify every manager at once" behavior.
+model EscalationChain {
+  id         String            @id @default(cuid())
+  propertyId String
+  priority   AlertPriority
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  property   Property          @relation(fields: [propertyId], references: [id])
+  steps      EscalationStep[]
+
+  @@unique([propertyId, priority])
+}
+
+model EscalationStep {
+  id           String            @id @default(cuid())
+  chainId      String
+  order        Int
+  roleLabel    String
+  // Either a real registered user (userId) or an external contact
+  // (contactName/contactPhone) — never both fabricated, one of the two
+  // must reflect a real, configured target.
+  userId       String?
+  contactName  String?
+  contactPhone String?
+  delayMinutes Int
+  channel      EscalationChannel
+  createdAt    DateTime          @default(now())
+  chain        EscalationChain   @relation(fields: [chainId], references: [id])
+  user         User?             @relation(fields: [userId], references: [id])
+
+  @@index([chainId])
+}
+
+enum EscalationChannel {
+  PUSH
+  SMS
+  EMAIL
+  ALL
 }
 
 model Incident {
@@ -462,8 +512,30 @@ model ChatMessage {
   replies          ChatMessage[]   @relation("MessageReplies")
   reactions        ChatReaction[]
   poll             ChatPoll?
+  reports          ChatReport[]
 
   @@index([propertyId, createdAt])
+}
+
+model ChatReport {
+  id         String       @id @default(cuid())
+  messageId  String
+  reporterId String
+  reason     String
+  status     ReportStatus @default(PENDING)
+  resolvedAt DateTime?
+  resolvedBy String?
+  createdAt  DateTime     @default(now())
+  message    ChatMessage  @relation(fields: [messageId], references: [id])
+  reporter   User         @relation(fields: [reporterId], references: [id])
+
+  @@index([messageId])
+}
+
+enum ReportStatus {
+  PENDING
+  DISMISSED
+  RESOLVED
 }
 
 model ChatReaction {

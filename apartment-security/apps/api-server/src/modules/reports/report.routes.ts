@@ -4,6 +4,8 @@ import { requireRole } from '../../middlewares/role.middleware';
 import {
   getOperationsOverview,
   generateMonthlyReport,
+  getMonthlyReportSummary,
+  getComplianceMetrics,
   getAuditLogs
 } from './report.controller';
 
@@ -15,6 +17,10 @@ router.get('/overview', requireRole('MANAGER', 'COMMITTEE'), getOperationsOvervi
 
 // Managers can generate monthly reports
 router.get('/monthly', requireRole('MANAGER'), generateMonthlyReport);
+router.get('/monthly/summary', requireRole('MANAGER', 'COMMITTEE'), getMonthlyReportSummary);
+
+// Managers / Committee can view compliance metrics
+router.get('/compliance', requireRole('MANAGER', 'COMMITTEE'), getComplianceMetrics);
 
 // Managers / Committee can view audit logs
 router.get('/audit', requireRole('MANAGER', 'COMMITTEE'), getAuditLogs);

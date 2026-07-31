@@ -9,13 +9,26 @@ import crypto from 'crypto';
 
 export const createPass = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { type, visitorName, visitorPhone, purpose, validFrom, validUntil, entryPointIds, recurringRule } = req.body;
+    const { type, visitorName, visitorPhone, purpose, validFrom, validUntil, entryPointIds, recurringRule, unitId: reqUnitId } = req.body;
     
-    // Validate resident context
-    const currentResident = await prisma.resident.findUnique({
-        where: { userId: req.user!.userId }
-    });
-    if (!currentResident) return next(new AppError('Resident context not found', 404));
+    let residentId = null;
+    let finalUnitId = reqUnitId;
+
+    if (req.user!.role === 'RESIDENT') {
+      const currentResident = await prisma.resident.findUnique({
+          where: { userId: req.user!.userId }
+      });
+      if (!currentResident) return next(new AppError('Resident context not found', 404));
+      residentId = currentResident.id;
+      finalUnitId = currentResident.unitId;
+    } else if (req.user!.role === 'MANAGER' || req.user!.role === 'COMMITTEE') {
+      if (!finalUnitId) return next(new AppError('unitId is required for managers creating passes', 400));
+      // Optionally find the primary resident of this unit to assign as host
+      const unitResident = await prisma.resident.findFirst({ where: { unitId: finalUnitId } });
+      residentId = unitResident ? unitResident.id : null;
+    } else {
+      return next(new AppError('Unauthorized to create passes', 403));
+    }
 
     // For DELIVERY type, we optionally create an OTP
     let otpPlaintext = null;
@@ -27,8 +40,8 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
 
     const pass = await prisma.pass.create({
       data: {
-        residentId: currentResident.id,
-        unitId: currentResident.unitId,
+        residentId,
+        unitId: finalUnitId,
         type,
         visitorName,
         visitorPhone,

@@ -4,7 +4,7 @@ import { sendSuccess } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { io } from '../../server';
 import { uploadBuffer } from '../../utils/objectStorage.util';
-import { getResidentContext } from '../../utils/residentContext.util';
+import { getResidentContext, getCallerPropertyId } from '../../utils/residentContext.util';
 
 const messageInclude = {
   sender: {
@@ -54,7 +54,9 @@ const redactSenderPrivacy = (message: any) => {
 
 export const listMessages = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { propertyId } = await getResidentContext(req.user!.userId);
+    // Both residents (reading their own feed) and managers (moderating it)
+    // call this — resolve propertyId generically rather than assuming resident.
+    const propertyId = await getCallerPropertyId(req.user!.userId);
     const limit = Math.min(Number(req.query.limit) || 30, 100);
     const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
 
@@ -76,11 +78,15 @@ export const listMessages = async (req: Request, res: Response, next: NextFuncti
 
 export const createMessage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { residentId, propertyId } = await getResidentContext(req.user!.userId);
+    const { propertyId, mutedFromCommunity } = await getResidentContext(req.user!.userId);
     const {
       type, body, mediaUrl, mediaMimeType, mediaDurationSec,
       fileName, fileSizeBytes, replyToId, mentionedUserIds, poll,
     } = req.body;
+
+    if (mutedFromCommunity) {
+      return next(new AppError('You have been muted from posting in the community', 403));
+    }
 
     if (type === 'POLL' && !poll) {
       return next(new AppError('poll is required when type is POLL', 400));
@@ -133,7 +139,7 @@ export const createMessage = async (req: Request, res: Response, next: NextFunct
 
 export const deleteMessage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { propertyId } = await getResidentContext(req.user!.userId);
+    const propertyId = await getCallerPropertyId(req.user!.userId);
     const messageId = req.params.id as string;
     const userId = req.user!.userId;
 
@@ -145,7 +151,10 @@ export const deleteMessage = async (req: Request, res: Response, next: NextFunct
       return next(new AppError('Message not found', 404));
     }
 
-    if (message.senderId !== userId) {
+    // A manager can moderate any message in their property; everyone else
+    // can only remove their own.
+    const isModerator = req.user!.role === 'MANAGER';
+    if (message.senderId !== userId && !isModerator) {
       return next(new AppError('You can only delete your own messages', 403));
     }
 
@@ -290,5 +299,114 @@ export const uploadMedia = async (req: Request, res: Response, next: NextFunctio
       sizeBytes: file.size,
       fileName: file.originalname,
     });
+  } catch (err) { next(err); }
+};
+
+// --- Moderation: resident reports a message, manager reviews the queue ---
+
+export const reportMessage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { propertyId } = await getResidentContext(req.user!.userId);
+    const messageId = req.params.id as string;
+    const { reason } = req.body;
+
+    const message = await prisma.chatMessage.findFirst({ where: { id: messageId, propertyId } });
+    if (!message) return next(new AppError('Message not found', 404));
+
+    const report = await prisma.chatReport.create({
+      data: { messageId, reporterId: req.user!.userId, reason },
+    });
+
+    sendSuccess(res, 201, 'Message reported', report);
+  } catch (err) { next(err); }
+};
+
+const reportInclude = {
+  reporter: { select: { resident: { select: { name: true, unit: { select: { unitNumber: true, tower: true } } } } } },
+  message: { include: messageInclude },
+};
+
+export const listReports = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+    const reports = await prisma.chatReport.findMany({
+      where: { message: { propertyId }, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: reportInclude,
+    });
+    sendSuccess(res, 200, 'Reports retrieved', reports.map((r) => ({ ...r, message: redactSenderPrivacy(r.message) })));
+  } catch (err) { next(err); }
+};
+
+const resolveReportStatus = async (req: Request, res: Response, next: NextFunction, status: 'DISMISSED' | 'RESOLVED') => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+    const reportId = req.params.id as string;
+
+    const report = await prisma.chatReport.findUnique({ where: { id: reportId }, include: { message: true } });
+    if (!report || report.message.propertyId !== propertyId) return next(new AppError('Report not found', 404));
+
+    const updated = await prisma.chatReport.update({
+      where: { id: reportId },
+      data: { status, resolvedAt: new Date(), resolvedBy: req.user!.userId },
+    });
+
+    sendSuccess(res, 200, `Report ${status.toLowerCase()}`, updated);
+  } catch (err) { next(err); }
+};
+
+export const dismissReport = (req: Request, res: Response, next: NextFunction) => resolveReportStatus(req, res, next, 'DISMISSED');
+export const resolveReport = (req: Request, res: Response, next: NextFunction) => resolveReportStatus(req, res, next, 'RESOLVED');
+
+// --- Manager-facing member roster + moderation ---
+
+export const listMembersForManager = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+
+    const residents = await prisma.resident.findMany({
+      where: { unit: { propertyId } },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        isPrimary: true,
+        mutedFromCommunity: true,
+        createdAt: true,
+        unit: { select: { unitNumber: true, tower: true } },
+        user: { select: { isActive: true, _count: { select: { chatMessages: true } } } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    sendSuccess(res, 200, 'Members retrieved', residents.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      name: r.name,
+      unit: r.unit,
+      role: r.isPrimary ? 'admin' : 'member',
+      joinedAt: r.createdAt,
+      postCount: r.user._count.chatMessages,
+      muted: r.mutedFromCommunity,
+      active: r.user.isActive,
+    })));
+  } catch (err) { next(err); }
+};
+
+export const setMemberMute = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+    const residentId = req.params.id as string;
+    const { muted } = req.body;
+
+    const resident = await prisma.resident.findUnique({ where: { id: residentId }, include: { unit: true } });
+    if (!resident || resident.unit.propertyId !== propertyId) return next(new AppError('Member not found', 404));
+
+    const updated = await prisma.resident.update({
+      where: { id: residentId },
+      data: { mutedFromCommunity: !!muted },
+    });
+
+    sendSuccess(res, 200, muted ? 'Member muted' : 'Member unmuted', { id: updated.id, muted: updated.mutedFromCommunity });
   } catch (err) { next(err); }
 };

@@ -20,8 +20,8 @@ import {
 const router = Router();
 router.use(authenticate);
 
-// Gate list — used by guards to log entries and residents/guards to display gate names
-router.get('/entry-points', requireRole('GUARD', 'RESIDENT'), getEntryPoints);
+// Gate list — used by guards to log entries and residents/guards/managers to display gate names
+router.get('/entry-points', requireRole('GUARD', 'RESIDENT', 'MANAGER', 'COMMITTEE'), getEntryPoints);
 
 // Guard logging
 router.get('/units',             requireRole('GUARD'), getUnitsForGuard);

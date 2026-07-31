@@ -54,80 +54,188 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-app)', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="card" style={{ width: 400, padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ background: 'var(--primary)', padding: '12px', borderRadius: '12px', color: 'white', display: 'flex' }}>
-            <ShieldCheck size={32} />
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-main)', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', padding: 24 }}>
+      <div style={{ 
+        width: '100%', 
+        maxWidth: 960, 
+        backgroundColor: 'white', 
+        borderRadius: 24, 
+        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.02)',
+        display: 'flex', 
+        overflow: 'hidden',
+        minHeight: 560
+      }}>
+        
+        {/* Left Side - Branding / Graphic */}
+        <div style={{ 
+          flex: 1, 
+          background: 'var(--bg-sidebar)', 
+          color: 'white', 
+          padding: '48px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          {/* Ambient Glows */}
+          <div style={{ position: 'absolute', top: '-10%', right: '-10%', width: '350px', height: '350px', background: 'var(--primary)', borderRadius: '50%', filter: 'blur(100px)', opacity: 0.15 }} />
+          <div style={{ position: 'absolute', bottom: '-20%', left: '-20%', width: '400px', height: '400px', background: 'var(--primary)', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.1 }} />
+          
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 60 }}>
+              <div style={{ background: 'var(--primary)', padding: 10, borderRadius: 12, boxShadow: '0 4px 12px rgba(0, 200, 150, 0.3)' }}>
+                <ShieldCheck size={28} strokeWidth={2.5} color="white" />
+              </div>
+              <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.5px' }}>SecureGate</span>
+            </div>
+            
+            <h1 style={{ fontSize: 40, fontWeight: 700, lineHeight: 1.15, marginBottom: 16, letterSpacing: '-0.02em' }}>
+              Intelligent<br/>Community<br/>Security.
+            </h1>
+            <p style={{ color: 'var(--text-sidebar)', fontSize: 16, lineHeight: 1.6, maxWidth: 320 }}>
+              The all-in-one portal to effortlessly manage workforce, entry passes, and your residents.
+            </p>
           </div>
-          <h2 style={{ margin: 0, fontSize: 24 }}>Manager {isLogin ? 'Login' : 'Signup'}</h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)' }}>SecureGate Admin Portal</p>
+          
+          <div style={{ position: 'relative', zIndex: 1, fontSize: 13, color: 'var(--text-sidebar)', fontWeight: 500 }}>
+            © {new Date().getFullYear()} SecureGate Inc.
+          </div>
         </div>
 
-        {error && (
-          <div style={{ color: error.includes('successful') ? 'var(--primary)' : 'var(--danger)', fontSize: 14, textAlign: 'center' }}>
-            {error}
-          </div>
-        )}
+        {/* Right Side - Form */}
+        <div style={{ 
+          flex: '0 0 480px', 
+          padding: '64px 48px',
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'center',
+          backgroundColor: 'white'
+        }}>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: 28, fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+            {isLogin ? 'Welcome Back' : 'Create Account'}
+          </h2>
+          <p style={{ margin: '0 0 32px 0', color: 'var(--text-muted)', fontSize: 15 }}>
+            {isLogin ? 'Please enter your details to sign in.' : 'Get started with your admin account.'}
+          </p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {!isLogin && (
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>Full Name</label>
-              <input 
-                type="text" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Arjun Mehta"
-                className="search-bar" 
-                style={{ width: '100%', padding: '10px 12px' }}
-                required={!isLogin}
-              />
+          {error && (
+            <div style={{ 
+              padding: '12px 16px', 
+              marginBottom: 24,
+              backgroundColor: error.includes('successful') ? 'var(--primary-bg)' : '#FEF2F2', 
+              color: error.includes('successful') ? 'var(--primary-hover)' : 'var(--danger)', 
+              borderRadius: 8,
+              fontSize: 14, 
+              fontWeight: 500,
+              border: `1px solid ${error.includes('successful') ? '#A7F3D0' : '#FECACA'}`
+            }}>
+              {error}
             </div>
           )}
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>Email Address</label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="manager@example.com"
-              className="search-bar" 
-              style={{ width: '100%', padding: '10px 12px' }}
-              required
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 500, color: 'var(--text-muted)' }}>Password</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="search-bar" 
-              style={{ width: '100%', padding: '10px 12px' }}
-              required
-            />
-          </div>
-          <button 
-            type="submit" 
-            disabled={loading}
-            style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 500, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 8 }}
-          >
-            {loading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')} <ArrowRight size={16} />
-          </button>
-          
-          <button 
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError('');
-            }}
-            style={{ background: 'transparent', color: 'var(--primary)', border: 'none', fontSize: 13, cursor: 'pointer', marginTop: 8 }}
-          >
-            {isLogin ? "Don't have an account? Sign up" : "Already have an account? Login"}
-          </button>
-        </form>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {!isLogin && (
+              <div>
+                <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                  Full Name
+                </label>
+                <input 
+                  type="text" 
+                  value={name} 
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Arjun Mehta"
+                  className="form-input" 
+                  style={{ padding: '14px 16px', fontSize: 15, borderRadius: 10, background: '#F8FAFC' }}
+                  required={!isLogin}
+                />
+              </div>
+            )}
+            <div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                Email Address
+              </label>
+              <input 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="manager@example.com"
+                className="form-input" 
+                style={{ padding: '14px 16px', fontSize: 15, borderRadius: 10, background: '#F8FAFC' }}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                Password
+              </label>
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="form-input" 
+                style={{ padding: '14px 16px', fontSize: 15, letterSpacing: '0.1em', borderRadius: 10, background: '#F8FAFC' }}
+                required
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={loading}
+              style={{ 
+                background: 'var(--primary)', 
+                color: 'white', 
+                border: 'none', 
+                padding: '14px', 
+                borderRadius: 10, 
+                fontWeight: 600, 
+                fontSize: 15,
+                cursor: loading ? 'not-allowed' : 'pointer', 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                gap: 8, 
+                marginTop: 12,
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 12px rgba(0, 200, 150, 0.25)',
+                opacity: loading ? 0.7 : 1
+              }}
+              onMouseOver={(e) => !loading && (e.currentTarget.style.transform = 'translateY(-2px)')}
+              onMouseOut={(e) => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
+            >
+              {loading ? 'Processing...' : (isLogin ? 'Sign In to Portal' : 'Create Account')} 
+              {!loading && <ArrowRight size={18} strokeWidth={2.5} />}
+            </button>
+            
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError('');
+                }}
+                style={{ 
+                  background: 'transparent', 
+                  color: 'var(--text-muted)', 
+                  border: 'none', 
+                  fontSize: 14, 
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-main)'}
+                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                {isLogin ? (
+                  <>Don't have an account? <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Sign up</span></>
+                ) : (
+                  <>Already have an account? <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Sign in</span></>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

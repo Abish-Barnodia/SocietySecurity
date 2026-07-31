@@ -291,13 +291,14 @@ export const onboardResident = async (req: Request, res: Response, next: NextFun
 
         if (!user) {
             user = await prisma.user.create({
-                data: { phone: formattedPhone, role: 'RESIDENT' }
-            });
+                data: { phone: formattedPhone, role: 'RESIDENT' },
+                include: { resident: true }
+            }) as any;
         }
         
         const resident = await prisma.resident.create({
             data: {
-                userId: user.id,
+                userId: user!.id,
                 unitId: unit.id,
                 name,
                 isPrimary

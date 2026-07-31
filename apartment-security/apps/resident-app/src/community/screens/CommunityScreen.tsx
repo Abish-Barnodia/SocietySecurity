@@ -45,6 +45,7 @@ export default function CommunityScreen() {
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [selectedActionMessage, setSelectedActionMessage] = useState<Message | null>(null);
   const [selectedProfileMessage, setSelectedProfileMessage] = useState<Message | null>(null);
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
   const { userId: currentUserId, userRole } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -352,6 +353,18 @@ export default function CommunityScreen() {
       await api.delete(`/community/messages/${item.id}`);
     } catch (error) {
       fetchMessages();
+    }
+  };
+
+  const handleReport = async (reason: string) => {
+    if (!reportTarget) return;
+    try {
+      await api.post(`/community/messages/${reportTarget.id}/report`, { reason });
+      Alert.alert('Reported', 'Thanks — a manager will review this message.');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to report message. Please try again.');
+    } finally {
+      setReportTarget(null);
     }
   };
 
@@ -766,9 +779,34 @@ export default function CommunityScreen() {
                       <Text style={[styles.actionListText, { color: '#ef4444' }]}>Delete</Text>
                     </TouchableOpacity>
                   )}
+
+                  {userRole === 'RESIDENT' && selectedActionMessage.senderId !== currentUserId && (
+                    <TouchableOpacity style={styles.actionListItem} onPress={() => { setReportTarget(selectedActionMessage); setSelectedActionMessage(null); }}>
+                      <View style={[styles.attachIconBg, { backgroundColor: '#f97316', width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center' }]}><Ionicons name="flag" size={24} color="#fff" /></View>
+                      <Text style={[styles.actionListText, { color: colors.text }]}>Report</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Report Reason Modal */}
+      <Modal visible={!!reportTarget} animationType="fade" transparent={true} onRequestClose={() => setReportTarget(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setReportTarget(null)}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.actionListText, { color: colors.text, fontSize: 16, fontWeight: '700', padding: 12 }]}>Report this message</Text>
+            {['Spam or advertising', 'Harassment or abuse', 'Inappropriate content', 'Other'].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                style={{ paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.border }}
+                onPress={() => handleReport(reason)}
+              >
+                <Text style={{ color: colors.text, fontSize: 15 }}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </TouchableOpacity>
       </Modal>

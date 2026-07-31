@@ -26,6 +26,7 @@ import timelineRouter from './modules/timeline/timeline.routes';
 import { communityRouter } from './modules/community/community.routes';
 import { complaintRouter } from './modules/complaints/complaint.routes';
 import { domesticWorkerRouter } from './modules/domesticWorkers/domesticWorker.routes';
+import { escalationRouter } from './modules/escalation/escalation.routes';
 
 const app = express();
 
@@ -89,6 +90,7 @@ app.use(`${API}/timeline`, timelineRouter);
 app.use(`${API}/community`, communityRouter);
 app.use(`${API}/complaints`, complaintRouter);
 app.use(`${API}/domestic-workers`, domesticWorkerRouter);
+app.use(`${API}/escalation`, escalationRouter);
 
 // 404 handler
 app.use(notFoundHandler);

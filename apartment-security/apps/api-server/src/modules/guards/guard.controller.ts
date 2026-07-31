@@ -320,9 +320,62 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
+export const assignGuardToPost = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const { entryPointId } = req.body;
+
+    const guard = await prisma.guard.findUnique({ where: { id } });
+    if (!guard) return next(new AppError('Guard not found', 404));
+
+    const entryPoint = await prisma.entryPoint.findUnique({ where: { id: entryPointId } });
+    if (!entryPoint || entryPoint.propertyId !== guard.propertyId) {
+      return next(new AppError('Invalid entry point', 400));
+    }
+
+    // End current shift if on duty
+    if (guard.isOnDuty) {
+      const activeShift = await prisma.shift.findFirst({
+        where: { guardId: guard.id, endedAt: null },
+        orderBy: { startedAt: 'desc' }
+      });
+      if (activeShift) {
+        await prisma.shift.update({
+          where: { id: activeShift.id },
+          data: { endedAt: new Date(), signedOffAt: new Date() }
+        });
+      }
+    }
+
+    const shift = await prisma.$transaction(async (tx) => {
+      const newShift = await tx.shift.create({
+        data: { guardId: guard.id }
+      });
+
+      await tx.guardPost.create({
+        data: {
+          guardId: guard.id,
+          shiftId: newShift.id,
+          entryPointId
+        }
+      });
+
+      await tx.guard.update({
+        where: { id: guard.id },
+        data: { isOnDuty: true }
+      });
+
+      return newShift;
+    });
+
+    await auditLog(req.user!.userId, 'ASSIGN_GUARD_TO_POST', 'Guard', guard.id);
+    return sendSuccess(res, 200, 'Guard assigned to post successfully', shift);
+  } catch (err) { next(err); }
+};
+
 export const getGuardProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     
     const guard = await prisma.guard.findUnique({
       where: { id },

@@ -4,7 +4,13 @@ import Dashboard from './Dashboard';
 import GuardManagement from './GuardManagement';
 import ResidentDirectory from './ResidentDirectory';
 import EventTimeline from './EventTimeline';
+import AlertsEscalation from './AlertsEscalation';
+import ExpectedVisitors from './ExpectedVisitors';
+import CommunityControl from './CommunityControl';
+import ReportsCompliance from './ReportsCompliance';
+import WorkforceMgmt from './WorkforceMgmt';
 import Login from './Login';
+import ManagerProfile from './ManagerProfile';
 import { 
   LayoutDashboard, ShieldCheck, Users, Clock, AlertTriangle, 
   UserCheck, Car, Video, FileText, UsersRound, CalendarDays, 
@@ -15,6 +21,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [fullProfile, setFullProfile] = useState<any>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     // ponytail: Simple auth check on load
@@ -23,6 +31,18 @@ const App: React.FC = () => {
     if (token && storedUser) {
       setIsAuthenticated(true);
       setUser(JSON.parse(storedUser));
+      
+      // Fetch full profile for property details
+      fetch('http://localhost:5000/api/v1/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success') {
+            setFullProfile(data.data);
+          }
+        })
+        .catch(console.error);
     }
   }, []);
 
@@ -64,13 +84,16 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ width: isSidebarCollapsed ? 80 : 260, transition: 'width 0.2s' }}>
         <div className="sidebar-header" style={{ marginBottom: 12 }}>
           <div style={{ background: 'var(--primary)', padding: '6px', borderRadius: '6px', color: 'white', display: 'flex' }}>
             <ShieldCheck size={20} />
           </div>
-          SecureGate
-          <div style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+          {!isSidebarCollapsed && <span>SecureGate</span>}
+          <div 
+            style={{ marginLeft: 'auto', color: 'var(--text-muted)', cursor: 'pointer' }}
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          >
             <Menu size={20} />
           </div>
         </div>
@@ -89,8 +112,8 @@ const App: React.FC = () => {
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                {item.label}
-                {item.badge && (
+                {!isSidebarCollapsed && item.label}
+                {!isSidebarCollapsed && item.badge && (
                   <span style={{ marginLeft: 'auto', background: 'var(--warning)', color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
                     {item.badge}
                   </span>
@@ -112,7 +135,7 @@ const App: React.FC = () => {
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                {item.label}
+                {!isSidebarCollapsed && item.label}
               </a>
             ))}
           </nav>
@@ -121,12 +144,14 @@ const App: React.FC = () => {
         {/* User Profile */}
         <div style={{ padding: '16px 20px', borderTop: '1px solid var(--bg-sidebar-hover)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0D2B24', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>
-            {user?.phone?.substring(0, 2) || 'AM'}
+            {fullProfile?.manager?.name?.substring(0, 2) || 'AM'}
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'white' }}>{user?.phone || 'Arjun Mehta'}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-sidebar)' }}>{user?.role || 'Facility Manager'}</div>
-          </div>
+          {!isSidebarCollapsed && (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'white' }}>{fullProfile?.manager?.name || 'Loading...'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-sidebar)' }}>{fullProfile?.role === 'MANAGER' ? 'Facility Manager' : 'Admin'}</div>
+            </div>
+          )}
           <button 
             onClick={handleLogout}
             title="Logout"
@@ -149,7 +174,7 @@ const App: React.FC = () => {
           <div className="topbar-right">
             <input type="text" className="search-bar" placeholder="Search units, guards, passes..." />
             
-            <div className="topbar-icon">
+            <div className="topbar-icon" onClick={() => setActiveTab('alerts')} style={{ cursor: 'pointer' }}>
               <Bell size={18} />
               <span style={{ 
                 position: 'absolute', top: 6, right: 6, 
@@ -158,13 +183,13 @@ const App: React.FC = () => {
               }}></span>
             </div>
             
-            <div className="topbar-icon" style={{ background: 'var(--primary-bg)', color: 'var(--primary)' }}>
+            <div className="topbar-icon" onClick={() => setActiveTab('profile')} style={{ background: 'var(--primary-bg)', color: 'var(--primary)', cursor: 'pointer' }}>
               <User size={18} />
             </div>
 
             <div className="property-selector">
               <Building size={16} color="var(--text-muted)" />
-              Greenwood Towers 
+              {fullProfile?.manager?.property?.name || 'Loading...'}
               <ChevronDown size={16} color="var(--text-muted)" />
             </div>
           </div>
@@ -176,7 +201,13 @@ const App: React.FC = () => {
           {activeTab === 'guards' && <GuardManagement />}
           {activeTab === 'residents' && <ResidentDirectory />}
           {activeTab === 'timeline' && <EventTimeline />}
-          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && (
+          {activeTab === 'alerts' && <AlertsEscalation />}
+          {activeTab === 'expected' && <ExpectedVisitors />}
+          {activeTab === 'community' && <CommunityControl />}
+          {activeTab === 'reports' && <ReportsCompliance />}
+          {activeTab === 'workforce' && <WorkforceMgmt />}
+          {activeTab === 'profile' && <ManagerProfile />}
+          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'profile' && (
             <div className="card">
               <h2>{operationsNav.concat(adminNav).find(i => i.id === activeTab)?.label}</h2>
               <p>This module is under construction.</p>

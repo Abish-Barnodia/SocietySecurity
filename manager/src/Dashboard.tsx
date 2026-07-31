@@ -55,7 +55,7 @@ const Dashboard: React.FC = () => {
 
       if (feedRes.status === 'fulfilled' && feedRes.value.ok) {
         const json = await feedRes.value.json();
-        setActivityFeed(json.status === 'success' && Array.isArray(json.data) ? json.data : []);
+        setActivityFeed(json.status === 'success' && Array.isArray(json.data?.entries) ? json.data.entries : []);
       } else {
         setActivityFeed([]);
       }
@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>{guard.entryPoint?.location || ''}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                       <div style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: 'var(--text-muted)' }}>👤</span> {guard.user?.name || guard.id}
+                        <span style={{ color: 'var(--text-muted)' }}>👤</span> {guard.name || guard.id}
                       </div>
                     </div>
                   </div>
@@ -254,13 +254,13 @@ const Dashboard: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)' }}>{app.visitorName || 'Unknown'}</div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => handleApprove(app.id)} className="btn btn-primary" style={{ padding: '4px 12px' }}>Approve</button>
-                        <button onClick={() => handleDeny(app.id)} className="btn btn-outline" style={{ padding: '4px 12px' }}>Deny</button>
+                        {/* Managers oversee, residents approve */}
+                        <span style={{ fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>Awaiting Resident</span>
                       </div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-main)', marginBottom: 8 }}>{app.purpose}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-main)', marginBottom: 8 }}>{app.purpose || app.notes}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div>🏠 Unit {app.unitId}</div>
+                      <div>🏠 Unit {app.unit?.unitNumber || app.unitId}</div>
                     </div>
                   </div>
                 ))

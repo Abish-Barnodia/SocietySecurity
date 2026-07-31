@@ -1,29 +1,75 @@
 import React, { useState, useEffect } from 'react';
 import { Building, ShieldCheck, CheckCircle, AlertTriangle, Key, ArrowRight, User, X, MapPin, Search } from 'lucide-react';
 
+const API_BASE = 'http://localhost:5000/api/v1';
+
 const EventTimeline = () => {
+  const getAuthToken = () => localStorage.getItem('accessToken') || '';
+
   const [viewType, setViewType] = useState<'unit' | 'guard'>('unit');
-  const [selectedUnit, setSelectedUnit] = useState('A-401');
-  const [selectedGuard, setSelectedGuard] = useState('SEC-1042');
+  
+  // Dynamic lists from DB
+  const [residentList, setResidentList] = useState<any[]>([]);
+  const [guardList, setGuardList] = useState<any[]>([]);
+
+  const [selectedUnit, setSelectedUnit] = useState<string>(''); // Will hold unitNumber
+  const [selectedGuard, setSelectedGuard] = useState<string>(''); // Will hold badgeNumber or id
   const [selectedPass, setSelectedPass] = useState<string | null>(null);
 
   const [events, setEvents] = useState<any[]>([]);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
 
+  // Fetch initial filters (units, guards)
+  useEffect(() => {
+    const fetchFilters = async () => {
+      try {
+        const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
+        
+        // ponytail: Fetches all residents to get units. Ideally, backend should have a /units endpoint.
+        const resResidents = await fetch(`${API_BASE}/residents`, { headers });
+        if (resResidents.ok) {
+          const data = await resResidents.json();
+          const validResidents = (data.data || []).filter((r: any) => r.unit?.unitNumber);
+          setResidentList(validResidents);
+          if (validResidents.length > 0) {
+            setSelectedUnit(validResidents[0].unit.unitNumber);
+          }
+        }
+
+        const resGuards = await fetch(`${API_BASE}/guards/directory`, { headers });
+        if (resGuards.ok) {
+          const data = await resGuards.json();
+          const guards = data.data || [];
+          setGuardList(guards);
+          if (guards.length > 0) {
+            setSelectedGuard(guards[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch filters', error);
+      }
+    };
+    fetchFilters();
+  }, []);
+
   const fetchEvents = async () => {
+    // Prevent fetching if selected ID is empty
+    if (viewType === 'unit' && !selectedUnit) return;
+    if (viewType === 'guard' && !selectedGuard) return;
+
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = getAuthToken();
       const url = viewType === 'unit' 
-        ? `http://localhost:3000/api/v1/timeline?unitId=${selectedUnit}`
-        : `http://localhost:3000/api/v1/timeline?guardId=${selectedGuard}`;
+        ? `${API_BASE}/timeline?unitId=${selectedUnit}`
+        : `${API_BASE}/timeline?guardId=${selectedGuard}`;
         
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setEvents(data.events);
+        setEvents(data.events || []);
         setLastRefresh(new Date());
         setSecondsAgo(0);
       }
@@ -44,6 +90,10 @@ const EventTimeline = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [lastRefresh]);
+
+  // Derived state for the title
+  const currentResident = residentList.find(r => r.unit?.unitNumber === selectedUnit);
+  const currentGuard = guardList.find(g => g.id === selectedGuard);
 
   return (
     <div style={{ display: 'flex', width: '100%', height: '100%', backgroundColor: '#fff', position: 'relative' }}>
@@ -88,58 +138,45 @@ const EventTimeline = () => {
         </div>
 
         {/* Sub-Filters */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
           {viewType === 'unit' ? (
-            <>
+            // ponytail: Show only first 5 units for UI simplicity instead of a huge list
+            residentList.slice(0, 5).map(res => (
               <button 
-                onClick={() => setSelectedUnit('A-401')}
+                key={res.id}
+                onClick={() => setSelectedUnit(res.unit.unitNumber)}
                 style={{ 
                   padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  backgroundColor: selectedUnit === 'A-401' ? '#008B8B' : '#F3F4F6',
-                  color: selectedUnit === 'A-401' ? 'white' : '#4B5563'
+                  backgroundColor: selectedUnit === res.unit.unitNumber ? '#008B8B' : '#F3F4F6',
+                  color: selectedUnit === res.unit.unitNumber ? 'white' : '#4B5563'
                 }}
               >
-                Unit A-401 — Ananya & Karthik Iyer
+                Unit {res.unit.unitNumber} — {res.name}
               </button>
-              <button 
-                onClick={() => setSelectedUnit('B-701')}
-                style={{ 
-                  padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  backgroundColor: selectedUnit === 'B-701' ? '#008B8B' : '#F3F4F6',
-                  color: selectedUnit === 'B-701' ? 'white' : '#4B5563'
-                }}
-              >
-                Unit B-701 — Vikram & Neha Desai
-              </button>
-            </>
+            ))
           ) : (
-            <>
+            // ponytail: Show only first 5 guards for UI simplicity
+            guardList.slice(0, 5).map(g => (
               <button 
-                onClick={() => setSelectedGuard('SEC-1042')}
+                key={g.id}
+                onClick={() => setSelectedGuard(g.id)}
                 style={{ 
                   padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  backgroundColor: selectedGuard === 'SEC-1042' ? '#008B8B' : '#F3F4F6',
-                  color: selectedGuard === 'SEC-1042' ? 'white' : '#4B5563'
+                  backgroundColor: selectedGuard === g.id ? '#008B8B' : '#F3F4F6',
+                  color: selectedGuard === g.id ? 'white' : '#4B5563'
                 }}
               >
-                Rajesh Kumar (SEC-1042)
+                {g.name} ({g.badgeNumber})
               </button>
-              <button 
-                onClick={() => setSelectedGuard('SEC-1071')}
-                style={{ 
-                  padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  backgroundColor: selectedGuard === 'SEC-1071' ? '#008B8B' : '#F3F4F6',
-                  color: selectedGuard === 'SEC-1071' ? 'white' : '#4B5563'
-                }}
-              >
-                Amit Sharma (SEC-1071)
-              </button>
-            </>
+            ))
           )}
         </div>
 
         <h3 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 24, borderBottom: '1px solid #E5E7EB', paddingBottom: 12 }}>
-          {viewType === 'unit' ? 'Timeline for Unit A-401' : 'Timeline for Rajesh Kumar'} <span style={{ color: '#9CA3AF', fontWeight: 400 }}>— {viewType === 'unit' ? 'Ananya & Karthik Iyer' : 'SEC-1042'}</span>
+          {viewType === 'unit' ? `Timeline for Unit ${selectedUnit}` : `Timeline for ${currentGuard?.name || 'Guard'}`} 
+          <span style={{ color: '#9CA3AF', fontWeight: 400 }}>
+            — {viewType === 'unit' ? (currentResident?.name || '') : (currentGuard?.badgeNumber || '')}
+          </span>
         </h3>
 
         {/* Timeline Events */}
@@ -148,7 +185,7 @@ const EventTimeline = () => {
           {events.length === 0 ? (
             <p style={{ color: '#6B7280', fontSize: 14, marginTop: 24 }}>No events found.</p>
           ) : events.map((evt, idx) => (
-            <div key={evt.id} style={{ display: 'flex', gap: 24, marginBottom: 32, position: 'relative' }}>
+            <div key={evt.id || idx} style={{ display: 'flex', gap: 24, marginBottom: 32, position: 'relative' }}>
               <div style={{ 
                 width: 32, height: 32, borderRadius: '50%', backgroundColor: evt.iconBg, 
                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 
@@ -223,104 +260,10 @@ const EventTimeline = () => {
           <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
               <span style={{ padding: '4px 12px', borderRadius: 12, fontSize: 12, fontWeight: 600, backgroundColor: '#D1FAE5', color: '#065F46' }}>Active</span>
-              <span style={{ padding: '4px 12px', borderRadius: 12, fontSize: 12, fontWeight: 500, backgroundColor: '#F3F4F6', color: '#4B5563' }}>Permanent</span>
             </div>
-
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Visitor</h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
-              <img src="https://i.pravatar.cc/150?img=47" alt="Avatar" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }} />
-              <div>
-                <h5 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 600, color: '#111827' }}>Lakshmi Amma</h5>
-                <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>+91 98765 43210</p>
-              </div>
-            </div>
-
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Resident</h4>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid #F3F4F6', marginBottom: 12 }}>
-              <span style={{ color: '#6B7280', fontSize: 14 }}>Unit</span>
-              <span style={{ color: '#111827', fontSize: 14, fontWeight: 500 }}>A-401</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid #F3F4F6', marginBottom: 12 }}>
-              <span style={{ color: '#6B7280', fontSize: 14 }}>Resident</span>
-              <span style={{ color: '#111827', fontSize: 14, fontWeight: 500 }}>Ananya & Karthik Iyer</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 32 }}>
-              <span style={{ color: '#6B7280', fontSize: 14 }}>Issued By</span>
-              <span style={{ color: '#111827', fontSize: 14, fontWeight: 500 }}>Ananya Iyer</span>
-            </div>
-
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Validity</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-              <div>
-                <span style={{ color: '#6B7280', fontSize: 12 }}>Created</span>
-                <div style={{ color: '#111827', fontSize: 14, fontWeight: 500, marginTop: 4 }}>15 Mar 2023</div>
-              </div>
-              <div>
-                <span style={{ color: '#6B7280', fontSize: 12 }}>Expires</span>
-                <div style={{ color: '#111827', fontSize: 14, fontWeight: 500, marginTop: 4 }}>14 Mar 2027</div>
-              </div>
-              <div>
-                <span style={{ color: '#6B7280', fontSize: 12 }}>Daily From</span>
-                <div style={{ color: '#111827', fontSize: 14, fontWeight: 500, marginTop: 4 }}>06:00 AM</div>
-              </div>
-              <div>
-                <span style={{ color: '#6B7280', fontSize: 12 }}>Daily Until</span>
-                <div style={{ color: '#111827', fontSize: 14, fontWeight: 500, marginTop: 4 }}>08:00 PM</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid #F3F4F6', marginBottom: 24 }}>
-              <span style={{ color: '#6B7280', fontSize: 14 }}>Entry Point</span>
-              <span style={{ color: '#111827', fontSize: 14, fontWeight: 500 }}>Main Gate A</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 32 }}>
-              <div style={{ backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>412</div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Total Uses</div>
-              </div>
-              <div style={{ backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', lineHeight: 1.2 }}>24 Jul 2026<br/>09:15 AM</div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Last Used</div>
-              </div>
-              <div style={{ backgroundColor: '#F9FAFB', padding: 12, borderRadius: 8, textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>0</div>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 4 }}>Stale Days</div>
-              </div>
-            </div>
-
-            <h4 style={{ margin: '0 0 8px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</h4>
-            <p style={{ margin: '0 0 32px 0', fontSize: 14, color: '#4B5563', lineHeight: 1.5 }}>
-              House help — comes daily except Sundays. Has been with the family for 8 years.
-            </p>
-
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Recent Activity</h4>
-            <div style={{ position: 'relative', paddingLeft: 16, marginBottom: 32 }}>
-              <div style={{ position: 'absolute', left: 4, top: 8, bottom: 8, width: 1, backgroundColor: '#E5E7EB' }}></div>
-              {[
-                { type: 'Entry', gate: 'Main Gate A', guard: 'Rajesh Kumar', time: '24 Jul 2026 - 09:15 AM' },
-                { type: 'Exit', gate: 'Main Gate A', guard: 'Manoj Tiwari', time: '23 Jul 2026 - 07:30 PM' },
-                { type: 'Entry', gate: 'Main Gate A', guard: 'Rajesh Kumar', time: '23 Jul 2026 - 09:00 AM' },
-                { type: 'Exit', gate: 'Main Gate A', guard: 'Manoj Tiwari', time: '22 Jul 2026 - 06:45 PM' },
-                { type: 'Entry', gate: 'Main Gate A', guard: 'Rajesh Kumar', time: '22 Jul 2026 - 09:10 AM' }
-              ].map((act, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, position: 'relative' }}>
-                  <div style={{ position: 'absolute', left: -14, top: 4, width: 5, height: 5, borderRadius: '50%', backgroundColor: '#008B8B' }}></div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{act.type} - {act.gate}</div>
-                    <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{act.guard}</div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#6B7280' }}>{act.time}</div>
-                </div>
-              ))}
-            </div>
-
-            <h4 style={{ margin: '0 0 16px 0', fontSize: 12, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>QR Code</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: '#F9FAFB', padding: 24, borderRadius: 8 }}>
-              <div style={{ width: 100, height: 100, backgroundColor: 'white', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #E5E7EB', marginBottom: 8 }}>
-                <span style={{ fontSize: 10, color: '#9CA3AF' }}>[QR Image]</span>
-              </div>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>{selectedPass}-QR</span>
-            </div>
+            
+            {/* ponytail: Simplified pass details pane since we don't have the full real pass object here yet. Just enough to not crash. */}
+            <p style={{ color: '#6B7280', fontSize: 14 }}>Real pass details would be fetched and displayed here based on {selectedPass}.</p>
           </div>
         </div>
       )}

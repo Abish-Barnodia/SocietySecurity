@@ -35,7 +35,6 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     if (user.resident) propertyId = user.resident.unit.propertyId;
     else if (user.guard) propertyId = user.guard.propertyId;
     else if (user.manager) propertyId = user.manager.propertyId;
-    else if (user.committee) propertyId = user.committee.propertyId;
     
     // Also include residentId if resident
     let residentId: string | undefined;

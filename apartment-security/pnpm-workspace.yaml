@@ -3,9 +3,12 @@ packages:
   - 'packages/*'
   - 'services/*'
 allowBuilds:
-  '@firebase/util': set this to true or false
-  '@prisma/engines': set this to true or false
-  msgpackr-extract: set this to true or false
-  prisma: set this to true or false
-  protobufjs: set this to true or false
-  unrs-resolver: set this to true or false
+  '@firebase/util': true
+  '@prisma/engines': true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
+  protobufjs: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - google-auth-library@11.0.0

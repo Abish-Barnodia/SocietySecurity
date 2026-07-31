@@ -4,6 +4,8 @@ import { sendSuccess } from '../../utils/response.util';
 import { generateMonthlyPDF } from '../../utils/pdf.util';
 import { auditLog } from '../../utils/audit.util';
 import { AppError } from '../../middlewares/error.middleware';
+import { getCallerPropertyId } from '../../utils/residentContext.util';
+import { SLA_MINUTES } from '../../jobs/alertEscalation.job';
 
 export const getOperationsOverview = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -55,28 +57,43 @@ export const getOperationsOverview = async (req: Request, res: Response, next: N
 
 export const getAuditLogs = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+
     const logs = await prisma.auditLog.findMany({
+      where: {
+        user: {
+          OR: [
+            { manager: { propertyId } },
+            { guard: { propertyId } },
+            { resident: { unit: { propertyId } } },
+          ],
+        },
+      },
       orderBy: { createdAt: 'desc' },
+      take: 200,
       include: {
-        user: { select: { name: true, role: true } }
-      }
+        user: {
+          select: {
+            role: true,
+            manager: { select: { name: true } },
+            guard: { select: { name: true } },
+            resident: { select: { name: true } },
+          },
+        },
+      },
     });
-    sendSuccess(res, 200, 'Audit logs retrieved', logs);
+
+    const data = logs.map(({ user, ...log }) => ({
+      ...log,
+      actorName: user.manager?.name ?? user.guard?.name ?? user.resident?.name ?? 'Unknown',
+      actorRole: user.role,
+    }));
+
+    sendSuccess(res, 200, 'Audit logs retrieved', data);
   } catch (err) { next(err); }
 };
 
-export const generateMonthlyReport = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { month, year } = req.query as Record<string, string>;
-    if (!month || !year) return next(new AppError('month and year are required', 400));
-    
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId },
-      include: { manager: true }
-    });
-    if (!user?.manager) return next(new AppError('Only managers can generate reports', 403));
-    const propertyId = user.manager.propertyId;
-
+const computeMonthlyReportData = async (propertyId: string, month: string, year: string) => {
     const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
 
@@ -149,17 +166,78 @@ export const generateMonthlyReport = async (req: Request, res: Response, next: N
         anomalies: anomalyFlags,
       },
       generatedAt: new Date(),
-      generatedBy: req.user!.userId,
     };
 
+    return reportData;
+};
+
+export const generateMonthlyReport = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { month, year } = req.query as Record<string, string>;
+    if (!month || !year) return next(new AppError('month and year are required', 400));
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: { manager: true }
+    });
+    if (!user?.manager) return next(new AppError('Only managers can generate reports', 403));
+
+    const reportData = await computeMonthlyReportData(user.manager.propertyId, month, year);
     await auditLog(req.user!.userId, 'GENERATE_REPORT', 'Report', `${year}-${month}`);
 
-    // Stream PDF to response
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=security-report-${year}-${month}.pdf`);
 
     const pdfStream = generateMonthlyPDF(reportData);
     pdfStream.pipe(res);
+  } catch (err) { next(err); }
+};
+
+export const getMonthlyReportSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { month, year } = req.query as Record<string, string>;
+    if (!month || !year) return next(new AppError('month and year are required', 400));
+
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+    const { incidents, ...reportData } = await computeMonthlyReportData(propertyId, month, year);
+    const { list, ...incidentsSummary } = incidents;
+
+    sendSuccess(res, 200, 'Monthly report summary fetched', { ...reportData, incidents: incidentsSummary });
+  } catch (err) { next(err); }
+};
+
+export const getComplianceMetrics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [acknowledgedAlerts, allAlerts, p1Alerts, shiftsTotal, shiftsHandedOver] = await Promise.all([
+      prisma.alert.count({ where: { propertyId, createdAt: { gte: since }, acknowledgedAt: { not: null } } }),
+      prisma.alert.count({ where: { propertyId, createdAt: { gte: since } } }),
+      prisma.alert.findMany({
+        where: { propertyId, priority: 'P1', createdAt: { gte: since } },
+        select: { createdAt: true, acknowledgedAt: true },
+      }),
+      prisma.shift.count({ where: { guard: { propertyId }, startedAt: { gte: since }, signedOffAt: { not: null } } }),
+      prisma.shift.count({ where: { guard: { propertyId }, startedAt: { gte: since }, signedOffAt: { not: null }, handedOverToId: { not: null } } }),
+    ]);
+
+    const p1WithinSla = p1Alerts.filter((a) => {
+      if (!a.acknowledgedAt) return false;
+      const minutes = (a.acknowledgedAt.getTime() - a.createdAt.getTime()) / 60000;
+      return minutes <= SLA_MINUTES.P1;
+    }).length;
+
+    sendSuccess(res, 200, 'Compliance metrics fetched', {
+      periodDays: 30,
+      alertAcknowledgementRate: allAlerts ? Math.round((acknowledgedAlerts / allAlerts) * 100) : null,
+      p1SlaComplianceRate: p1Alerts.length ? Math.round((p1WithinSla / p1Alerts.length) * 100) : null,
+      p1SlaMinutes: SLA_MINUTES.P1,
+      shiftHandoverCompletionRate: shiftsTotal ? Math.round((shiftsHandedOver / shiftsTotal) * 100) : null,
+      shiftsCompleted: shiftsTotal,
+      alertsTotal: allAlerts,
+      p1AlertsTotal: p1Alerts.length,
+    });
   } catch (err) { next(err); }
 };
 

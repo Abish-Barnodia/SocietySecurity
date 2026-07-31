@@ -361,12 +361,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addAlert = (alert: Alert) => setAlerts((prev) => [alert, ...prev]);
 
-  const markAlertRead = (id: string) => {
+  const markAlertRead = async (id: string) => {
     setAlerts((prev) => prev.map(a => a.id === id ? { ...a, unread: false } : a));
+    try {
+      await api.put(`/alerts/${id}/acknowledge`);
+    } catch (e) { console.error('Failed to acknowledge alert:', e); }
   };
 
-  const markAllAlertsRead = () => {
+  const markAllAlertsRead = async () => {
+    const unreadAlerts = alerts.filter(a => a.unread);
     setAlerts((prev) => prev.map(a => ({ ...a, unread: false })));
+    try {
+      await Promise.all(unreadAlerts.map(a => api.put(`/alerts/${a.id}/acknowledge`)));
+    } catch (e) { console.error('Failed to acknowledge all alerts:', e); }
   };
 
   const claimVehicleAlert = async (id: string) => {

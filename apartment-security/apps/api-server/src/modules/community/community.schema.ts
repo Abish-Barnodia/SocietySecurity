@@ -30,3 +30,15 @@ export const voteSchema = z.object({
     optionId: z.string(),
   }),
 });
+
+export const reportSchema = z.object({
+  body: z.object({
+    reason: z.string().min(1).max(500),
+  }),
+});
+
+export const muteSchema = z.object({
+  body: z.object({
+    muted: z.boolean(),
+  }),
+});

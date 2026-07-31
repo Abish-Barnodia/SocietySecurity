@@ -115,7 +115,7 @@ export const getTimelineEvents = async (req: Request, res: Response) => {
       // Entry Event
       events.push({
         id: `entry-${e.id}`,
-        type: e.method === 'WALKIN' && e.status === 'DENIED' ? 'Alert' : 'Scan',
+        type: e.method === 'MANUAL_GUARD' && e.status === 'DENIED' ? 'Alert' : 'Scan',
         iconBg: e.status === 'DENIED' ? '#FEF3C7' : '#D1FAE5',
         iconColor: e.status === 'DENIED' ? '#D97706' : '#059669',
         iconType: e.status === 'DENIED' ? 'AlertTriangle' : 'ArrowRight',

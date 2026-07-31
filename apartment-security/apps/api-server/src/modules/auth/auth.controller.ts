@@ -222,6 +222,13 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
             isOnDuty: true,
             property: { select: { name: true } }
           }
+        },
+        manager: {
+          select: {
+            id: true,
+            name: true,
+            property: { select: { name: true } }
+          }
         }
       }
     });

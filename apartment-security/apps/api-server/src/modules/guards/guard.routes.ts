@@ -12,7 +12,8 @@ import {
   getGuardProfile,
   getShiftSummary,
   getRoster,
-  getMyProfile
+  getMyProfile,
+  assignGuardToPost
 } from './guard.controller';
 import {
   startShiftSchema,
@@ -36,6 +37,7 @@ router.get('/directory', requireRole('MANAGER', 'COMMITTEE'), getDirectory);
 router.get('/active', requireRole('MANAGER', 'COMMITTEE'), getActiveGuards);
 
 router.post('/', requireRole('MANAGER', 'COMMITTEE'), validate(createGuardSchema), createGuard);
+router.post('/:id/assign', requireRole('MANAGER', 'COMMITTEE'), assignGuardToPost);
 router.get('/:id/profile', requireRole('MANAGER', 'COMMITTEE'), getGuardProfile);
 
 export { router as guardRouter };

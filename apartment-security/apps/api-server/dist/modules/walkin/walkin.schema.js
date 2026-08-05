@@ -9,7 +9,9 @@ exports.requestWalkinSchema = zod_1.z.object({
         visitorName: zod_1.z.string().min(2),
         visitorPhone: zod_1.z.string().optional(),
         purpose: zod_1.z.string(),
-        gatePhotoUrl: zod_1.z.string().url().optional()
+        gatePhotoUrl: zod_1.z.string().url().optional(),
+        gatePhotoBase64: zod_1.z.string().optional(),
+        vehicleNumber: zod_1.z.string().optional()
     })
 });
 exports.respondWalkinSchema = zod_1.z.object({

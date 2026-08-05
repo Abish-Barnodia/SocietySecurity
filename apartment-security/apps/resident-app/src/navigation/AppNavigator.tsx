@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import HomeScreen from '../screens/HomeScreen';
 import PassesScreen from '../screens/PassesScreen';
 import EntriesScreen from '../screens/EntriesScreen';
@@ -33,6 +34,7 @@ import WorkerFormScreen from '../screens/WorkerFormScreen';
 
 export type RootStackParamList = {
   Login: undefined;
+  ForgotPassword: undefined;
   MainTabs: undefined;
   GuardTabs: undefined;
   ResidentOnboarding: undefined;
@@ -131,7 +133,10 @@ export default function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <Stack.Screen name="Login" component={LoginScreen} />
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
+        </>
       ) : userRole === 'GUARD' ? (
         <>
           <Stack.Screen name="GuardTabs" component={GuardTabs} />

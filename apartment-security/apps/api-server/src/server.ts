@@ -25,6 +25,8 @@ export const io = new Server(server, {
   },
 });
 
+app.set('io', io);
+
 import { registerSocketHandlers } from './modules/realtime/socket.handler';
 
 registerSocketHandlers(io);

@@ -16,4 +16,10 @@ router.post('/broadcast', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITT
 router.post('/duress', (0, validate_middleware_1.validate)(alert_schema_1.triggerDuressSchema), alert_controller_1.triggerDuress);
 // Anyone can fetch their relevant alerts
 router.get('/', alert_controller_1.getAlerts);
+// Anyone can acknowledge an alert addressed to them (scoped to their property)
+router.put('/:id/acknowledge', alert_controller_1.acknowledgeAlertRoute);
+// Guard broadcasts an unknown vehicle to all residents, with photo
+router.post('/vehicle', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(alert_schema_1.vehicleAlertSchema), alert_controller_1.broadcastVehicleAlert);
+// Resident claims an unknown vehicle as their own
+router.post('/:id/claim', (0, role_middleware_1.requireRole)('RESIDENT'), alert_controller_1.claimVehicleAlert);
 //# sourceMappingURL=alert.routes.js.map

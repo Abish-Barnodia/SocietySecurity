@@ -60,6 +60,15 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         <Text style={styles.sectionLabel}>SETTINGS</Text>
         <View style={styles.menuCard}>
           <MenuRow
+            icon="people"
+            iconBg={colors.primaryLight}
+            iconColor={colors.primary}
+            label="My Family / Household"
+            colors={colors}
+            onPress={() => navigation.navigate('Household')}
+          />
+          <View style={styles.divider} />
+          <MenuRow
             icon="notifications"
             iconBg={colors.primaryLight}
             iconColor={colors.primary}

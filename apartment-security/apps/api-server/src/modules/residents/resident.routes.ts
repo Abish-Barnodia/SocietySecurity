@@ -10,7 +10,10 @@ import {
   removeHouseholdMember,
   updateAlertPreferences,
   getAllResidents,
+  getFamilyDetails,
   onboardResident,
+  onboardHousehold,
+  updateHousehold,
   onboardSelf,
   getTowers,
   getUnitsByTower,
@@ -19,9 +22,11 @@ import {
 } from './resident.controller';
 import {
   onboardResidentSchema,
+  onboardHouseholdSchema,
   onboardSelfSchema,
   updateProfileSchema,
   alertPreferencesSchema,
+  updateHouseholdSchema,
 } from './resident.schema';
 
 const router = Router();
@@ -40,9 +45,12 @@ router.post('/unit/members', requireRole('RESIDENT'), addHouseholdMember);
 router.delete('/unit/members/:memberId', requireRole('RESIDENT'), removeHouseholdMember);
 
 // Manager operations
-router.get('/',              requireRole('MANAGER', 'COMMITTEE'), getAllResidents);
-router.post('/',             requireRole('MANAGER'), validate(onboardResidentSchema), onboardResident);
-router.delete('/:id',        requireRole('MANAGER'), deactivateResident);
-router.get('/:id/summary',   requireRole('MANAGER', 'COMMITTEE'), getUnitSummary);
+router.get('/',                    requireRole('MANAGER', 'COMMITTEE'), getAllResidents);
+router.get('/families/:unitId',    requireRole('MANAGER', 'COMMITTEE'), getFamilyDetails);
+router.post('/',                   requireRole('MANAGER'), validate(onboardResidentSchema), onboardResident);
+router.post('/household',          requireRole('MANAGER'), validate(onboardHouseholdSchema), onboardHousehold);
+router.put('/families/:unitId',    requireRole('MANAGER'), validate(updateHouseholdSchema), updateHousehold);
+router.delete('/:id',              requireRole('MANAGER'), deactivateResident);
+router.get('/:id/summary',         requireRole('MANAGER', 'COMMITTEE'), getUnitSummary);
 
 export { router as residentRouter };

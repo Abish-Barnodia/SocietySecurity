@@ -29,6 +29,7 @@ exports.io = new socket_io_1.Server(server, {
         credentials: true,
     },
 });
+app_1.default.set('io', exports.io);
 const socket_handler_1 = require("./modules/realtime/socket.handler");
 (0, socket_handler_1.registerSocketHandlers)(exports.io);
 const jobs_1 = require("./jobs");

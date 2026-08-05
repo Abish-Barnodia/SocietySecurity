@@ -3,11 +3,10 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
-import { io } from '../../server'; // Socket.io instance
 
 export const requestWalkin = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { unitId, entryPointId, visitorName, visitorPhone, purpose, gatePhotoUrl, gatePhotoBase64 } = req.body;
+    const { unitId, entryPointId, visitorName, visitorPhone, purpose, gatePhotoUrl, gatePhotoBase64, vehicleNumber } = req.body;
     
     let finalPhotoUrl = gatePhotoUrl;
     if (gatePhotoBase64) {
@@ -43,7 +42,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
         status: 'PENDING_APPROVAL',
         visitorName,
         visitorPhone,
-        notes: purpose,
+        notes: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
         gatePhotoUrl: finalPhotoUrl
       }
     });
@@ -51,10 +50,11 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
     await auditLog(req.user!.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
 
     // Broadcast to unit room via Socket.io
+    const io = req.app.get('io');
     io?.to(`unit_${unitId}`).emit('walkin_request', {
       entryId: entry.id,
       visitorName,
-      purpose,
+      purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
       gatePhotoUrl: finalPhotoUrl
     });
 
@@ -64,7 +64,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
         entryId: entry.id,
         residentId: targetUnit.residents[0].id, // Assign to the first resident (usually primary)
         visitorName,
-        purpose: purpose || '',
+        purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : (purpose || ''),
         timeoutAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes timeout
       }
     });
@@ -152,6 +152,7 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
 
     // Notify Guard App — room is `guard:${id}` (colon), matching what
     // socket.handler.ts actually joins guards to on connect.
+    const io = req.app.get('io');
     io?.to(`guard:${entry.guardId}`).emit(
       entry.walkinApproval ? 'visitor_approval_response' : 'walkin_response',
       { entryId: entry.id, status }

@@ -92,7 +92,10 @@ export const deleteWorker = async (req: Request, res: Response, next: NextFuncti
     const existing = await findOwnedWorker(req.params.id as string, unitId);
     if (!existing) return next(new AppError('Domestic worker not found', 404));
 
-    await prisma.domesticWorker.delete({ where: { id: existing.id } });
+    await prisma.domesticWorker.update({
+      where: { id: existing.id },
+      data: { isActive: false }
+    });
 
     await auditLog(req.user!.userId, 'DELETE_DOMESTIC_WORKER', 'DomesticWorker', existing.id);
 

@@ -22,8 +22,8 @@ const errorHandler = (err, req, res, next) => {
     else {
         logger_util_1.logger.error(`${err.statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
     }
-    if (err.name === 'ZodError') {
-        return (0, response_util_1.sendError)(res, 400, 'Validation Error', err.errors);
+    if (err.name === 'ZodError' || err.issues || err.errors) {
+        return (0, response_util_1.sendError)(res, 400, 'Validation Error', err.errors || err.issues);
     }
     if (err.name === 'PrismaClientKnownRequestError') {
         // Handle specific Prisma errors like unique constraint violations
@@ -34,8 +34,8 @@ const errorHandler = (err, req, res, next) => {
     if (err.isOperational) {
         return (0, response_util_1.sendError)(res, err.statusCode, err.message);
     }
-    // Programming or other unknown error: don't leak error details
-    return (0, response_util_1.sendError)(res, 500, 'Something went very wrong!');
+    // Programming or other unknown error: don't leak error details in prod, but we're debugging
+    return (0, response_util_1.sendError)(res, 500, `Internal Server Error: ${err.message}`, { stack: err.stack, name: err.name });
 };
 exports.errorHandler = errorHandler;
 //# sourceMappingURL=error.middleware.js.map

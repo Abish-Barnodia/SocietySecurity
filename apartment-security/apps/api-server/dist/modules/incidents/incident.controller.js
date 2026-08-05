@@ -33,13 +33,47 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.closeIncident = exports.escalateIncident = exports.assignIncident = exports.createIncident = void 0;
+exports.closeIncident = exports.escalateIncident = exports.assignIncident = exports.createIncident = exports.getIncidents = void 0;
 const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const alert_util_1 = require("../../utils/alert.util");
 const audit_util_1 = require("../../utils/audit.util");
 const server_1 = require("../../server");
+const getIncidents = async (req, res, next) => {
+    try {
+        // Scope to the caller's own property — mirrors the same resolution
+        // pattern used by getPendingWalkins/getAlerts in the sibling modules.
+        let propertyId;
+        if (req.user.role === 'GUARD') {
+            const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
+            propertyId = guard?.propertyId;
+        }
+        else if (req.user.role === 'MANAGER') {
+            const manager = await prisma_1.prisma.manager.findUnique({ where: { userId: req.user.userId } });
+            propertyId = manager?.propertyId;
+        }
+        if (!propertyId && req.user.role !== 'COMMITTEE') {
+            return next(new error_middleware_1.AppError('No property context found', 400));
+        }
+        const incidents = await prisma_1.prisma.incident.findMany({
+            where: propertyId ? { propertyId } : undefined,
+            include: {
+                guard: {
+                    include: {
+                        user: { select: { phone: true } }
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        (0, response_util_1.sendSuccess)(res, 200, 'Incidents retrieved', incidents);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getIncidents = getIncidents;
 const createIncident = async (req, res, next) => {
     try {
         const { type, description, location, photoUrls, vehicleNumber, unitId } = req.body;

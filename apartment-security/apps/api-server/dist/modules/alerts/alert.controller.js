@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAlerts = exports.triggerDuress = exports.broadcastAlert = void 0;
+exports.acknowledgeAlertRoute = exports.claimVehicleAlert = exports.broadcastVehicleAlert = exports.getAlerts = exports.triggerDuress = exports.broadcastAlert = void 0;
 const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
@@ -41,6 +41,7 @@ const audit_util_1 = require("../../utils/audit.util");
 const server_1 = require("../../server");
 const sms_util_1 = require("../../utils/sms.util");
 const env_1 = require("../../config/env");
+const alert_util_1 = require("../../utils/alert.util");
 const broadcastAlert = async (req, res, next) => {
     try {
         const { type, severity, title, message, targetRoles } = req.body;
@@ -171,7 +172,15 @@ const getAlerts = async (req, res, next) => {
         const alerts = await prisma_1.prisma.alert.findMany({
             where: {
                 propertyId,
-                targetRoles: { has: req.user.role },
+                // Role-wide broadcasts (targetRoles) and alerts aimed at this specific
+                // user (targetUserIds — e.g. a visitor-approval request for one
+                // resident) are both valid ways an alert can be "for" this caller;
+                // matching only targetRoles meant any targetUserIds-only alert
+                // (walk-in requests, visitor QR approvals) was never fetchable here.
+                OR: [
+                    { targetRoles: { has: req.user.role } },
+                    { targetUserIds: { has: req.user.userId } },
+                ],
             },
             orderBy: { createdAt: 'desc' },
             take: 50
@@ -183,4 +192,102 @@ const getAlerts = async (req, res, next) => {
     }
 };
 exports.getAlerts = getAlerts;
+const broadcastVehicleAlert = async (req, res, next) => {
+    try {
+        const { photoBase64, plateNumber, vehicleDetails, location, notes } = req.body;
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
+        if (!guard)
+            return next(new error_middleware_1.AppError('Guard profile not found', 404));
+        const { uploadBuffer } = await Promise.resolve().then(() => __importStar(require('../../utils/objectStorage.util')));
+        const buffer = Buffer.from(photoBase64, 'base64');
+        const imageUrl = await uploadBuffer(buffer, `vehicle-alerts/${Date.now()}.jpg`, 'image/jpeg');
+        const body = `${vehicleDetails} — Plate ${plateNumber} — spotted at ${location}.${notes ? ` ${notes}` : ''}`;
+        const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+        const alert = await triggerAlert({
+            priority: 'P2',
+            title: 'Unknown Vehicle Alert',
+            body,
+            targetRoles: ['RESIDENT'],
+            propertyId: guard.propertyId,
+            imageUrl,
+        });
+        server_1.io?.to(`property:${guard.propertyId}`).emit('new_alert', alert);
+        await (0, audit_util_1.auditLog)(req.user.userId, 'BROADCAST_VEHICLE_ALERT', 'Alert', alert.id);
+        return (0, response_util_1.sendSuccess)(res, 201, 'Vehicle alert sent to all residents', alert);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.broadcastVehicleAlert = broadcastVehicleAlert;
+const claimVehicleAlert = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const alert = await prisma_1.prisma.alert.findUnique({ where: { id } });
+        if (!alert)
+            return next(new error_middleware_1.AppError('Alert not found', 404));
+        // First claim wins — this is a broadcast to many residents, only one of
+        // them actually owns the vehicle.
+        if (alert.claimedByUserId)
+            return next(new error_middleware_1.AppError('This vehicle has already been claimed by another resident', 400));
+        const resident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId },
+            include: { unit: true },
+        });
+        if (!resident)
+            return next(new error_middleware_1.AppError('Resident context not found', 404));
+        if (resident.unit.propertyId !== alert.propertyId)
+            return next(new error_middleware_1.AppError('Unauthorized', 403));
+        const updated = await prisma_1.prisma.alert.update({
+            where: { id },
+            data: {
+                claimedByUserId: req.user.userId,
+                claimedByName: resident.name,
+                claimedAt: new Date(),
+            },
+        });
+        const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+        const guardAlert = await triggerAlert({
+            priority: 'P3',
+            title: 'Vehicle Claimed',
+            body: `${resident.name} (Unit ${resident.unit.unitNumber}) says this vehicle is theirs: ${alert.body}`,
+            targetRoles: ['GUARD'],
+            propertyId: alert.propertyId,
+            imageUrl: alert.imageUrl ?? undefined,
+        });
+        server_1.io?.to(`property:${alert.propertyId}`).emit('new_alert', guardAlert);
+        await (0, audit_util_1.auditLog)(req.user.userId, 'CLAIM_VEHICLE_ALERT', 'Alert', id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Vehicle claim recorded', updated);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.claimVehicleAlert = claimVehicleAlert;
+const acknowledgeAlertRoute = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const alert = await prisma_1.prisma.alert.findUnique({ where: { id } });
+        if (!alert)
+            return next(new error_middleware_1.AppError('Alert not found', 404));
+        // Same propertyId-scoping as getAlerts — a caller can only acknowledge
+        // an alert that belongs to their own property.
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: { manager: true, guard: true, resident: { include: { unit: true } } },
+        });
+        const propertyId = user?.manager?.propertyId ??
+            user?.guard?.propertyId ??
+            user?.resident?.unit.propertyId;
+        if (!propertyId || alert.propertyId !== propertyId) {
+            return next(new error_middleware_1.AppError('Unauthorized', 403));
+        }
+        const updated = await (0, alert_util_1.acknowledgeAlert)(id, req.user.userId);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Alert acknowledged', updated);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.acknowledgeAlertRoute = acknowledgeAlertRoute;
 //# sourceMappingURL=alert.controller.js.map

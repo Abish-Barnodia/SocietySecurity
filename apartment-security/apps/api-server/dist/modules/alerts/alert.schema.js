@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.triggerDuressSchema = exports.createAlertSchema = void 0;
+exports.vehicleAlertSchema = exports.triggerDuressSchema = exports.createAlertSchema = void 0;
 const zod_1 = require("zod");
 exports.createAlertSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -15,6 +15,15 @@ exports.triggerDuressSchema = zod_1.z.object({
     body: zod_1.z.object({
         latitude: zod_1.z.number().optional(),
         longitude: zod_1.z.number().optional()
+    })
+});
+exports.vehicleAlertSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        photoBase64: zod_1.z.string().min(1, 'Vehicle photo is required'),
+        plateNumber: zod_1.z.string().min(1),
+        vehicleDetails: zod_1.z.string().min(1),
+        location: zod_1.z.string().min(1),
+        notes: zod_1.z.string().optional(),
     })
 });
 //# sourceMappingURL=alert.schema.js.map

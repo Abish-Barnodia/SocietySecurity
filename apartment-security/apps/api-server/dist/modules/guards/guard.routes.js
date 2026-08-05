@@ -12,5 +12,13 @@ exports.guardRouter = router;
 router.use(auth_middleware_1.authenticate);
 router.post('/shift/start', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(guard_schema_1.startShiftSchema), guard_controller_1.startShift);
 router.post('/shift/end', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(guard_schema_1.endShiftSchema), guard_controller_1.endShift);
+router.get('/shift/summary', (0, role_middleware_1.requireRole)('GUARD'), guard_controller_1.getShiftSummary);
 router.post('/post/checkin', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(guard_schema_1.checkInPostSchema), guard_controller_1.checkInPost);
+router.get('/roster', (0, role_middleware_1.requireRole)('GUARD'), guard_controller_1.getRoster);
+router.get('/me', (0, role_middleware_1.requireRole)('GUARD'), guard_controller_1.getMyProfile);
+router.get('/directory', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getDirectory);
+router.get('/active', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getActiveGuards);
+router.post('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, validate_middleware_1.validate)(guard_schema_1.createGuardSchema), guard_controller_1.createGuard);
+router.post('/:id/assign', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.assignGuardToPost);
+router.get('/:id/profile', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getGuardProfile);
 //# sourceMappingURL=guard.routes.js.map

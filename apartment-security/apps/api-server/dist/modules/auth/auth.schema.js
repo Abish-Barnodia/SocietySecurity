@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.emailSignupSchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
+exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.emailSignupSchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
 const zod_1 = require("zod");
 exports.requestOtpSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -46,6 +46,20 @@ exports.refreshTokenSchema = zod_1.z.object({
 exports.registerFcmTokenSchema = zod_1.z.object({
     body: zod_1.z.object({
         token: zod_1.z.string().min(1),
+    })
+});
+exports.signupEmailSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        email: zod_1.z.string().email(),
+        password: zod_1.z.string().min(6),
+        name: zod_1.z.string().min(2).optional(),
+        role: zod_1.z.enum(['RESIDENT', 'MANAGER']).optional(),
+    })
+});
+exports.loginEmailSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        email: zod_1.z.string().email(),
+        password: zod_1.z.string().min(1),
     })
 });
 //# sourceMappingURL=auth.schema.js.map

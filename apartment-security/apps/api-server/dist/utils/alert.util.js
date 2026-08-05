@@ -6,7 +6,7 @@ const push_util_1 = require("./push.util");
 const sms_util_1 = require("./sms.util");
 const env_1 = require("../config/env");
 const triggerAlert = async (params) => {
-    const { priority, title, body, targetUserIds = [], targetRoles = [], entryId, incidentId, propertyId, } = params;
+    const { priority, title, body, targetUserIds = [], targetRoles = [], entryId, incidentId, propertyId, imageUrl, } = params;
     // Determine all target users
     let userIds = [...targetUserIds];
     if (targetRoles.length > 0) {
@@ -43,6 +43,7 @@ const triggerAlert = async (params) => {
             targetUserIds: userIds,
             channel: 'PUSH',
             status: 'SENT',
+            imageUrl,
         },
     });
     const allFcmTokens = users.flatMap((u) => u.fcmTokens);

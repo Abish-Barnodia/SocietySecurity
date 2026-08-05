@@ -9,7 +9,10 @@ if (!connectionString) {
     console.error('❌ DATABASE_URL is not set. Cannot create database connection pool.');
     process.exit(1);
 }
-const pool = new pg_1.Pool({ connectionString });
+const pool = new pg_1.Pool({
+    connectionString,
+    ssl: connectionString.includes('supabase.com') ? { rejectUnauthorized: false } : undefined,
+});
 const adapter = new adapter_pg_1.PrismaPg(pool);
 const globalForPrisma = globalThis;
 exports.prisma = globalForPrisma.prisma ??

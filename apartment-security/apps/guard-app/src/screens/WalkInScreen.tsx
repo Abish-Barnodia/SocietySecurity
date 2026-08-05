@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import api from '../utils/api';
+import { queueWalkin } from '../services/syncService';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
@@ -76,26 +77,37 @@ export default function WalkInScreen({ navigation }: any) {
       return;
     }
 
+    const payload = {
+      unitId: unit.id,
+      entryPointId: selectedGateId,
+      visitorName,
+      vehicleNumber,
+      purpose,
+      gatePhotoBase64: photoBase64,
+    };
+
+    const resetForm = () => {
+      setVisitorName(''); setVehicleNumber(''); setPurpose('');
+      setBlockInput(''); setFlatInput(''); setPhotoBase64(null);
+      navigation.goBack();
+    };
+
     setSubmitting(true);
     try {
-      await api.post('/walkins/request', {
-        unitId: unit.id,
-        entryPointId: selectedGateId,
-        visitorName,
-        vehicleNumber,
-        purpose,
-        visitorPhone: '0000000000',
-        gatePhotoBase64: photoBase64,
-      });
+      await api.post('/walkins/request', payload);
       Alert.alert(t('walkin_successTitle'), t('walkin_successMsg'), [
-        { text: t('common_ok'), onPress: () => {
-          setVisitorName(''); setVehicleNumber(''); setPurpose('');
-          setBlockInput(''); setFlatInput(''); setPhotoBase64(null);
-          navigation.goBack();
-        }}
+        { text: t('common_ok'), onPress: resetForm }
       ]);
     } catch (error: any) {
-      Alert.alert(t('common_error'), error.response?.data?.message ?? t('walkin_errorMsg'));
+      if (!error.response) {
+        // no network -- keep the entry locally and sync it once we reconnect
+        await queueWalkin(payload);
+        Alert.alert(t('walkin_offlineSavedTitle'), t('walkin_offlineSavedMsg'), [
+          { text: t('common_ok'), onPress: resetForm }
+        ]);
+      } else {
+        Alert.alert(t('common_error'), error.response?.data?.message ?? t('walkin_errorMsg'));
+      }
     } finally {
       setSubmitting(false);
     }

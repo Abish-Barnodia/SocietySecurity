@@ -7,26 +7,26 @@ datasource db {
 }
 
 model Property {
-  id           String        @id @default(cuid())
-  name         String
-  address      String
-  city         String
-  pincode      String
-  totalUnits   Int
-  totalTowers  Int           @default(1)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  amenities    Amenity[]
-  broadcasts   Broadcast[]
-  chatMessages ChatMessage[]
-  complaints   Complaint[]
-  entryPoints  EntryPoint[]
-  guards       Guard[]
-  incidents    Incident[]
-  invoices     Invoice[]
-  managers     Manager[]
-  units        Unit[]
+  id               String            @id @default(cuid())
+  name             String
+  address          String
+  city             String
+  pincode          String
+  totalUnits       Int
+  totalTowers      Int               @default(1)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  amenities        Amenity[]
+  broadcasts       Broadcast[]
+  chatMessages     ChatMessage[]
+  complaints       Complaint[]
+  entryPoints      EntryPoint[]
   escalationChains EscalationChain[]
+  guards           Guard[]
+  incidents        Incident[]
+  invoices         Invoice[]
+  managers         Manager[]
+  units            Unit[]
 }
 
 model EntryPoint {
@@ -47,6 +47,7 @@ model Unit {
   unitNumber      String
   floor           Int
   tower           String?
+  familyName      String?
   isOccupied      Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -77,16 +78,16 @@ model User {
   updatedAt       DateTime         @updatedAt
   auditLogs       AuditLog[]
   chatMessages    ChatMessage[]
-  chatReactions   ChatReaction[]
   chatPollVotes   ChatPollVote[]
+  chatReactions   ChatReaction[]
+  chatReports     ChatReport[]
   committee       CommitteeMember?
+  escalationSteps EscalationStep[]
   guard           Guard?
   manager         Manager?
   otps            OTP[]
   refreshTokens   RefreshToken[]
   resident        Resident?
-  escalationSteps EscalationStep[]
-  chatReports     ChatReport[]
 }
 
 model Resident {
@@ -94,15 +95,16 @@ model Resident {
   userId               String           @unique
   unitId               String
   name                 String
-  residentType         String           @default("Owner")
   isPrimary            Boolean          @default(false)
   emergencyContact     String?
   emergencyContactName String?
   alertPreferences     Json             @default("{}")
-  showUnitInCommunity  Boolean          @default(true)
-  mutedFromCommunity   Boolean          @default(false)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+  showUnitInCommunity  Boolean          @default(true)
+  residentType         String           @default("Owner")
+  mutedFromCommunity   Boolean          @default(false)
+  relationship         String           @default("Primary")
   complaints           Complaint[]
   registeredWorkers    DomesticWorker[]
   invoices             Invoice[]
@@ -259,44 +261,38 @@ model WalkinApproval {
 }
 
 model Alert {
-  id             String        @id @default(cuid())
-  entryId        String?
-  incidentId     String?
-  propertyId     String
-  priority       AlertPriority
-  status         AlertStatus   @default(SENT)
-  title          String
-  body           String
-  targetRoles    Role[]
-  targetUserIds  String[]
-  channel        AlertChannel
-  imageUrl       String?
+  id              String        @id @default(cuid())
+  entryId         String?
+  incidentId      String?
+  propertyId      String
+  priority        AlertPriority
+  status          AlertStatus   @default(SENT)
+  title           String
+  body            String
+  targetRoles     Role[]
+  targetUserIds   String[]
+  channel         AlertChannel
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  escalatedAt     DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  claimedAt       DateTime?
+  claimedByName   String?
   claimedByUserId String?
-  claimedByName  String?
-  claimedAt      DateTime?
-  acknowledgedAt DateTime?
-  acknowledgedBy String?
-  escalatedAt    DateTime?
-  resolvedAt     DateTime?
-  // How many EscalationStep entries (in order) have already fired for this
-  // alert — lets the escalation job resume where it left off instead of
-  // re-notifying earlier steps every tick.
-  escalationStep Int           @default(0)
-  createdAt      DateTime      @default(now())
-  entry          Entry?        @relation(fields: [entryId], references: [id])
-  incident       Incident?     @relation(fields: [incidentId], references: [id])
+  imageUrl        String?
+  escalationStep  Int           @default(0)
+  entry           Entry?        @relation(fields: [entryId], references: [id])
+  incident        Incident?     @relation(fields: [incidentId], references: [id])
 }
 
-// A per-property, per-priority ordered list of who gets notified as an alert
-// ages unacknowledged, and how (push/SMS/email), replacing the old flat
-// "notify every manager at once" behavior.
 model EscalationChain {
-  id         String            @id @default(cuid())
+  id         String           @id @default(cuid())
   propertyId String
   priority   AlertPriority
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  property   Property          @relation(fields: [propertyId], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  property   Property         @relation(fields: [propertyId], references: [id])
   steps      EscalationStep[]
 
   @@unique([propertyId, priority])
@@ -307,9 +303,6 @@ model EscalationStep {
   chainId      String
   order        Int
   roleLabel    String
-  // Either a real registered user (userId) or an external contact
-  // (contactName/contactPhone) — never both fabricated, one of the two
-  // must reflect a real, configured target.
   userId       String?
   contactName  String?
   contactPhone String?
@@ -320,13 +313,6 @@ model EscalationStep {
   user         User?             @relation(fields: [userId], references: [id])
 
   @@index([chainId])
-}
-
-enum EscalationChannel {
-  PUSH
-  SMS
-  EMAIL
-  ALL
 }
 
 model Incident {
@@ -407,20 +393,20 @@ model AmenityBooking {
 }
 
 model Shift {
-  id             String      @id @default(cuid())
-  guardId        String
-  startedAt      DateTime    @default(now())
-  endedAt        DateTime?
-  totalEntries   Int         @default(0)
-  totalIncidents Int         @default(0)
-  openItems      String?
-  handoverNote   String?
-  handedOverToId String?
+  id               String      @id @default(cuid())
+  guardId          String
+  startedAt        DateTime    @default(now())
+  endedAt          DateTime?
+  totalEntries     Int         @default(0)
+  totalIncidents   Int         @default(0)
+  openItems        String?
+  handoverNote     String?
+  signedOffAt      DateTime?
+  createdAt        DateTime    @default(now())
+  handedOverToId   String?
   handedOverToName String?
-  signedOffAt    DateTime?
-  createdAt      DateTime    @default(now())
-  postCheckIns   GuardPost[]
-  guard          Guard       @relation(fields: [guardId], references: [id])
+  postCheckIns     GuardPost[]
+  guard            Guard       @relation(fields: [guardId], references: [id])
 }
 
 model GuardPost {
@@ -507,11 +493,11 @@ model ChatMessage {
   deletedAt        DateTime?
   createdAt        DateTime        @default(now())
   property         Property        @relation(fields: [propertyId], references: [id])
-  sender           User            @relation(fields: [senderId], references: [id])
   replyTo          ChatMessage?    @relation("MessageReplies", fields: [replyToId], references: [id])
   replies          ChatMessage[]   @relation("MessageReplies")
-  reactions        ChatReaction[]
+  sender           User            @relation(fields: [senderId], references: [id])
   poll             ChatPoll?
+  reactions        ChatReaction[]
   reports          ChatReport[]
 
   @@index([propertyId, createdAt])
@@ -530,12 +516,6 @@ model ChatReport {
   reporter   User         @relation(fields: [reporterId], references: [id])
 
   @@index([messageId])
-}
-
-enum ReportStatus {
-  PENDING
-  DISMISSED
-  RESOLVED
 }
 
 model ChatReaction {
@@ -600,8 +580,8 @@ model Complaint {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   property       Property          @relation(fields: [propertyId], references: [id])
-  unit           Unit              @relation(fields: [unitId], references: [id])
   resident       Resident          @relation(fields: [residentId], references: [id])
+  unit           Unit              @relation(fields: [unitId], references: [id])
   updates        ComplaintUpdate[]
 
   @@index([propertyId, createdAt])
@@ -620,7 +600,7 @@ model ComplaintUpdate {
 }
 
 model DomesticWorker {
-  id             String     @id @default(cuid())
+  id             String      @id @default(cuid())
   unitId         String
   registeredById String
   name           String
@@ -634,11 +614,24 @@ model DomesticWorker {
   entryTime      String
   exitTime       String
   notes          String?
-  isActive       Boolean    @default(true)
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  unit           Unit       @relation(fields: [unitId], references: [id])
-  registeredBy   Resident   @relation(fields: [registeredById], references: [id])
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  registeredBy   Resident    @relation(fields: [registeredById], references: [id])
+  unit           Unit        @relation(fields: [unitId], references: [id])
+}
+
+enum EscalationChannel {
+  PUSH
+  SMS
+  EMAIL
+  ALL
+}
+
+enum ReportStatus {
+  PENDING
+  DISMISSED
+  RESOLVED
 }
 
 enum Role {

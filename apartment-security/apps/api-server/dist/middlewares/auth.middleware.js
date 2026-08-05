@@ -34,8 +34,6 @@ const authenticate = async (req, res, next) => {
             propertyId = user.guard.propertyId;
         else if (user.manager)
             propertyId = user.manager.propertyId;
-        else if (user.committee)
-            propertyId = user.committee.propertyId;
         // Also include residentId if resident
         let residentId;
         if (user.resident)

@@ -36,8 +36,14 @@ app.use(helmet());
 // CORS — allow mobile apps (no Origin header) + known browser client origins
 app.use(cors({
   origin: (origin, callback) => {
-    // Mobile apps (React Native / Expo) send no Origin header — always allow
-    if (!origin) return callback(null, true);
+    // Mobile apps (React Native / Expo) send no Origin header
+    // In production, this should ideally be locked behind an explicit ALLOW_NO_ORIGIN flag or API key middleware.
+    if (!origin) {
+      if (process.env.NODE_ENV === 'development' || process.env.ALLOW_NO_ORIGIN === 'true') {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS: missing origin not allowed'));
+    }
     // In development, allow any localhost origin regardless of port (Vite assigns dynamic ports)
     if (process.env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
       return callback(null, true);
@@ -54,9 +60,9 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsing - limited to 1mb to prevent DoS via massive payloads
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // HTTP request logging
 app.use(morgan('combined', {

@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
+import bcrypt from 'bcryptjs';
 
 export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -129,7 +130,10 @@ export const removeHouseholdMember = async (req: Request, res: Response, next: N
             return next(new AppError('Member not found in your unit', 404));
         }
         
-        await prisma.resident.delete({ where: { id: memberId } });
+        await prisma.resident.update({
+            where: { id: memberId },
+            data: { isActive: false }
+        });
         await prisma.user.update({
             where: { id: memberToRemove.userId },
             data: { isActive: false }
@@ -242,9 +246,88 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
 export const getAllResidents = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const residents = await prisma.resident.findMany({
-            include: { unit: true, user: { select: { phone: true, isActive: true } } }
+            include: {
+                unit: true,
+                user: { select: { phone: true, email: true, isActive: true } }
+            },
+            orderBy: { createdAt: 'asc' }
         });
-        return sendSuccess(res, 200, 'All residents fetched', residents);
+
+        // Group residents by unit → one family entry per unit
+        const familyMap = new Map<string, any>();
+
+        for (const r of residents) {
+            const uid = r.unitId;
+            if (!familyMap.has(uid)) {
+                familyMap.set(uid, {
+                    unitId: uid,
+                    familyName: (r.unit as any).familyName || null,
+                    apartmentNumber: r.unit.unitNumber,
+                    tower: r.unit.tower || 'Tower A',
+                    floor: r.unit.floor,
+                    totalMembers: 0,
+                    primaryResident: null,
+                    members: [],
+                });
+            }
+            const family = familyMap.get(uid);
+            const member = {
+                id: r.id,
+                name: r.name,
+                relationship: r.relationship,
+                isPrimary: r.isPrimary,
+                phone: r.user?.phone || null,
+                email: r.user?.email || null,
+                isActive: r.user?.isActive ?? true,
+                createdAt: r.createdAt,
+            };
+            family.members.push(member);
+            family.totalMembers += 1;
+            if (r.isPrimary || !family.primaryResident) {
+                family.primaryResident = { id: r.id, name: r.name, phone: r.user?.phone || null, email: r.user?.email || null };
+            }
+        }
+
+        const families = Array.from(familyMap.values());
+        return sendSuccess(res, 200, 'Families fetched', families);
+    } catch (err) { next(err); }
+};
+
+export const getFamilyDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { unitId } = req.params;
+        const unit = await prisma.unit.findUnique({
+            where: { id: unitId },
+            include: {
+                residents: {
+                    include: { user: { select: { phone: true, email: true, isActive: true } } },
+                    orderBy: { isPrimary: 'desc' }
+                }
+            }
+        });
+        if (!unit) return next(new AppError('Unit not found', 404));
+
+        const primary = unit.residents.find(r => r.isPrimary) || unit.residents[0];
+        const result = {
+            unitId: unit.id,
+            familyName: (unit as any).familyName || null,
+            apartmentNumber: unit.unitNumber,
+            tower: unit.tower || 'Tower A',
+            floor: unit.floor,
+            totalMembers: unit.residents.length,
+            primaryResident: primary ? { id: primary.id, name: primary.name } : null,
+            members: unit.residents.map(r => ({
+                id: r.id,
+                name: r.name,
+                relationship: r.relationship,
+                isPrimary: r.isPrimary,
+                phone: r.user?.phone || null,
+                email: r.user?.email || null,
+                isActive: r.user?.isActive ?? true,
+                createdAt: r.createdAt,
+            })),
+        };
+        return sendSuccess(res, 200, 'Family details fetched', result);
     } catch (err) { next(err); }
 };
 
@@ -316,6 +399,279 @@ export const onboardResident = async (req: Request, res: Response, next: NextFun
         await auditLog(req.user!.userId, 'ONBOARD_RESIDENT', 'Resident', resident.id);
         
         return sendSuccess(res, 201, 'Resident onboarded successfully', resident);
+    } catch (err) { next(err); }
+};
+
+export const onboardHousehold = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { familyName, unit: unitNumber, tower, floor, members } = req.body;
+        
+        const result = await prisma.$transaction(async (tx) => {
+            let property = await tx.property.findFirst();
+            if (!property) {
+                property = await tx.property.create({
+                    data: { name: "Default Property", address: "Address", city: "City", pincode: "000000", totalUnits: 100 }
+                });
+            }
+
+            let unit = await tx.unit.findFirst({ 
+                where: { unitNumber, propertyId: property.id } 
+            });
+            if (!unit) {
+                unit = await tx.unit.create({
+                    data: {
+                        unitNumber,
+                        floor: parseInt(floor) || 1,
+                        tower: tower || 'Tower A',
+                        familyName: familyName || null,
+                        propertyId: property.id,
+                        isOccupied: true
+                    }
+                });
+            } else if (familyName && !(unit as any).familyName) {
+                unit = await tx.unit.update({
+                    where: { id: unit.id },
+                    data: { familyName }
+                });
+            }
+            
+            const allFormattedPhones = members.map((m: any) => m.phone ? (m.phone.startsWith('+') ? m.phone : `+91${m.phone}`) : undefined).filter(Boolean);
+            const allEmails = members.map((m: any) => m.email).filter(Boolean);
+
+            const existingUsers = await tx.user.findMany({
+                where: {
+                    OR: [
+                        { phone: { in: allFormattedPhones as string[] } },
+                        { email: { in: allEmails as string[] } }
+                    ]
+                },
+                include: { resident: true }
+            });
+            
+            const createdResidents = [];
+            
+            for (const member of members) {
+                if (!member.phone && !member.email) {
+                    throw new AppError('Each member must have at least a phone number or email.', 400);
+                }
+
+                if (!member.password || member.password.length < 6) {
+                    throw new AppError(`Password for ${member.name} must be at least 6 characters.`, 400);
+                }
+
+                const passwordHash = await bcrypt.hash(member.password, 10);
+                const formattedPhone = member.phone 
+                    ? (member.phone.startsWith('+') ? member.phone : `+91${member.phone}`)
+                    : undefined;
+
+                let user = existingUsers.find((u: any) => 
+                    (formattedPhone && u.phone === formattedPhone) || 
+                    (member.email && u.email === member.email)
+                );
+
+                if (user) {
+                    if (user.role !== 'RESIDENT') {
+                        throw new AppError(`${formattedPhone || member.email} belongs to a staff or admin account and cannot be modified.`, 403);
+                    }
+                    if (user.resident) {
+                        throw new AppError(`${formattedPhone || member.email} is already registered to a resident.`, 400);
+                    }
+                }
+
+                if (!user) {
+                    user = await tx.user.create({
+                        data: { phone: formattedPhone, email: member.email, role: 'RESIDENT', passwordHash },
+                        include: { resident: true }
+                    }) as any;
+                } else {
+                    user = await tx.user.update({
+                        where: { id: user.id },
+                        data: { 
+                            email: (!user.email && member.email) ? member.email : undefined,
+                            passwordHash 
+                        },
+                        include: { resident: true }
+                    }) as any;
+                }
+                
+                const resident = await tx.resident.create({
+                    data: {
+                        userId: user!.id,
+                        unitId: unit.id,
+                        name: member.name,
+                        relationship: member.relationship,
+                        isPrimary: member.isPrimary
+                    }
+                });
+                createdResidents.push(resident);
+            }
+            
+            if (!unit.isOccupied) {
+                await tx.unit.update({
+                    where: { id: unit.id },
+                    data: { isOccupied: true }
+                });
+            }
+            
+            return { unitId: unit.id, createdResidents };
+        });
+        
+        await auditLog(req.user!.userId, 'ONBOARD_HOUSEHOLD', 'Unit', result.unitId);
+        
+        return sendSuccess(res, 201, 'Household onboarded successfully', result.createdResidents);
+    } catch (err) { next(err); }
+};
+
+export const updateHousehold = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const unitId = req.params.unitId;
+        const { familyName, unit: unitNumber, tower, floor, members } = req.body;
+        
+        const result = await prisma.$transaction(async (tx) => {
+            let unit = await tx.unit.findUnique({ 
+                where: { id: unitId },
+                include: { residents: { include: { user: true } } }
+            });
+            if (!unit) {
+                throw new AppError('Household not found', 404);
+            }
+
+            unit = await tx.unit.update({
+                where: { id: unitId },
+                data: {
+                    unitNumber,
+                    floor: parseInt(floor) || 1,
+                    tower: tower || 'Tower A',
+                    familyName: familyName || null,
+                },
+                include: { residents: { include: { user: true } } }
+            }) as any;
+
+            const currentMemberIds = unit.residents.map(r => r.id);
+            const incomingMemberIds = members.filter((m: any) => m.id).map((m: any) => m.id);
+            
+            const membersToRemove = currentMemberIds.filter(id => !incomingMemberIds.includes(id));
+            for (const residentId of membersToRemove) {
+                const resident = unit.residents.find(r => r.id === residentId);
+                if (resident) {
+                    await tx.user.update({
+                        where: { id: resident.userId },
+                        data: { isActive: false }
+                    });
+                    await tx.resident.update({
+                        where: { id: residentId },
+                        data: { isActive: false }
+                    });
+                }
+            }
+
+            const allFormattedPhones = members.map((m: any) => m.phone ? (m.phone.startsWith('+') ? m.phone : `+91${m.phone}`) : undefined).filter(Boolean);
+            const allEmails = members.map((m: any) => m.email).filter(Boolean);
+
+            const existingUsers = await tx.user.findMany({
+                where: {
+                    OR: [
+                        { phone: { in: allFormattedPhones as string[] } },
+                        { email: { in: allEmails as string[] } }
+                    ]
+                },
+                include: { resident: true }
+            });
+
+            const updatedResidents = [];
+            
+            for (const member of members) {
+                if (!member.phone && !member.email) {
+                    throw new AppError('Each member must have at least a phone number or email.', 400);
+                }
+
+                const formattedPhone = member.phone 
+                    ? (member.phone.startsWith('+') ? member.phone : `+91${member.phone}`)
+                    : undefined;
+
+                let passwordHash = undefined;
+                if (member.password && member.password.length >= 6) {
+                    passwordHash = await bcrypt.hash(member.password, 10);
+                }
+
+                if (member.id) {
+                    const resident = unit.residents.find(r => r.id === member.id);
+                    if (!resident) continue;
+
+                    await tx.user.update({
+                        where: { id: resident.userId },
+                        data: { 
+                            phone: formattedPhone,
+                            email: member.email || undefined,
+                            ...(passwordHash && { passwordHash }),
+                            isActive: true
+                        }
+                    });
+
+                    const updatedResident = await tx.resident.update({
+                        where: { id: resident.id },
+                        data: {
+                            name: member.name,
+                            relationship: member.relationship,
+                            isPrimary: member.isPrimary,
+                            isActive: true
+                        }
+                    });
+                    updatedResidents.push(updatedResident);
+                } else {
+                    if (!member.password || member.password.length < 6) {
+                        throw new AppError(`Password for ${member.name} must be at least 6 characters.`, 400);
+                    }
+                    const newPasswordHash = await bcrypt.hash(member.password, 10);
+
+                    let user = existingUsers.find((u: any) => 
+                        (formattedPhone && u.phone === formattedPhone) || 
+                        (member.email && u.email === member.email)
+                    );
+
+                    if (user) {
+                        if (user.role !== 'RESIDENT') {
+                            throw new AppError(`${formattedPhone || member.email} belongs to a staff or admin account and cannot be modified.`, 403);
+                        }
+                        if (user.resident) {
+                            throw new AppError(`${formattedPhone || member.email} is already registered to a resident.`, 400);
+                        }
+                    }
+
+                    if (!user) {
+                        user = await tx.user.create({
+                            data: { phone: formattedPhone, email: member.email, role: 'RESIDENT', passwordHash: newPasswordHash },
+                            include: { resident: true }
+                        }) as any;
+                    } else {
+                        user = await tx.user.update({
+                            where: { id: user.id },
+                            data: { 
+                                email: (!user.email && member.email) ? member.email : undefined,
+                                passwordHash: newPasswordHash 
+                            },
+                            include: { resident: true }
+                        }) as any;
+                    }
+                    
+                    const resident = await tx.resident.create({
+                        data: {
+                            userId: user!.id,
+                            unitId: unit.id,
+                            name: member.name,
+                            relationship: member.relationship,
+                            isPrimary: member.isPrimary
+                        }
+                    });
+                    updatedResidents.push(resident);
+                }
+            }
+            return { unitId: unit.id, updatedResidents };
+        });
+        
+        await auditLog(req.user!.userId, 'UPDATE_HOUSEHOLD', 'Unit', result.unitId);
+        
+        return sendSuccess(res, 200, 'Household updated successfully', result.updatedResidents);
     } catch (err) { next(err); }
 };
 

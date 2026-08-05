@@ -2,9 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSocketHandlers = void 0;
 const jwt_util_1 = require("../../utils/jwt.util");
-const prisma_1 = require("../../config/prisma");
 const logger_util_1 = require("../../utils/logger.util");
-const redis_1 = require("../../config/redis");
+const prisma_1 = require("../../config/prisma");
 const registerSocketHandlers = (io) => {
     // Auth middleware for every socket connection
     io.use((socket, next) => {
@@ -22,47 +21,52 @@ const registerSocketHandlers = (io) => {
     });
     io.on('connection', async (socket) => {
         const user = socket.data.user;
-        // Fetch propertyId dynamically from DB or Cache since it's not in the JWT
-        let propertyId;
-        try {
-            const cacheKey = `user_property:${user.userId}`;
-            const cached = await redis_1.redis.get(cacheKey);
-            if (cached) {
-                propertyId = cached;
-            }
-            else {
-                const dbUser = await prisma_1.prisma.user.findUnique({
-                    where: { id: user.userId },
-                    include: { resident: { include: { unit: true } }, guard: true, manager: true, committee: true }
-                });
-                if (dbUser) {
-                    if (dbUser.resident)
-                        propertyId = dbUser.resident.unit.propertyId;
-                    else if (dbUser.guard)
-                        propertyId = dbUser.guard.propertyId;
-                    else if (dbUser.manager)
-                        propertyId = dbUser.manager.propertyId;
-                    else if (dbUser.committee)
-                        propertyId = dbUser.committee.propertyId;
-                    if (propertyId) {
-                        await redis_1.redis.setex(cacheKey, 3600, propertyId); // Cache for 1 hour
-                    }
-                }
-            }
-        }
-        catch (e) {
-            logger_util_1.logger.error('Failed to fetch user in socket connection', e);
-        }
-        logger_util_1.logger.info('WebSocket connected', { userId: user.userId, role: user.role, propertyId });
+        logger_util_1.logger.info('WebSocket connected', { userId: user.userId, role: user.role });
         // Personal room for direct messages
         socket.join(`user:${user.userId}`);
-        // Role-based rooms
-        if (propertyId) {
-            socket.join(`property:${propertyId}`);
+        let resolvedPropertyId = undefined;
+        try {
+            if (user.role === 'RESIDENT') {
+                const resident = await prisma_1.prisma.resident.findUnique({
+                    where: { userId: user.userId },
+                    select: { unitId: true, unit: { select: { propertyId: true } } },
+                });
+                resolvedPropertyId = resident?.unit.propertyId;
+                if (resolvedPropertyId)
+                    socket.join(`property:${resolvedPropertyId}`);
+                if (resident?.unitId)
+                    socket.join(`unit_${resident.unitId}`);
+            }
+            else if (user.role === 'GUARD') {
+                const guard = await prisma_1.prisma.guard.findUnique({
+                    where: { userId: user.userId },
+                    select: { id: true, propertyId: true },
+                });
+                resolvedPropertyId = guard?.propertyId;
+                if (resolvedPropertyId)
+                    socket.join(`property:${resolvedPropertyId}`);
+                if (guard?.id)
+                    socket.join(`guard:${guard.id}`);
+            }
+            else if (user.role === 'MANAGER' || user.role === 'COMMITTEE') {
+                const manager = await prisma_1.prisma.manager.findUnique({
+                    where: { userId: user.userId },
+                    select: { propertyId: true },
+                });
+                resolvedPropertyId = manager?.propertyId;
+                if (resolvedPropertyId)
+                    socket.join(`property:${resolvedPropertyId}`);
+            }
         }
-        if (user.guardId) {
-            socket.join(`guard:${user.guardId}`);
+        catch (err) {
+            logger_util_1.logger.error('Failed to resolve context for socket room join', { err });
         }
+        // Community chat typing indicator — relayed to everyone else in the room.
+        socket.on('community:typing', () => {
+            if (!resolvedPropertyId)
+                return;
+            socket.to(`property:${resolvedPropertyId}`).emit('community:typing', { userId: user.userId });
+        });
         socket.on('disconnect', () => {
             logger_util_1.logger.info('WebSocket disconnected', { userId: user.userId });
         });

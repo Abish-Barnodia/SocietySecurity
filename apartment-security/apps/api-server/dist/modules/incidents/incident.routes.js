@@ -10,6 +10,8 @@ const incident_schema_1 = require("./incident.schema");
 const router = (0, express_1.Router)();
 exports.incidentRouter = router;
 router.use(auth_middleware_1.authenticate);
+// Manager / Committee / Guard views incidents
+router.get('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE', 'GUARD'), incident_controller_1.getIncidents);
 // Guard creates an incident
 router.post('/', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(incident_schema_1.createIncidentSchema), incident_controller_1.createIncident);
 // Manager / Committee assigns incident

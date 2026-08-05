@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const path_1 = __importDefault(require("path"));
 const helmet_1 = __importDefault(require("helmet"));
 const cors_1 = __importDefault(require("cors"));
 const morgan_1 = __importDefault(require("morgan"));
@@ -26,10 +25,13 @@ const vehicle_routes_1 = require("./modules/vehicles/vehicle.routes");
 const amenity_routes_1 = require("./modules/amenities/amenity.routes");
 const report_routes_1 = require("./modules/reports/report.routes");
 const offline_routes_1 = require("./modules/offline/offline.routes");
-const community_routes_1 = __importDefault(require("./modules/community/community.routes"));
+const broadcast_routes_1 = require("./modules/broadcasts/broadcast.routes");
+const timeline_routes_1 = __importDefault(require("./modules/timeline/timeline.routes"));
+const community_routes_1 = require("./modules/community/community.routes");
+const complaint_routes_1 = require("./modules/complaints/complaint.routes");
+const domesticWorker_routes_1 = require("./modules/domesticWorkers/domesticWorker.routes");
+const escalation_routes_1 = require("./modules/escalation/escalation.routes");
 const app = (0, express_1.default)();
-// Serve static files from public directory
-app.use('/public', express_1.default.static(path_1.default.join(__dirname, '../public')));
 // Security headers
 app.use((0, helmet_1.default)());
 // CORS — allow mobile apps (no Origin header) + known browser client origins
@@ -38,7 +40,11 @@ app.use((0, cors_1.default)({
         // Mobile apps (React Native / Expo) send no Origin header — always allow
         if (!origin)
             return callback(null, true);
-        // Allow configured browser client origins
+        // In development, allow any localhost origin regardless of port (Vite assigns dynamic ports)
+        if (process.env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+            return callback(null, true);
+        }
+        // In production, allow only configured browser client origins
         const allowed = [
             env_1.env.CLIENT_RESIDENT_APP_URL,
             env_1.env.CLIENT_GUARD_APP_URL,
@@ -77,7 +83,12 @@ app.use(`${API}/vehicles`, vehicle_routes_1.vehicleRouter);
 app.use(`${API}/amenities`, amenity_routes_1.amenityRouter);
 app.use(`${API}/reports`, report_routes_1.reportRouter);
 app.use(`${API}/offline`, offline_routes_1.offlineRouter);
-app.use(`${API}/community`, community_routes_1.default);
+app.use(`${API}/broadcasts`, broadcast_routes_1.broadcastRouter);
+app.use(`${API}/timeline`, timeline_routes_1.default);
+app.use(`${API}/community`, community_routes_1.communityRouter);
+app.use(`${API}/complaints`, complaint_routes_1.complaintRouter);
+app.use(`${API}/domestic-workers`, domesticWorker_routes_1.domesticWorkerRouter);
+app.use(`${API}/escalation`, escalation_routes_1.escalationRouter);
 // 404 handler
 app.use(notFound_middleware_1.notFoundHandler);
 // Global error handler

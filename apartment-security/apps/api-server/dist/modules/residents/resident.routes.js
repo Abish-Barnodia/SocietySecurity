@@ -11,6 +11,9 @@ const router = (0, express_1.Router)();
 exports.residentRouter = router;
 router.use(auth_middleware_1.authenticate);
 // Resident self-service
+router.get('/towers', resident_controller_1.getTowers);
+router.get('/units', resident_controller_1.getUnitsByTower);
+router.post('/me/onboard', (0, role_middleware_1.requireRole)('RESIDENT'), (0, validate_middleware_1.validate)(resident_schema_1.onboardSelfSchema), resident_controller_1.onboardSelf);
 router.get('/me', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.getMyProfile);
 router.put('/me', (0, role_middleware_1.requireRole)('RESIDENT'), (0, validate_middleware_1.validate)(resident_schema_1.updateProfileSchema), resident_controller_1.updateMyProfile);
 router.put('/me/alerts', (0, role_middleware_1.requireRole)('RESIDENT'), (0, validate_middleware_1.validate)(resident_schema_1.alertPreferencesSchema), resident_controller_1.updateAlertPreferences);
@@ -20,6 +23,7 @@ router.delete('/unit/members/:memberId', (0, role_middleware_1.requireRole)('RES
 // Manager operations
 router.get('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), resident_controller_1.getAllResidents);
 router.post('/', (0, role_middleware_1.requireRole)('MANAGER'), (0, validate_middleware_1.validate)(resident_schema_1.onboardResidentSchema), resident_controller_1.onboardResident);
+router.post('/household', (0, role_middleware_1.requireRole)('MANAGER'), (0, validate_middleware_1.validate)(resident_schema_1.onboardHouseholdSchema), resident_controller_1.onboardHousehold);
 router.delete('/:id', (0, role_middleware_1.requireRole)('MANAGER'), resident_controller_1.deactivateResident);
 router.get('/:id/summary', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), resident_controller_1.getUnitSummary);
 //# sourceMappingURL=resident.routes.js.map

@@ -10,7 +10,12 @@ const entry_schema_1 = require("./entry.schema");
 const router = (0, express_1.Router)();
 exports.entryRouter = router;
 router.use(auth_middleware_1.authenticate);
+// Gate list — used by guards to log entries and residents/guards/managers to display gate names
+router.get('/entry-points', (0, role_middleware_1.requireRole)('GUARD', 'RESIDENT', 'MANAGER', 'COMMITTEE'), entry_controller_1.getEntryPoints);
 // Guard logging
+router.get('/units', (0, role_middleware_1.requireRole)('GUARD'), entry_controller_1.getUnitsForGuard);
+router.get('/frequent-visitors', (0, role_middleware_1.requireRole)('GUARD'), entry_controller_1.getFrequentVisitors);
+router.get('/recent', (0, role_middleware_1.requireRole)('GUARD'), entry_controller_1.getRecentEntries);
 router.post('/', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(entry_schema_1.logEntrySchema), entry_controller_1.logEntry);
 router.put('/:id/exit', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(entry_schema_1.logExitSchema), entry_controller_1.logExit);
 // Resident viewing

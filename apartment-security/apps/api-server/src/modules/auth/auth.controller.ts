@@ -4,6 +4,7 @@ import { prisma } from '../../config/prisma';
 import { createOTP, verifyOTP } from '../../utils/otp.util';
 import { signAccessToken, signRefreshToken, rotateRefreshToken } from '../../utils/jwt.util';
 import { sendSMS } from '../../utils/sms.util';
+import { sendEmail } from '../../utils/email.service';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
@@ -308,6 +309,73 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       refreshToken,
       user: { id: user.id, email: user.email, role: user.role }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    
+    if (!user) {
+      // Don't leak whether the email exists or not
+      return sendSuccess(res, 200, 'If your email is registered, you will receive a reset code.');
+    }
+    
+    if (!user.isActive) {
+      return next(new AppError('Your account has been deactivated', 403));
+    }
+    
+    const code = await createOTP(user.id, 'PASSWORD_RESET');
+    
+    const subject = 'Password Reset Code';
+    const text = `Your password reset code is: ${code}. This code will expire in 10 minutes.`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>Password Reset</h2>
+        <p>You requested a password reset. Use the following code:</p>
+        <div style="font-size: 24px; font-weight: bold; padding: 10px; background-color: #f4f4f4; text-align: center; border-radius: 5px;">
+          ${code}
+        </div>
+        <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+      </div>
+    `;
+    
+    await sendEmail(email, subject, text, html);
+    await auditLog(user.id, 'PASSWORD_RESET_REQUESTED', 'User', user.id);
+    
+    return sendSuccess(res, 200, 'If your email is registered, you will receive a reset code.');
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, code, password } = req.body;
+    
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return next(new AppError('Invalid email or code', 400));
+    }
+    
+    const isValid = await verifyOTP(user.id, code, 'PASSWORD_RESET');
+    if (!isValid) {
+      return next(new AppError('Invalid or expired OTP', 400));
+    }
+    
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash }
+    });
+    
+    await auditLog(user.id, 'PASSWORD_RESET_SUCCESS', 'User', user.id);
+    
+    return sendSuccess(res, 200, 'Password has been successfully reset');
   } catch (error) {
     next(error);
   }

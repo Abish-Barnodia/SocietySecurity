@@ -7,6 +7,7 @@ import ScanScreen from './ScanScreen';
 import WalkInScreen from './WalkInScreen';
 import AlertsScreen from './AlertsScreen';
 import ShiftHandoverScreen from './ShiftHandoverScreen';
+import OfflineBanner from '../components/OfflineBanner';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
@@ -30,6 +31,7 @@ export default function GuardShell() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <OfflineBanner />
       <View style={styles.body}>
         {tab === 'home' && <HomeScreen onNavigate={setTab} />}
         {tab === 'scan' && <ScanScreen />}

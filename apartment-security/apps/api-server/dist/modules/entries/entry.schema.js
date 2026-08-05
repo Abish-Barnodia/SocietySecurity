@@ -4,10 +4,12 @@ exports.logExitSchema = exports.logEntrySchema = void 0;
 const zod_1 = require("zod");
 exports.logEntrySchema = zod_1.z.object({
     body: zod_1.z.object({
-        unitId: zod_1.z.string().cuid(),
+        // Required for every method except QR_SCAN (enforced in the controller,
+        // since a QR scan derives both fields from the signed pass itself).
+        unitId: zod_1.z.string().cuid().optional(),
         entryPointId: zod_1.z.string().cuid(),
         method: zod_1.z.enum(['QR_SCAN', 'OTP', 'MANUAL_GUARD', 'VEHICLE_ANPR']),
-        visitorName: zod_1.z.string().min(2),
+        visitorName: zod_1.z.string().min(2).optional(),
         visitorPhone: zod_1.z.string().optional(),
         vehicleNumber: zod_1.z.string().optional(),
         // Auth fields (one must be provided based on method)

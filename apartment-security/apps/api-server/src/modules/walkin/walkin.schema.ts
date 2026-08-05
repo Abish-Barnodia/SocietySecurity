@@ -7,7 +7,9 @@ export const requestWalkinSchema = z.object({
     visitorName: z.string().min(2),
     visitorPhone: z.string().optional(),
     purpose: z.string(),
-    gatePhotoUrl: z.string().url().optional()
+    gatePhotoUrl: z.string().url().optional(),
+    gatePhotoBase64: z.string().optional(),
+    vehicleNumber: z.string().optional()
   })
 });
 

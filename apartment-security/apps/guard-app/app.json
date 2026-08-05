@@ -1,14 +1,31 @@
 {
   "expo": {
     "name": "Guard App",
-    "slug": "society-management",
+    "slug": "guard-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
     "extra": {
       "eas": {
-        "projectId": "06646b3f-0f76-44b2-bc6f-bb8ef2a3e50b"
+        "projectId": "e3cde75a-a25d-4294-827e-3ccb5d23ff76"
       }
     },
     "android": {
-      "package": "com.manik098steam.societymanagement"
-    }
+      "package": "com.manik098steam.societymanagement",
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Guard App needs camera access to scan visitor QR codes and capture gate photos."
+        }
+      ]
+    ],
+    "owner": "manik098s-team"
   }
 }

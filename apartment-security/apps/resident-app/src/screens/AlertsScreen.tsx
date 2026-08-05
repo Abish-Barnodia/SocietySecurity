@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert as RNAlert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert as RNAlert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +12,7 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
   const { alerts, markAllAlertsRead, markAlertRead, fetchAlerts, claimVehicleAlert } = useData();
   const { userId } = useAuth();
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
 
   // Alerts otherwise only ever come from the one-time fetch at login plus
   // whatever arrives live over the socket while this screen happens to be
@@ -59,10 +60,12 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity
             key={alert.id}
             style={styles.card}
-            activeOpacity={alert.entryId ? 0.7 : 1}
+            activeOpacity={alert.entryId || alert.imageUrl ? 0.7 : 1}
             onPress={() => {
               if (alert.entryId) {
                 navigation.navigate('WalkInApproval', { requestId: alert.entryId });
+              } else if (alert.imageUrl) {
+                setSelectedAlert(alert);
               }
             }}
           >
@@ -109,6 +112,65 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Full screen modal for unknown vehicle / alert details */}
+      <Modal visible={!!selectedAlert} transparent animationType="fade" onRequestClose={() => setSelectedAlert(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedAlert(null)}>
+              <Text style={{ fontSize: 24, color: colors.text }}>×</Text>
+            </TouchableOpacity>
+            
+            {selectedAlert && (
+              <ScrollView contentContainerStyle={{ padding: 16 }}>
+                <View style={styles.alertRow}>
+                  <Text style={styles.alertIcon}>{selectedAlert.icon}</Text>
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertTitle}>{selectedAlert.title}</Text>
+                    <Text style={styles.alertTime}>{selectedAlert.time}</Text>
+                  </View>
+                </View>
+                <Text style={[styles.alertSubtitle, { marginTop: 12, fontSize: 16 }]}>{selectedAlert.subtitle}</Text>
+                
+                {selectedAlert.imageUrl && (
+                  <Image source={{ uri: selectedAlert.imageUrl }} style={styles.fullImage} resizeMode="contain" />
+                )}
+
+                {selectedAlert.imageUrl && (
+                  <View style={{ marginTop: 24 }}>
+                    {selectedAlert.claimedByUserId ? (
+                      <Text style={[styles.claimStatus, { textAlign: 'center' }]}>
+                        {selectedAlert.claimedByUserId === userId ? 'You confirmed this is your vehicle' : `Claimed by ${selectedAlert.claimedByName ?? 'another resident'}`}
+                      </Text>
+                    ) : (
+                      <View style={styles.claimActions}>
+                        <TouchableOpacity
+                          style={[styles.notMineButton, { paddingVertical: 16 }]}
+                          onPress={() => {
+                            markAlertRead(selectedAlert.id);
+                            setSelectedAlert(null);
+                          }}
+                        >
+                          <Text style={styles.notMineText}>Not mine</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.claimButton, { paddingVertical: 16 }]}
+                          onPress={() => {
+                            handleClaim(selectedAlert);
+                            setSelectedAlert(null);
+                          }}
+                        >
+                          <Text style={styles.claimButtonText}>This is my vehicle</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -224,5 +286,31 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     fontWeight: '600',
     color: colors.textMuted,
     marginTop: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    maxHeight: '90%',
+    overflow: 'hidden',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 12,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
+  },
+  fullImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 12,
+    marginTop: 20,
+    backgroundColor: '#000',
   },
 });

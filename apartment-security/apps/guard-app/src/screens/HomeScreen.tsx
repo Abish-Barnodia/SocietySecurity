@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import api from '../utils/api';
@@ -41,15 +41,15 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
 
   const QUICK_ACTIONS: { key: Tab; icon: keyof typeof Ionicons.glyphMap; title: string; subtitle: string; tint: Tint }[] = [
     { key: 'scan', icon: 'scan-outline', title: t('home_scanPassTitle'), subtitle: t('home_scanPassSubtitle'), tint: 'primary' },
-    { key: 'handover', icon: 'swap-horizontal-outline', title: t('home_handoverTitle'), subtitle: t('home_handoverSubtitle'), tint: 'success' },
-    { key: 'walkin', icon: 'person-add-outline', title: t('home_logVisitorTitle'), subtitle: t('home_logVisitorSubtitle'), tint: 'warning' },
+    { key: 'handover', icon: 'swap-horizontal-outline', title: t('home_handoverTitle'), subtitle: t('home_handoverSubtitle'), tint: 'primary' },
+    { key: 'walkin', icon: 'person-add-outline', title: t('home_logVisitorTitle'), subtitle: t('home_logVisitorSubtitle'), tint: 'primary' },
     { key: 'alerts', icon: 'warning-outline', title: t('home_raiseAlertTitle'), subtitle: t('home_raiseAlertSubtitle'), tint: 'danger' },
   ];
 
   const STAT_TILES: { key: keyof Stats; icon: keyof typeof Ionicons.glyphMap; label: string; tint: Tint }[] = [
     { key: 'walkInApprovals', icon: 'person-add-outline', label: t('home_walkInApprovals'), tint: 'primary' },
-    { key: 'openIncidents', icon: 'alert-circle-outline', label: t('home_openIncidents'), tint: 'danger' },
-    { key: 'unackedAlerts', icon: 'warning-outline', label: t('home_unackedAlerts'), tint: 'danger' },
+    { key: 'openIncidents', icon: 'alert-circle-outline', label: t('home_openIncidents'), tint: 'primary' },
+    { key: 'unackedAlerts', icon: 'notifications-outline', label: t('home_unackedAlerts'), tint: 'primary' },
   ];
 
   const [entries, setEntries] = useState<RecentEntry[]>([]);

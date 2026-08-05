@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../utils/api';
 import tokenStorage from '../utils/tokenStorage';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 
 // The socket.io server is attached to the same HTTP server as the REST API,
 // listening at the origin root — strip the "/api/v1" API prefix to get it.

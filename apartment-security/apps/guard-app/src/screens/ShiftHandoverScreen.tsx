@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
 import { TranslationKey } from '../i18n/translations';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import PieChart from '../components/PieChart';
 
 type EntryMethod = 'QR_SCAN' | 'OTP' | 'MANUAL_GUARD' | 'VEHICLE_ANPR';

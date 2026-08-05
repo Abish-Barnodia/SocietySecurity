@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import api, { API_URL } from '../../utils/api';
 import * as SecureStore from 'expo-secure-store';
 import io, { Socket } from 'socket.io-client';

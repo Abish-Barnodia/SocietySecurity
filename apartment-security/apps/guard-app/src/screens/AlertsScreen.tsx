@@ -46,10 +46,10 @@ export default function AlertsScreen() {
     { key: 'VEHICLE', label: t('alerts_filterVehicle') },
   ];
 
-  const PRIORITY_STYLE: Record<Priority, { bg: string; fg: string; labelKey: TranslationKey }> = {
-    P1: { bg: colors.dangerLight, fg: colors.danger, labelKey: 'alerts_priority1' },
-    P2: { bg: colors.warningLight, fg: colors.warning, labelKey: 'alerts_priority2' },
-    P3: { bg: colors.primaryLight, fg: colors.primary, labelKey: 'alerts_priority3' },
+  const PRIORITY_STYLE: Record<Priority, { bg: string; fg: string; labelKey: TranslationKey; icon: keyof typeof Ionicons.glyphMap }> = {
+    P1: { bg: colors.dangerLight, fg: colors.danger, labelKey: 'alerts_priority1', icon: 'alert-circle' },
+    P2: { bg: colors.warningLight, fg: colors.warning, labelKey: 'alerts_priority2', icon: 'warning' },
+    P3: { bg: colors.primaryLight, fg: colors.primary, labelKey: 'alerts_priority3', icon: 'notifications-outline' },
   };
 
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
@@ -163,22 +163,32 @@ export default function AlertsScreen() {
             const style = PRIORITY_STYLE[alert.priority];
             const acknowledged = !!alert.acknowledgedAt;
             return (
-              <View key={alert.id} style={[styles.card, { backgroundColor: style.bg, borderColor: style.fg + '33' }]}>
+              <View key={alert.id} style={[styles.card, { borderLeftWidth: 4, borderLeftColor: style.fg }]}>
                 <View style={styles.cardHeaderRow}>
+                  <View style={[styles.cardIconWrap, { backgroundColor: style.bg }]}>
+                    <Ionicons name={style.icon} size={20} color={style.fg} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={[styles.cardPriority, { color: style.fg }]}>{t(style.labelKey)}</Text>
+                      <Text style={styles.cardTime}>
+                        {new Date(alert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    <Text style={styles.cardTitle}>{cleanTitle(alert.title)}</Text>
+                  </View>
                   {!acknowledged && <View style={[styles.unreadDot, { backgroundColor: style.fg }]} />}
-                  <Text style={[styles.cardPriority, { color: style.fg }]}>{t(style.labelKey)}</Text>
-                  <Text style={styles.cardTime}>
-                    {new Date(alert.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
                 </View>
-                <Text style={styles.cardTitle}>{cleanTitle(alert.title)}</Text>
                 <Text style={styles.cardBody}>{alert.body}</Text>
                 {alert.imageUrl && (
                   <Image source={{ uri: alert.imageUrl }} style={styles.cardImage} />
                 )}
 
                 {acknowledged ? (
-                  <Text style={styles.acknowledgedText}>{t('alerts_acknowledged')}</Text>
+                  <View style={styles.acknowledgedRow}>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginRight: 6 }} />
+                    <Text style={styles.acknowledgedText}>{t('alerts_acknowledged')}</Text>
+                  </View>
                 ) : (
                   <TouchableOpacity
                     style={[styles.ackButton, { backgroundColor: style.fg + '22' }]}
@@ -237,17 +247,17 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   emptyState: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyText: { color: colors.textMuted, fontSize: 14 },
 
-  card: { borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 12 },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  unreadDot: { width: 7, height: 7, borderRadius: 3.5 },
+  card: { borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 16, marginBottom: 12, backgroundColor: colors.card },
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
+  cardIconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  unreadDot: { width: 7, height: 7, borderRadius: 3.5, marginTop: 6, flexShrink: 0 },
   cardPriority: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
   cardTime: { fontSize: 12, color: colors.textMuted, marginLeft: 'auto' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 20 },
   cardBody: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 12 },
-
   cardImage: { width: '100%', height: 140, borderRadius: 12, marginBottom: 12 },
-
   ackButton: { borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   ackButtonText: { fontSize: 14, fontWeight: '700' },
-  acknowledgedText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  acknowledgedRow: { flexDirection: 'row', alignItems: 'center' },
+  acknowledgedText: { fontSize: 13, fontWeight: '600', color: colors.success },
 });

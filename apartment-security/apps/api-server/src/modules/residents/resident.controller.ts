@@ -261,7 +261,7 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
             if (!familyMap.has(uid)) {
                 familyMap.set(uid, {
                     unitId: uid,
-                    familyName: (r.unit as any).familyName || null,
+                    familyName: r.unit.familyName || null,
                     apartmentNumber: r.unit.unitNumber,
                     tower: r.unit.tower || 'Tower A',
                     floor: r.unit.floor,
@@ -295,7 +295,7 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
 
 export const getFamilyDetails = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { unitId } = req.params;
+        const unitId = req.params.unitId as string;
         const unit = await prisma.unit.findUnique({
             where: { id: unitId },
             include: {
@@ -310,7 +310,7 @@ export const getFamilyDetails = async (req: Request, res: Response, next: NextFu
         const primary = unit.residents.find(r => r.isPrimary) || unit.residents[0];
         const result = {
             unitId: unit.id,
-            familyName: (unit as any).familyName || null,
+            familyName: unit.familyName || null,
             apartmentNumber: unit.unitNumber,
             tower: unit.tower || 'Tower A',
             floor: unit.floor,
@@ -376,7 +376,7 @@ export const onboardResident = async (req: Request, res: Response, next: NextFun
             user = await prisma.user.create({
                 data: { phone: formattedPhone, role: 'RESIDENT' },
                 include: { resident: true }
-            }) as any;
+            });
         }
         
         const resident = await prisma.resident.create({
@@ -428,7 +428,7 @@ export const onboardHousehold = async (req: Request, res: Response, next: NextFu
                         isOccupied: true
                     }
                 });
-            } else if (familyName && !(unit as any).familyName) {
+            } else if (familyName && !unit.familyName) {
                 unit = await tx.unit.update({
                     where: { id: unit.id },
                     data: { familyName }
@@ -482,7 +482,7 @@ export const onboardHousehold = async (req: Request, res: Response, next: NextFu
                     user = await tx.user.create({
                         data: { phone: formattedPhone, email: member.email, role: 'RESIDENT', passwordHash },
                         include: { resident: true }
-                    }) as any;
+                    });
                 } else {
                     user = await tx.user.update({
                         where: { id: user.id },
@@ -491,7 +491,7 @@ export const onboardHousehold = async (req: Request, res: Response, next: NextFu
                             passwordHash 
                         },
                         include: { resident: true }
-                    }) as any;
+                    });
                 }
                 
                 const resident = await tx.resident.create({
@@ -524,7 +524,7 @@ export const onboardHousehold = async (req: Request, res: Response, next: NextFu
 
 export const updateHousehold = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const unitId = req.params.unitId;
+        const unitId = req.params.unitId as string;
         const { familyName, unit: unitNumber, tower, floor, members } = req.body;
         
         const result = await prisma.$transaction(async (tx) => {
@@ -545,7 +545,7 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                     familyName: familyName || null,
                 },
                 include: { residents: { include: { user: true } } }
-            }) as any;
+            });
 
             const currentMemberIds = unit.residents.map(r => r.id);
             const incomingMemberIds = members.filter((m: any) => m.id).map((m: any) => m.id);
@@ -587,7 +587,7 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
 
                 const formattedPhone = member.phone 
                     ? (member.phone.startsWith('+') ? member.phone : `+91${member.phone}`)
-                    : undefined;
+                    : null;
 
                 let passwordHash = undefined;
                 if (member.password && member.password.length >= 6) {
@@ -598,11 +598,20 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                     const resident = unit.residents.find(r => r.id === member.id);
                     if (!resident) continue;
 
+                    let conflictingUser = existingUsers.find((u: any) => 
+                        u.id !== resident.userId &&
+                        ((formattedPhone && u.phone === formattedPhone) || 
+                        (member.email && u.email === member.email))
+                    );
+                    if (conflictingUser) {
+                        throw new AppError(`Phone or email is already in use by another user.`, 400);
+                    }
+
                     await tx.user.update({
                         where: { id: resident.userId },
                         data: { 
                             phone: formattedPhone,
-                            email: member.email || undefined,
+                            email: member.email || null,
                             ...(passwordHash && { passwordHash }),
                             isActive: true
                         }
@@ -642,7 +651,7 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                         user = await tx.user.create({
                             data: { phone: formattedPhone, email: member.email, role: 'RESIDENT', passwordHash: newPasswordHash },
                             include: { resident: true }
-                        }) as any;
+                        });
                     } else {
                         user = await tx.user.update({
                             where: { id: user.id },
@@ -651,13 +660,13 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                                 passwordHash: newPasswordHash 
                             },
                             include: { resident: true }
-                        }) as any;
+                        });
                     }
                     
                     const resident = await tx.resident.create({
                         data: {
                             userId: user!.id,
-                            unitId: unit.id,
+                            unitId: unit!.id,
                             name: member.name,
                             relationship: member.relationship,
                             isPrimary: member.isPrimary
@@ -666,7 +675,7 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                     updatedResidents.push(resident);
                 }
             }
-            return { unitId: unit.id, updatedResidents };
+            return { unitId: unit!.id, updatedResidents };
         });
         
         await auditLog(req.user!.userId, 'UPDATE_HOUSEHOLD', 'Unit', result.unitId);

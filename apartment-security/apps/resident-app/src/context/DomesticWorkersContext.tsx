@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import api from '../utils/api';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 
 export type WorkerType =
   | 'MAID'
@@ -75,7 +75,7 @@ type DomesticWorkersContextType = {
 const DomesticWorkersContext = createContext<DomesticWorkersContextType | undefined>(undefined);
 
 export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, userRole } = useAuth();
   const [workers, setWorkers] = useState<DomesticWorker[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,8 +125,10 @@ export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = 
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetchWorkers();
-  }, [isAuthenticated, fetchWorkers]);
+    if (userRole === 'RESIDENT') {
+      fetchWorkers();
+    }
+  }, [isAuthenticated, userRole, fetchWorkers]);
 
   return (
     <DomesticWorkersContext.Provider

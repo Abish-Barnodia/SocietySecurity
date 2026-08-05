@@ -8,7 +8,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LoginStackParamList } from '../LoginRoutes';
 import api from '../../utils/api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import Constants from 'expo-constants';
 
 

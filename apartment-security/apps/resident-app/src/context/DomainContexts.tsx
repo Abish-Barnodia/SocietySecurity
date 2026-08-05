@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import api from '../utils/api';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import { Pass, Alert, Entry, Member, ScanRequest, EmergencyContact, AlertPreferences } from './DataContext';
 
 // ---------------- PASS CONTEXT ----------------

@@ -2,35 +2,41 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, LoginScreen } from '@apartment-security/shared-auth';
 import { useTheme } from '../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Screens
-import LoginScreen from '../screens/LoginScreen';
-import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import HomeScreen from '../screens/HomeScreen';
-import PassesScreen from '../screens/PassesScreen';
-import EntriesScreen from '../screens/EntriesScreen';
-import CommunityScreen from '../screens/CommunityScreen';
-import AlertsScreen from '../screens/AlertsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import CreatePassScreen from '../screens/CreatePassScreen';
-import PassDetailScreen from '../screens/PassDetailScreen';
-import HouseholdScreen from '../screens/HouseholdScreen';
-import AmenitiesScreen from '../screens/AmenitiesScreen';
-import WalkInApprovalScreen from '../screens/WalkInApprovalScreen';
-import GuardHomeScreen from '../screens/GuardHomeScreen';
-import ResidentOnboardingScreen from '../screens/ResidentOnboardingScreen';
-import ScanPassScreen from '../screens/ScanPassScreen';
-import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
-import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
-import PrivacyScreen from '../screens/PrivacyScreen';
-import HelpSupportScreen from '../screens/HelpSupportScreen';
-import ComplaintsScreen from '../screens/ComplaintsScreen';
-import ComplaintDetailScreen from '../screens/ComplaintDetailScreen';
-import CreateComplaintScreen from '../screens/CreateComplaintScreen';
-import DomesticWorkersScreen from '../screens/DomesticWorkersScreen';
-import WorkerFormScreen from '../screens/WorkerFormScreen';
+// Auth Screens
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+
+// Resident Screens
+import HomeScreen from '../screens/resident/HomeScreen';
+import PassesScreen from '../screens/resident/PassesScreen';
+import EntriesScreen from '../screens/resident/EntriesScreen';
+import CommunityScreen from '../screens/resident/CommunityScreen';
+import CreatePassScreen from '../screens/resident/CreatePassScreen';
+import PassDetailScreen from '../screens/resident/PassDetailScreen';
+import HouseholdScreen from '../screens/resident/HouseholdScreen';
+import AmenitiesScreen from '../screens/resident/AmenitiesScreen';
+import WalkInApprovalScreen from '../screens/resident/WalkInApprovalScreen';
+import ResidentOnboardingScreen from '../screens/resident/ResidentOnboardingScreen';
+import SecuritySettingsScreen from '../screens/resident/SecuritySettingsScreen';
+import PrivacyScreen from '../screens/resident/PrivacyScreen';
+import HelpSupportScreen from '../screens/resident/HelpSupportScreen';
+import ComplaintsScreen from '../screens/resident/ComplaintsScreen';
+import ComplaintDetailScreen from '../screens/resident/ComplaintDetailScreen';
+import CreateComplaintScreen from '../screens/resident/CreateComplaintScreen';
+import DomesticWorkersScreen from '../screens/resident/DomesticWorkersScreen';
+import WorkerFormScreen from '../screens/resident/WorkerFormScreen';
+
+// Shared Screens
+import AlertsScreen from '../screens/shared/AlertsScreen';
+import ProfileScreen from '../screens/shared/ProfileScreen';
+import NotificationSettingsScreen from '../screens/shared/NotificationSettingsScreen';
+
+// Guard Screens
+import GuardShell from '../screens/guard/GuardShell';
+import ScanPassScreen from '../screens/guard/ScanScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -58,34 +64,14 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-const GuardTabs = () => {
-  const { colors } = useTheme();
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'shield-checkmark';
-          if (route.name === 'Dashboard') iconName = focused ? 'shield-checkmark' : 'shield-checkmark-outline';
-          else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        headerShown: false,
-        tabBarStyle: { paddingBottom: 5, paddingTop: 5, height: 60, backgroundColor: colors.card, borderTopColor: colors.border },
-      })}
-    >
-      <Tab.Screen name="Dashboard" component={GuardHomeScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
-  );
-};
+
 
 import { useData } from '../context/DataContext';
 
 const MainTabs = () => {
   const { alerts } = useData();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const unreadCount = alerts.filter(a => a.unread).length;
 
   return (
@@ -105,9 +91,9 @@ const MainTabs = () => {
         tabBarInactiveTintColor: colors.textMuted,
         headerShown: false,
         tabBarStyle: {
-          paddingBottom: 5,
+          paddingBottom: Math.max(insets.bottom, 5),
           paddingTop: 5,
-          height: 60,
+          height: 55 + Math.max(insets.bottom, 5),
           backgroundColor: colors.card,
           borderTopColor: colors.border,
         },
@@ -133,13 +119,15 @@ export default function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <>
-          <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Group screenOptions={{ headerShown: false, animation: 'fade' }}>
+          <Stack.Screen name="Login">
+            {(props) => <LoginScreen {...props} appTitle="SOCIETY SECURITY" allowSignup={false} onForgotPassword={() => props.navigation.navigate('ForgotPassword')} />}
+          </Stack.Screen>
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
-        </>
+        </Stack.Group>
       ) : userRole === 'GUARD' ? (
         <>
-          <Stack.Screen name="GuardTabs" component={GuardTabs} />
+          <Stack.Screen name="GuardTabs" component={GuardShell} />
           <Stack.Screen name="ScanPass" component={ScanPassScreen} options={{ headerShown: true, title: 'Scan Pass' }} />
         </>
       ) : !isOnboarded ? (

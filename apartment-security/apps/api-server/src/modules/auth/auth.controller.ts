@@ -212,6 +212,9 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
           select: {
             id: true,
             name: true,
+            residentType: true,
+            isPrimary: true,
+            relationship: true,
             unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }
           }
         },

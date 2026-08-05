@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { colors } from '../theme/colors';
 import api, { API_URL } from '../utils/api';
 import tokenStorage from '../utils/tokenStorage';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import { scheduleLocalNotification } from '../utils/notifications';
 
 const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
@@ -85,7 +85,7 @@ const mapAlert = (raw: any): Alert => ({
   title: raw.title,
   subtitle: raw.body,
   time: raw.createdAt ? new Date(raw.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '',
-  icon: ALERT_PRIORITY_ICON[raw.priority] ?? '🔔',
+  icon: raw.priority ?? 'P3',  // store priority key; UI maps this to Ionicons
   unread: !raw.acknowledgedAt,
   entryId: raw.entryId ?? undefined,
   imageUrl: raw.imageUrl ?? null,
@@ -499,14 +499,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Only hit protected endpoints once logged in — firing these while still on
-  // the login screen produced 401s and noisy LogBox console.error stack traces.
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetchPasses();
-    fetchAlerts();
-    fetchProfileSettings();
     if (userRole === 'RESIDENT') {
+      fetchPasses();
+      fetchAlerts();
+      fetchProfileSettings();
       fetchEntries();
       fetchMembers();
       fetchAmenities();

@@ -2,17 +2,27 @@ import React, { useEffect } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, configureApi, useAuth } from '@apartment-security/shared-auth';
 import { DataProvider } from './src/context/DataContext';
 import { CommunityProvider } from './src/context/CommunityContext';
 import { ComplaintsProvider } from './src/context/ComplaintsContext';
 import { DomesticWorkersProvider } from './src/context/DomesticWorkersContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { useAuth } from './src/context/AuthContext';
+import { LanguageProvider } from './src/context/LanguageContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import { registerForPushNotificationsAsync } from './src/utils/notifications';
-import api from './src/utils/api';
+import api, { API_URL } from './src/utils/api';
+import tokenStorage from './src/utils/tokenStorage';
 
+// Configure shared API
+configureApi(
+  API_URL,
+  async () => tokenStorage.getItemAsync('userToken'),
+  async () => {
+    await tokenStorage.deleteItemAsync('userToken');
+    await tokenStorage.deleteItemAsync('userRefreshToken');
+  }
+);
 function ThemedApp() {
   const { colors, isDark } = useTheme();
   const { isAuthenticated } = useAuth();
@@ -56,17 +66,19 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <DataProvider>
-            <CommunityProvider>
-              <ComplaintsProvider>
-                <DomesticWorkersProvider>
-                  <ThemedApp />
-                </DomesticWorkersProvider>
-              </ComplaintsProvider>
-            </CommunityProvider>
-          </DataProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider allowedRoles={['RESIDENT', 'GUARD', 'MANAGER', 'ADMIN']} tokenKey="userToken" refreshTokenKey="userRefreshToken">
+            <DataProvider>
+              <CommunityProvider>
+                <ComplaintsProvider>
+                  <DomesticWorkersProvider>
+                    <ThemedApp />
+                  </DomesticWorkersProvider>
+                </ComplaintsProvider>
+              </CommunityProvider>
+            </DataProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../../theme/colors';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import { useCommunity, Poll } from '../../context/CommunityContext';
 
 export default function PollCard({ poll, tint }: { poll: Poll; tint?: string }) {

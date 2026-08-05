@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getStyles } from '../styles';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../../theme/ThemeContext';
 
 export default function CreateProfileScreen() {

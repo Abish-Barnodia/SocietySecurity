@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import api from '../utils/api';
-import { useAuth } from './AuthContext';
+import { useAuth } from '@apartment-security/shared-auth';
 
 export type ComplaintCategory =
   | 'MAINTENANCE'
@@ -97,7 +97,7 @@ type ComplaintsContextType = {
 const ComplaintsContext = createContext<ComplaintsContextType | undefined>(undefined);
 
 export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, userRole } = useAuth();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,8 +142,10 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetchComplaints();
-  }, [isAuthenticated, fetchComplaints]);
+    if (userRole === 'RESIDENT') {
+      fetchComplaints();
+    }
+  }, [isAuthenticated, userRole, fetchComplaints]);
 
   return (
     <ComplaintsContext.Provider

@@ -1,59 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Upload, Download, Plus, MoreVertical, Key, Megaphone, Users, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Search, Download, Plus, Users, Key, Megaphone, Loader2, ChevronRight, X, Phone, Mail, Home, Building2 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api/v1';
 
+interface FamilyMember {
+  id: string;
+  name: string;
+  relationship: string;
+  isPrimary: boolean;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+interface Family {
+  unitId: string;
+  familyName: string | null;
+  apartmentNumber: string;
+  tower: string;
+  floor: number;
+  totalMembers: number;
+  primaryResident: { id: string; name: string; phone: string | null; email: string | null } | null;
+  members: FamilyMember[];
+}
+
 const ResidentDirectory = () => {
   const [activeTab, setActiveTab] = useState('directory');
-  const [residents, setResidents] = useState<any[]>([]);
+  const [families, setFamilies] = useState<Family[]>([]);
   const [passes, setPasses] = useState<any[]>([]);
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [towerFilter, setTowerFilter] = useState('All Towers');
 
-  // New Resident Form State
-  const [newResidentForm, setNewResidentForm] = useState({
-    name: '', unit: '', tower: 'Tower A', floor: '1', members: '1', phone: '', email: '', isPrimary: true
+  const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
+  const [editFamilyUnitId, setEditFamilyUnitId] = useState<string | null>(null);
+  const [newResidentForm, setNewResidentForm] = useState<{
+    familyName: string;
+    unit: string;
+    tower: string;
+    floor: string;
+    members: Array<{ id?: string; name: string; phone: string; email: string; password: string; relationship: string; isPrimary: boolean }>;
+  }>({
+    familyName: '', unit: '', tower: 'Tower A', floor: '1',
+    members: [{ name: '', phone: '', email: '', password: '', relationship: 'Primary', isPrimary: true }]
   });
 
-  // Action Modals State
-  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
-  const [selectedResidentForDetails, setSelectedResidentForDetails] = useState<any>(null);
-  
-  const [isManagePassesOpen, setIsManagePassesOpen] = useState(false);
-  const [selectedResidentForPasses, setSelectedResidentForPasses] = useState<any>(null);
-  
+  const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
+  const [isFamilyDetailsOpen, setIsFamilyDetailsOpen] = useState(false);
+
   const [isComposeBroadcastOpen, setIsComposeBroadcastOpen] = useState(false);
   const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '', targetScope: 'ALL_RESIDENTS' });
 
-  // UI Polish States
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
-  const [suspendConfirmId, setSuspendConfirmId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
+  useEffect(() => { fetchData(); }, [activeTab]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
-      
       if (activeTab === 'directory') {
         const res = await fetch(`${API_BASE}/residents`, { headers });
         const data = await res.json();
-        if (data.status === 'success') setResidents(data.data);
+        if (data.status === 'success') setFamilies(data.data);
       } else if (activeTab === 'passes') {
         const res = await fetch(`${API_BASE}/passes`, { headers });
         const data = await res.json();
-        if (data.status === 'success') setPasses(data.data.passes); // Note: paginated in backend
+        if (data.status === 'success') setPasses(data.data.passes || []);
       } else if (activeTab === 'broadcasts') {
         const res = await fetch(`${API_BASE}/broadcasts`, { headers });
         const data = await res.json();
@@ -66,194 +89,120 @@ const ResidentDirectory = () => {
     }
   };
 
+  const uniqueTowers = useMemo(() => {
+    const towers = new Set(families.map(f => f.tower));
+    return ['All Towers', ...Array.from(towers).sort()];
+  }, [families]);
+
+  const filteredFamilies = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return families.filter(f => {
+      const towerMatch = towerFilter === 'All Towers' || f.tower === towerFilter;
+      if (!towerMatch) return false;
+      if (!q) return true;
+      return (
+        f.familyName?.toLowerCase().includes(q) ||
+        f.apartmentNumber.toLowerCase().includes(q) ||
+        f.primaryResident?.name.toLowerCase().includes(q) ||
+        f.members.some(m => m.name.toLowerCase().includes(q))
+      );
+    });
+  }, [families, searchQuery, towerFilter]);
+
+  const displayName = (f: Family) => f.familyName || `Unit ${f.apartmentNumber} Family`;
+  const familyIsActive = (f: Family) => f.members.some(m => m.isActive);
+
   const handleAddResident = async () => {
+    if (!newResidentForm.unit.trim()) { showToast('Unit number is required', 'error'); return; }
+    const primary = newResidentForm.members[0];
+    if (!primary.name.trim()) { showToast('Primary member name is required', 'error'); return; }
+    if (!primary.phone && !primary.email) { showToast('Primary member needs a phone or email', 'error'); return; }
+    for (const m of newResidentForm.members) {
+      if (!m.id && (!m.password || m.password.length < 6)) {
+        showToast(`Password for ${m.name || 'a new member'} must be at least 6 characters`, 'error');
+        return;
+      }
+      if (m.id && m.password && m.password.length < 6) {
+        showToast(`Password for ${m.name} must be at least 6 characters`, 'error');
+        return;
+      }
+    }
     try {
-      // ponytail: Minimal mock unit logic. If unit doesn't exist, this fails in backend, 
-      // but we assume there's a script or we gracefully fail.
-      // In a real app we'd fetch units and have a dropdown, but for now we'll just pass unitId = 123
-      const res = await fetch(`${API_BASE}/residents`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${getAuthToken()}`,
-          'Content-Type': 'application/json'
-        },
+      const url = editFamilyUnitId ? `${API_BASE}/residents/families/${editFamilyUnitId}` : `${API_BASE}/residents/household`;
+      const method = editFamilyUnitId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
         body: JSON.stringify({
-          name: newResidentForm.name,
-          phone: newResidentForm.phone,
+          familyName: newResidentForm.familyName || undefined,
           unit: newResidentForm.unit,
           tower: newResidentForm.tower,
           floor: newResidentForm.floor,
-          isPrimary: newResidentForm.isPrimary
+          members: newResidentForm.members.map(m => ({ ...m, phone: m.phone || undefined, email: m.email || undefined, id: m.id || undefined }))
         })
       });
+      const data = await res.json();
       if (res.ok) {
         setIsAddResidentOpen(false);
-        setNewResidentForm({ name: '', unit: '', tower: 'Tower A', floor: '1', members: '1', phone: '', email: '', isPrimary: true });
-        showToast('Resident added successfully', 'success');
+        setEditFamilyUnitId(null);
+        setNewResidentForm({ familyName: '', unit: '', tower: 'Tower A', floor: '1', members: [{ name: '', phone: '', email: '', password: '', relationship: 'Primary', isPrimary: true }] });
+        showToast(editFamilyUnitId ? 'Household updated successfully!' : 'Household added successfully!', 'success');
+        if (isFamilyDetailsOpen && editFamilyUnitId) {
+          setIsFamilyDetailsOpen(false); // Close details modal to refresh
+        }
         fetchData();
       } else {
-        const errorData = await res.json();
-        showToast(`Failed to add resident: ${errorData.message || 'Unknown error'}`, 'error');
+        showToast(data.message || 'Error saving household', 'error');
       }
-    } catch (e) {
-      console.error(e);
-      showToast('An unexpected error occurred', 'error');
+    } catch (error) {
+      showToast('Connection error', 'error');
     }
   };
 
-  const confirmSuspend = async () => {
-    if (!suspendConfirmId) return;
+  const confirmSuspendFamily = async () => {
+    if (!suspendConfirmUnitId) return;
+    const family = families.find(f => f.unitId === suspendConfirmUnitId);
+    if (!family) return;
     try {
-      const res = await fetch(`${API_BASE}/residents/${suspendConfirmId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-      });
-      if (res.ok) {
-        showToast('Resident suspended successfully', 'success');
-        setSuspendConfirmId(null);
-        fetchData(); // refresh the list
-      } else {
-        const errorData = await res.json();
-        showToast(`Failed to suspend resident: ${errorData.message || 'Unknown error'}`, 'error');
+      for (const member of family.members) {
+        await fetch(`${API_BASE}/residents/${member.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
       }
-    } catch (e) {
-      console.error(e);
-      showToast('An unexpected error occurred', 'error');
-    }
-  };
-
-  const handleSuspend = (residentId: string) => {
-    setSuspendConfirmId(residentId);
-  };
-
-  const handleViewDetails = (resident: any) => {
-    setSelectedResidentForDetails(resident);
-    setIsViewDetailsOpen(true);
-  };
-
-  const handleManagePasses = (resident: any) => {
-    setSelectedResidentForPasses(resident);
-    setIsManagePassesOpen(true);
+      showToast('Family suspended', 'success');
+      setSuspendConfirmUnitId(null);
+      fetchData();
+    } catch (e) { showToast('An unexpected error occurred', 'error'); }
   };
 
   const handleExportCSV = () => {
-    if (residents.length === 0) {
-      showToast("No residents available to export.", 'error');
-      return;
-    }
-
-    showToast("CSV export started. The file will download shortly.", 'success');
-    
-    // Create CSV header
-    let csvContent = "Name,Phone,Unit,Tower,Floor,Status,Move-in Date\n";
-    
-    // Add rows
-    residents.forEach(r => {
-      const name = `"${r.name || ''}"`;
-      const phone = `"${r.user?.phone || ''}"`;
-      const unit = `"${r.unit?.unitNumber || ''}"`;
-      const tower = `"${r.unit?.tower || ''}"`;
-      const floor = `"${r.unit?.floor || ''}"`;
-      const status = `"${r.user?.isActive ? 'Active' : 'Suspended'}"`;
-      const date = `"${new Date(r.createdAt).toLocaleDateString()}"`;
-      
-      csvContent += `${name},${phone},${unit},${tower},${floor},${status},${date}\n`;
+    if (families.length === 0) { showToast('No families to export', 'error'); return; }
+    let csv = 'Family Name,Apartment,Tower,Floor,Primary Resident,Total Members,Phone\n';
+    families.forEach(f => {
+      csv += `"${displayName(f)}","${f.apartmentNumber}","${f.tower}","${f.floor}","${f.primaryResident?.name || ''}","${f.totalMembers}","${f.primaryResident?.phone || ''}"\n`;
     });
-
-    // Trigger download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `resident_directory_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleImportCSV = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.onchange = async (e: any) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const text = event.target?.result as string;
-        const lines = text.split('\n').filter(l => l.trim().length > 0);
-        
-        if (lines.length < 2) {
-          showToast("CSV file must contain a header and at least one row.", 'error');
-          return;
-        }
-
-        showToast("Processing CSV...", 'success');
-        setLoading(true);
-
-        let successCount = 0;
-        let failCount = 0;
-
-        // Simple CSV parser assuming format: Name, Phone, Unit, Tower, Floor
-        // We always skip the first line (header)
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(s => s.trim());
-          if (cols.length < 3) continue; // Need at least name, phone, unit
-          
-          const name = cols[0];
-          const phone = cols[1];
-          const unitNumber = cols[2];
-          const tower = cols[3] || 'Tower A';
-          const floor = parseInt(cols[4]) || 1;
-
-          try {
-            const res = await fetch(`${API_BASE}/residents`, {
-              method: 'POST',
-              headers: { 
-                'Authorization': `Bearer ${getAuthToken()}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ name, phone, unitNumber, tower, floor, isPrimary: true })
-            });
-            if (res.ok) successCount++;
-            else failCount++;
-          } catch (err) {
-            failCount++;
-          }
-        }
-
-        showToast(`Import complete! Added ${successCount} residents. ${failCount > 0 ? `(${failCount} failed)` : ''}`, successCount > 0 ? 'success' : 'error');
-        fetchData(); // This will also set loading back to false
-      };
-      reader.readAsText(file);
-    };
-    input.click();
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `resident_directory_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast('CSV exported', 'success');
   };
 
   const handleComposeBroadcast = async () => {
     try {
       const res = await fetch(`${API_BASE}/broadcasts`, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${getAuthToken()}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(broadcastForm)
       });
       if (res.ok) {
         setIsComposeBroadcastOpen(false);
         setBroadcastForm({ title: '', body: '', targetScope: 'ALL_RESIDENTS' });
-        showToast('Broadcast sent successfully!', 'success');
+        showToast('Broadcast sent!', 'success');
         fetchData();
-      } else {
-        const errorData = await res.json();
-        showToast(`Failed to broadcast: ${errorData.message || 'Unknown error'}`, 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showToast('An unexpected error occurred', 'error');
-    }
+      } else { const d = await res.json(); showToast(`Failed: ${d.message || 'Unknown error'}`, 'error'); }
+    } catch (e) { showToast('An unexpected error occurred', 'error'); }
   };
 
   const tabs = [
@@ -264,43 +213,33 @@ const ResidentDirectory = () => {
 
   return (
     <div style={{ padding: 24, flex: 1, backgroundColor: 'var(--bg-secondary)', overflowY: 'auto' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--text-main)' }}>Resident Directory</h1>
-          <p style={{ margin: 0, color: 'var(--text-muted)' }}>Account management, credential auditing, pass oversight, and broadcast composition</p>
+          <p style={{ margin: 0, color: 'var(--text-muted)' }}>Family management, credential auditing, pass oversight, and broadcast composition</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'white' }} onClick={handleExportCSV}>
             <Download size={16} /> Export CSV
           </button>
-          <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'white' }} onClick={handleImportCSV}>
-            <Upload size={16} /> Import CSV
-          </button>
           <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setIsAddResidentOpen(true)}>
-            <Plus size={16} /> Add Resident
+            <Plus size={16} /> Add Household
           </button>
         </div>
       </div>
 
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
         {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: activeTab === tab.id ? 'white' : 'transparent',
-              border: activeTab === tab.id ? '1px solid var(--border-color)' : '1px solid transparent',
-              borderRadius: 8,
-              fontWeight: activeTab === tab.id ? 600 : 500,
-              color: activeTab === tab.id ? 'var(--text-main)' : 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              boxShadow: activeTab === tab.id ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
-            }}
-          >
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '8px 16px', backgroundColor: activeTab === tab.id ? 'white' : 'transparent',
+            border: activeTab === tab.id ? '1px solid var(--border-color)' : '1px solid transparent',
+            borderRadius: 8, fontWeight: activeTab === tab.id ? 600 : 500,
+            color: activeTab === tab.id ? 'var(--text-main)' : 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            boxShadow: activeTab === tab.id ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
+          }}>
             {tab.icon} {tab.label}
           </button>
         ))}
@@ -312,163 +251,162 @@ const ResidentDirectory = () => {
         </div>
       ) : (
         <>
-          {/* DIRECTORY TAB */}
           {activeTab === 'directory' && (
             <>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-                <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
+              {/* Search & Filters */}
+              <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+                <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
                   <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
-                  <input type="text" className="form-input" placeholder="Search residents or units..." style={{ paddingLeft: 36, backgroundColor: 'white' }} />
+                  <input type="text" className="form-input" placeholder="Search by family, unit, or member name..."
+                    style={{ paddingLeft: 36, backgroundColor: 'white' }}
+                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
-                <select className="form-input" style={{ width: 'auto', backgroundColor: 'white' }}>
-                  <option>All Towers</option>
-                  <option>Tower A</option>
-                  <option>Tower B</option>
-                </select>
-                <select className="form-input" style={{ width: 'auto', backgroundColor: 'white' }}>
-                  <option>All Status</option>
-                  <option>Active</option>
-                  <option>Suspended</option>
+                <select className="form-input" style={{ width: 'auto', backgroundColor: 'white' }}
+                  value={towerFilter} onChange={e => setTowerFilter(e.target.value)}>
+                  {uniqueTowers.map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 20 }}>
-                {residents.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)' }}>No residents found. Try adding one!</p>
-                ) : (
-                  residents.map(resident => (
-                    <div key={resident.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                        <div>
-                          <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 600 }}>{resident.name}</h3>
-                          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>{resident.unit?.unitNumber ? `Unit ${resident.unit.unitNumber}` : 'Unassigned Unit'}</p>
-                        </div>
-                        <span style={{ 
-                          padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, 
-                          backgroundColor: resident.user?.isActive ? '#E0F2FE' : '#FEE2E2', 
-                          color: resident.user?.isActive ? '#0369A1' : '#991B1B' 
-                        }}>
-                          {resident.user?.isActive ? 'active' : 'suspended'}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                        <div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Occupancy</div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>Owner</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Members</div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>1</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Active Passes</div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>0</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>Since</div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{new Date(resident.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-                        {resident.user?.phone || 'No Phone'}
-                      </div>
-
-                      <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
-                        <button onClick={() => handleViewDetails(resident)} style={{ flex: 1, padding: '8px 0', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}>View Details</button>
-                        <button onClick={() => handleManagePasses(resident)} style={{ flex: 1, padding: '8px 0', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}>Manage Passes</button>
-                        {resident.user?.isActive ? (
-                          <button onClick={() => handleSuspend(resident.id)} style={{ flex: 1, padding: '8px 0', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: 'none', color: '#D97706', cursor: 'pointer' }}>Suspend</button>
-                        ) : (
-                          <button disabled style={{ flex: 1, padding: '8px 0', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'not-allowed' }}>Suspended</button>
-                        )}
-                      </div>
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: 14, marginBottom: 24 }}>
+                {[
+                  { icon: <Home size={16} color="var(--primary)" />, value: filteredFamilies.length, label: 'Families' },
+                  { icon: <Users size={16} color="var(--primary)" />, value: filteredFamilies.reduce((s, f) => s + f.totalMembers, 0), label: 'Total Residents' },
+                  { icon: <Building2 size={16} color="var(--primary)" />, value: uniqueTowers.length - 1, label: 'Towers' },
+                ].map(stat => (
+                  <div key={stat.label} style={{ backgroundColor: 'white', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 18px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {stat.icon}
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>{stat.value}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{stat.label}</div>
                     </div>
-                  ))
-                )}
+                  </div>
+                ))}
               </div>
+
+              {/* Family Cards */}
+              {filteredFamilies.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
+                  <Users size={40} style={{ marginBottom: 12, opacity: 0.25 }} />
+                  <p style={{ margin: 0, fontSize: 15 }}>{searchQuery ? 'No families match your search.' : 'No families yet. Click "Add Household" to get started!'}</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
+                  {filteredFamilies.map(family => {
+                    const active = familyIsActive(family);
+                    return (
+                      <div key={family.unitId}
+                        style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.1s' }}
+                        onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+                        onClick={() => { setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                          <div>
+                            <h3 style={{ margin: '0 0 5px 0', fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{displayName(family)}</h3>
+                            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Home size={11} /> Unit {family.apartmentNumber} &middot; {family.tower}
+                            </p>
+                          </div>
+                          <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: active ? '#E0F2FE' : '#FEE2E2', color: active ? '#0369A1' : '#991B1B' }}>
+                            {active ? 'active' : 'suspended'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                          <div style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Primary Resident</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{family.primaryResident?.name || '-'}</div>
+                          </div>
+                          <div style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Members</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)' }}>{family.totalMembers}</div>
+                          </div>
+                        </div>
+
+                        {/* Member name pills */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14, minHeight: 26 }}>
+                          {family.members.slice(0, 3).map(m => (
+                            <span key={m.id} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, backgroundColor: m.isPrimary ? '#EDE9FE' : '#F1F5F9', color: m.isPrimary ? '#6D28D9' : '#64748B' }}>
+                              {m.isPrimary && '\u2605 '}{m.name}
+                            </span>
+                          ))}
+                          {family.members.length > 3 && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#94A3B8' }}>+{family.members.length - 3} more</span>}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid var(--border-color)', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <button
+                            onClick={e => { e.stopPropagation(); setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                            View Family <ChevronRight size={14} />
+                          </button>
+                          {active ? (
+                            <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
+                              style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
+                              Suspend
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Suspended</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
 
-          {/* PASSES TAB */}
           {activeTab === 'passes' && (
             <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#F8FAFC' }}>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Pass ID</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Resident / Unit</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Visitor</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Type</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Status</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Created</th>
+                    {['Pass ID', 'Resident / Unit', 'Visitor', 'Type', 'Status', 'Created'].map(h => (
+                      <th key={h} style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {passes.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)' }}>No passes found.</td>
-                    </tr>
-                  ) : (
-                    passes.map(pass => (
+                  {passes.length === 0
+                    ? <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No passes found.</td></tr>
+                    : passes.map(pass => (
                       <tr key={pass.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '16px 20px', fontSize: 13, fontFamily: 'monospace' }}>PASS-{pass.id.slice(-4).toUpperCase()}</td>
-                        <td style={{ padding: '16px 20px', fontSize: 13 }}>
+                        <td style={{ padding: '14px 20px', fontSize: 13, fontFamily: 'monospace' }}>PASS-{pass.id.slice(-4).toUpperCase()}</td>
+                        <td style={{ padding: '14px 20px', fontSize: 13 }}>
                           <div style={{ fontWeight: 500 }}>{pass.resident?.name || 'Unknown'}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{pass.unit?.unitNumber || 'N/A'}</div>
                         </td>
-                        <td style={{ padding: '16px 20px', fontSize: 13 }}>{pass.visitorName}</td>
-                        <td style={{ padding: '16px 20px', fontSize: 13 }}>
-                          <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#475569' }}>
-                            {pass.type}
+                        <td style={{ padding: '14px 20px', fontSize: 13 }}>{pass.visitorName}</td>
+                        <td style={{ padding: '14px 20px' }}><span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#475569' }}>{pass.type}</span></td>
+                        <td style={{ padding: '14px 20px' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: pass.status === 'ACTIVE' ? '#E0F2FE' : '#FEF3C7', color: pass.status === 'ACTIVE' ? '#0369A1' : '#B45309' }}>
+                            {pass.status?.toLowerCase()}
                           </span>
                         </td>
-                        <td style={{ padding: '16px 20px', fontSize: 13 }}>
-                           <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: pass.status === 'ACTIVE' ? '#E0F2FE' : '#FEF3C7', color: pass.status === 'ACTIVE' ? '#0369A1' : '#B45309' }}>
-                            {pass.status.toLowerCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: '16px 20px', fontSize: 13 }}>
-                          {new Date(pass.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
+                        <td style={{ padding: '14px 20px', fontSize: 13 }}>{new Date(pass.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                       </tr>
-                    ))
-                  )}
+                    ))}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* BROADCASTS TAB */}
           {activeTab === 'broadcasts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {broadcasts.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No broadcasts found.</p>
-              ) : (
-                broadcasts.map(broadcast => (
-                  <div key={broadcast.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{broadcast.title}</h3>
-                      <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#FEF3C7', color: '#B45309' }}>
-                        important
-                      </span>
+              {broadcasts.length === 0
+                ? <p style={{ color: 'var(--text-muted)' }}>No broadcasts yet.</p>
+                : broadcasts.map(b => (
+                  <div key={b.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{b.title}</h3>
+                      <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#FEF3C7', color: '#B45309' }}>important</span>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-                      By {broadcast.sentBy} • {new Date(broadcast.sentAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', year: 'numeric' })}
-                    </div>
-                    <p style={{ margin: '0 0 16px 0', fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>
-                      {broadcast.body}
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Users size={14} /> {broadcast.targetScope}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#00C896' }}></span> sent</div>
-                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>By {b.sentBy} &middot; {new Date(b.sentAt).toLocaleString()}</div>
+                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>{b.body}</p>
                   </div>
-                ))
-              )}
-              
-              <button className="btn btn-outline" style={{ marginTop: 16, alignSelf: 'center', backgroundColor: 'white' }} onClick={() => setIsComposeBroadcastOpen(true)}>
+                ))}
+              <button className="btn btn-outline" style={{ marginTop: 8, alignSelf: 'center', backgroundColor: 'white' }} onClick={() => setIsComposeBroadcastOpen(true)}>
                 + Compose New Broadcast
               </button>
             </div>
@@ -476,196 +414,263 @@ const ResidentDirectory = () => {
         </>
       )}
 
-      {/* ADD RESIDENT MODAL */}
+      {/* ===== FAMILY DETAILS MODAL ===== */}
+      {isFamilyDetailsOpen && selectedFamily && (
+        <div className="modal-overlay" onClick={() => setIsFamilyDetailsOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}
+            style={{ width: 600, maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '24px 28px 18px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+              <div>
+                <h2 style={{ margin: '0 0 6px 0', fontSize: 20, fontWeight: 700 }}>{displayName(selectedFamily)}</h2>
+                <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-muted)' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Home size={12} /> Unit {selectedFamily.apartmentNumber}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building2 size={12} /> {selectedFamily.tower}</span>
+                  <span>Floor {selectedFamily.floor}</span>
+                </div>
+              </div>
+              <button onClick={() => setIsFamilyDetailsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 28px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+              {[
+                { label: 'Primary Resident', value: selectedFamily.primaryResident?.name || 'â€”' },
+                { label: 'Total Members', value: String(selectedFamily.totalMembers) },
+                { label: 'Status', value: familyIsActive(selectedFamily) ? 'Active' : 'Suspended', color: familyIsActive(selectedFamily) ? '#059669' : '#DC2626' },
+              ].map(s => (
+                <div key={s.label} style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{s.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: s.color }}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ padding: '16px 28px 20px', overflowY: 'auto', flex: 1 }}>
+              <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Family Members</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {selectedFamily.members.map(member => (
+                  <div key={member.id} style={{
+                    padding: 16, borderRadius: 10,
+                    border: `1px solid ${member.isPrimary ? '#DDD6FE' : 'var(--border-color)'}`,
+                    backgroundColor: member.isPrimary ? '#FAFAFA' : 'white',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <div style={{
+                          width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 15, fontWeight: 700,
+                          backgroundColor: member.isPrimary ? '#EDE9FE' : '#F1F5F9',
+                          color: member.isPrimary ? '#6D28D9' : '#475569',
+                        }}>
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{member.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{member.relationship}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {member.isPrimary && <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: '#EDE9FE', color: '#6D28D9' }}>Primary</span>}
+                        <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: member.isActive ? '#DCFCE7' : '#FEE2E2', color: member.isActive ? '#15803D' : '#991B1B' }}>
+                          {member.isActive ? 'Active' : 'Suspended'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                      {member.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Phone size={12} />{member.phone}</div>}
+                      {member.email && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Mail size={12} />{member.email}</div>}
+                      {!member.phone && !member.email && <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No contact info</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding: '14px 28px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
+              <button onClick={() => {
+                setEditFamilyUnitId(selectedFamily.unitId);
+                setNewResidentForm({
+                  familyName: selectedFamily.familyName || '',
+                  unit: selectedFamily.apartmentNumber,
+                  tower: selectedFamily.tower,
+                  floor: String(selectedFamily.floor || '1'),
+                  members: selectedFamily.members.map(m => ({
+                    id: m.id,
+                    name: m.name,
+                    phone: m.phone || '',
+                    email: m.email || '',
+                    password: '',
+                    relationship: m.relationship,
+                    isPrimary: m.isPrimary
+                  }))
+                });
+                setIsAddResidentOpen(true);
+              }}
+                style={{ padding: '9px 20px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #E2E8F0', color: '#475569', borderRadius: 6, cursor: 'pointer' }}>
+                Edit Family
+              </button>
+              {familyIsActive(selectedFamily) && (
+                <button onClick={() => { setIsFamilyDetailsOpen(false); setSuspendConfirmUnitId(selectedFamily.unitId); }}
+                  style={{ padding: '9px 20px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
+                  Suspend Family
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={() => setIsFamilyDetailsOpen(false)} style={{ padding: '9px 24px' }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ADD/EDIT HOUSEHOLD MODAL ===== */}
       {isAddResidentOpen && (
-        <div className="modal-overlay" onClick={() => setIsAddResidentOpen(false)}>
+        <div className="modal-overlay" onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Add New Resident</h3>
-                <p className="modal-subtitle">Create a household account and assign unit</p>
+                <h3 className="modal-title">{editFamilyUnitId ? 'Edit Household' : 'Add New Household'}</h3>
+                <p className="modal-subtitle">{editFamilyUnitId ? 'Update family details and members' : 'Create a family account and assign a unit'}</p>
               </div>
-              <button className="modal-close" onClick={() => setIsAddResidentOpen(false)}>×</button>
+              <button className="modal-close" onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>&times;</button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 }}>
               <div>
-                <label className="form-label">Household Name</label>
-                <input type="text" className="form-input" placeholder="e.g. Sharma Family" value={newResidentForm.name} onChange={e => setNewResidentForm({...newResidentForm, name: e.target.value})} />
+                <label className="form-label">Household / Family Name (Optional)</label>
+                <input type="text" autoComplete="off" className="form-input" placeholder="e.g. Sharma Family"
+                  value={newResidentForm.familyName} onChange={e => setNewResidentForm({ ...newResidentForm, familyName: e.target.value })} />
               </div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label">Unit</label>
-                  <input type="text" className="form-input" placeholder="e.g. A-501" value={newResidentForm.unit} onChange={e => setNewResidentForm({...newResidentForm, unit: e.target.value})} />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 2 }}>
+                  <label className="form-label">Unit Number <span style={{ color: '#DC2626' }}>*</span></label>
+                  <input type="text" className="form-input" placeholder="e.g. A-501"
+                    value={newResidentForm.unit} onChange={e => setNewResidentForm({ ...newResidentForm, unit: e.target.value })} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label className="form-label">Tower</label>
-                  <select className="form-input" value={newResidentForm.tower} onChange={e => setNewResidentForm({...newResidentForm, tower: e.target.value})}>
-                    <option>Tower A</option>
-                    <option>Tower B</option>
+                  <select className="form-input" value={newResidentForm.tower} onChange={e => setNewResidentForm({ ...newResidentForm, tower: e.target.value })}>
+                    <option>Tower A</option><option>Tower B</option><option>Tower C</option>
                   </select>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 16 }}>
                 <div style={{ flex: 1 }}>
                   <label className="form-label">Floor</label>
-                  <input type="text" className="form-input" value={newResidentForm.floor} onChange={e => setNewResidentForm({...newResidentForm, floor: e.target.value})} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label">Members</label>
-                  <input type="text" className="form-input" value={newResidentForm.members} onChange={e => setNewResidentForm({...newResidentForm, members: e.target.value})} />
+                  <input type="text" className="form-input" value={newResidentForm.floor} onChange={e => setNewResidentForm({ ...newResidentForm, floor: e.target.value })} />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label">Phone</label>
-                  <input type="text" className="form-input" placeholder="+91 98xxx xxxxx" value={newResidentForm.phone} onChange={e => setNewResidentForm({...newResidentForm, phone: e.target.value})} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="form-label">Email</label>
-                  <input type="email" className="form-input" placeholder="family@email.com" value={newResidentForm.email} onChange={e => setNewResidentForm({...newResidentForm, email: e.target.value})} />
-                </div>
+
+              <div style={{ marginTop: 8, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
+                <h4 style={{ margin: '0 0 14px 0', fontSize: 14, fontWeight: 700 }}>Family Members</h4>
+                {newResidentForm.members.map((member, index) => (
+                  <div key={index} style={{ backgroundColor: '#F9FAFB', padding: 16, borderRadius: 10, marginBottom: 10, position: 'relative', border: '1px solid #E5E7EB' }}>
+                    {index === 0 && (
+                      <div style={{ position: 'absolute', top: -1, left: 12, padding: '2px 8px', backgroundColor: '#EDE9FE', color: '#6D28D9', fontSize: 10, fontWeight: 700, borderRadius: '0 0 6px 6px' }}>
+                        PRIMARY RESIDENT
+                      </div>
+                    )}
+                    {index > 0 && (
+                      <button onClick={() => { const u = [...newResidentForm.members]; u.splice(index, 1); setNewResidentForm({ ...newResidentForm, members: u }); }}
+                        style={{ position: 'absolute', top: 8, right: 8, background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>&times;</button>
+                    )}
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 12, marginTop: index === 0 ? 14 : 0 }}>
+                      <div style={{ flex: 1 }}>
+                        <label className="form-label">Full Name <span style={{ color: '#DC2626' }}>*</span></label>
+                        <input type="text" className="form-input" placeholder="Name" value={member.name}
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].name = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label className="form-label">Relationship</label>
+                        <select className="form-input" value={member.relationship}
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].relationship = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }}>
+                          <option>Primary</option><option>Spouse</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <label className="form-label">Phone</label>
+                        <input type="text" className="form-input" placeholder="+91 98765 43210" value={member.phone}
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].phone = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label className="form-label">Email</label>
+                        <input type="email" className="form-input" placeholder="email@example.com" value={member.email}
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].email = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <label className="form-label">Password {(!member.id) && <span style={{ color: '#DC2626' }}>*</span>}</label>
+                      <input type="password" autoComplete="new-password" className="form-input" placeholder={member.id ? "Leave blank to keep unchanged" : "Individual password (min 6 chars)"} value={member.password}
+                        onChange={e => { const u = [...newResidentForm.members]; u[index].password = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                    </div>
+                  </div>
+                ))}
+                <button className="btn btn-outline" style={{ width: '100%', borderStyle: 'dashed', backgroundColor: 'transparent' }}
+                  onClick={() => setNewResidentForm({ ...newResidentForm, members: [...newResidentForm.members, { name: '', phone: '', email: '', password: '', relationship: 'Other', isPrimary: false }] })}>
+                  + Add Member
+                </button>
               </div>
-              
-              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsAddResidentOpen(false)}>Cancel</button>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddResident}>Create Resident</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* VIEW DETAILS MODAL */}
-      {isViewDetailsOpen && selectedResidentForDetails && (
-        <div className="modal-overlay" onClick={() => setIsViewDetailsOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: 500, padding: 0 }}>
-            <div className="modal-header" style={{ padding: '24px 24px 16px', borderBottom: 'none' }}>
-              <div>
-                <h3 className="modal-title" style={{ fontSize: 18, color: '#111827' }}>Resident Details</h3>
-              </div>
-              <button className="modal-close" onClick={() => setIsViewDetailsOpen(false)}>×</button>
-            </div>
-            
-            <div className="modal-body" style={{ padding: '0 24px 24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Name</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>{selectedResidentForDetails.name}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Unit</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>{selectedResidentForDetails.unit?.unitNumber} — Tower {selectedResidentForDetails.unit?.tower || 'A'}, Floor {selectedResidentForDetails.unit?.floor || 1}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Status</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>{selectedResidentForDetails.user?.isActive ? 'Active' : 'Suspended'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Occupancy</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>Owner</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Members</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>1</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Active Passes</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>0</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Total Passes</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>0</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Move-in</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>{new Date(selectedResidentForDetails.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Phone</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>{selectedResidentForDetails.user?.phone || 'No Phone'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Email</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>Not Provided</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
-                <button className="btn btn-primary" style={{ backgroundColor: '#008B8B', borderColor: '#008B8B', padding: '8px 24px', fontWeight: 600, fontSize: 14, borderRadius: 6 }} onClick={() => setIsViewDetailsOpen(false)}>Close</button>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>Cancel</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddResident}>{editFamilyUnitId ? 'Save Changes' : 'Create Household'}</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MANAGE PASSES MODAL */}
-      {isManagePassesOpen && selectedResidentForPasses && (
-        <div className="modal-overlay" onClick={() => setIsManagePassesOpen(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ width: 500, padding: 0 }}>
-            <div className="modal-header" style={{ padding: '24px 24px 16px', borderBottom: 'none' }}>
+      {/* ===== CONFIRM SUSPEND MODAL ===== */}
+      {suspendConfirmUnitId && (
+        <div className="modal-overlay" onClick={() => setSuspendConfirmUnitId(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-header">
               <div>
-                <h3 className="modal-title" style={{ fontSize: 18, color: '#111827' }}>Manage Passes — {selectedResidentForPasses.name}</h3>
+                <h3 className="modal-title">Suspend Family</h3>
+                <p className="modal-subtitle" style={{ color: '#DC2626' }}>All family members will lose access.</p>
               </div>
-              <button className="modal-close" onClick={() => setIsManagePassesOpen(false)}>×</button>
+              <button className="modal-close" onClick={() => setSuspendConfirmUnitId(null)}>&times;</button>
             </div>
-            
-            <div className="modal-body" style={{ padding: '0 24px 24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Active Passes</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>0</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Total Created</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>0</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #f3f4f6' }}>
-                  <span style={{ color: '#9CA3AF', fontSize: 14 }}>Duress Active</span>
-                  <span style={{ color: '#374151', fontSize: 14, fontWeight: 500 }}>No</span>
-                </div>
-                
-                <div style={{ backgroundColor: '#F9FAFB', border: '1px solid #F3F4F6', borderRadius: 6, padding: '16px', marginTop: 16 }}>
-                  <p style={{ margin: 0, fontSize: 14, color: '#6B7280', lineHeight: 1.5 }}>
-                    Pass management actions would be available here: revoke passes, create new passes, view pass history, and set expiry dates.
-                  </p>
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-                <button style={{ backgroundColor: 'transparent', border: 'none', color: '#4B5563', padding: '8px 16px', fontWeight: 600, fontSize: 14, cursor: 'pointer' }} onClick={() => setIsManagePassesOpen(false)}>Cancel</button>
-                <button className="btn btn-primary" style={{ backgroundColor: '#008B8B', borderColor: '#008B8B', padding: '8px 24px', fontWeight: 600, fontSize: 14, borderRadius: 6 }} onClick={() => setIsManagePassesOpen(false)}>Save</button>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 20px 0', fontSize: 14 }}>All members in this household will lose app access and their passes will be invalidated.</p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmUnitId(null)}>Cancel</button>
+                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmSuspendFamily}>Yes, Suspend</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* COMPOSE BROADCAST MODAL */}
+      {/* ===== COMPOSE BROADCAST MODAL ===== */}
       {isComposeBroadcastOpen && (
         <div className="modal-overlay" onClick={() => setIsComposeBroadcastOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">Compose Broadcast</h3>
-                <p className="modal-subtitle">Send an announcement to residents</p>
+                <p className="modal-subtitle">Send an announcement to all residents</p>
               </div>
-              <button className="modal-close" onClick={() => setIsComposeBroadcastOpen(false)}>×</button>
+              <button className="modal-close" onClick={() => setIsComposeBroadcastOpen(false)}>&times;</button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="form-label">Title</label>
-                <input type="text" className="form-input" placeholder="e.g. Water Supply Interruption" value={broadcastForm.title} onChange={e => setBroadcastForm({...broadcastForm, title: e.target.value})} />
+                <input type="text" className="form-input" placeholder="e.g. Water Supply Interruption"
+                  value={broadcastForm.title} onChange={e => setBroadcastForm({ ...broadcastForm, title: e.target.value })} />
               </div>
               <div>
                 <label className="form-label">Message</label>
-                <textarea className="form-input" placeholder="Enter your message..." style={{ height: 100, resize: 'none' }} value={broadcastForm.body} onChange={e => setBroadcastForm({...broadcastForm, body: e.target.value})} />
+                <textarea className="form-input" placeholder="Enter your message..." style={{ height: 100, resize: 'none' }}
+                  value={broadcastForm.body} onChange={e => setBroadcastForm({ ...broadcastForm, body: e.target.value })} />
               </div>
               <div>
                 <label className="form-label">Target Scope</label>
-                <select className="form-input" value={broadcastForm.targetScope} onChange={e => setBroadcastForm({...broadcastForm, targetScope: e.target.value})}>
+                <select className="form-input" value={broadcastForm.targetScope} onChange={e => setBroadcastForm({ ...broadcastForm, targetScope: e.target.value })}>
                   <option value="ALL_RESIDENTS">All Residents</option>
                   <option value="TOWER_A">Tower A Only</option>
                   <option value="TOWER_B">Tower B Only</option>
                 </select>
               </div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsComposeBroadcastOpen(false)}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#D97706', borderColor: '#D97706' }} onClick={handleComposeBroadcast}>Send Broadcast</button>
               </div>
@@ -673,49 +678,16 @@ const ResidentDirectory = () => {
           </div>
         </div>
       )}
-      {/* CONFIRM SUSPEND MODAL */}
-      {suspendConfirmId && (
-        <div className="modal-overlay" onClick={() => setSuspendConfirmId(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">Suspend Resident</h3>
-                <p className="modal-subtitle" style={{ color: '#DC2626' }}>Warning: This action cannot be undone.</p>
-              </div>
-              <button className="modal-close" onClick={() => setSuspendConfirmId(null)}>×</button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-main)' }}>
-                Are you sure you want to suspend this resident? They will lose access to the app, and all their active passes will be invalidated.
-              </p>
-              <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmId(null)}>Cancel</button>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626', color: 'white' }} onClick={confirmSuspend}>Yes, Suspend</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* TOAST NOTIFICATION */}
+      {/* ===== TOAST ===== */}
       {toast && (
         <div style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
           backgroundColor: toast.type === 'error' ? '#FEE2E2' : '#DCFCE7',
           color: toast.type === 'error' ? '#991B1B' : '#166534',
-          padding: '12px 20px',
-          borderRadius: 8,
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          zIndex: 9999,
+          padding: '12px 20px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
           border: `1px solid ${toast.type === 'error' ? '#FCA5A5' : '#86EFAC'}`,
-          fontWeight: 500,
-          fontSize: 14,
-          animation: 'slideIn 0.3s ease-out'
+          fontWeight: 500, fontSize: 14, animation: 'slideIn 0.3s ease-out'
         }}>
           {toast.message}
         </div>
@@ -725,3 +697,4 @@ const ResidentDirectory = () => {
 };
 
 export default ResidentDirectory;
+

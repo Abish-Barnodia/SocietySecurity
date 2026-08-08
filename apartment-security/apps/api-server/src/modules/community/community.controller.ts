@@ -18,6 +18,7 @@ const messageInclude = {
           unit: { select: { unitNumber: true, tower: true } },
         },
       },
+      manager: { select: { name: true } },
     },
   },
   replyTo: {
@@ -25,7 +26,7 @@ const messageInclude = {
       id: true,
       type: true,
       body: true,
-      sender: { select: { id: true, resident: { select: { name: true } } } },
+      sender: { select: { id: true, resident: { select: { name: true } }, manager: { select: { name: true } } } },
     },
   },
   reactions: true,
@@ -78,14 +79,17 @@ export const listMessages = async (req: Request, res: Response, next: NextFuncti
 
 export const createMessage = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { propertyId, mutedFromCommunity } = await getResidentContext(req.user!.userId);
+    const propertyId = await getCallerPropertyId(req.user!.userId);
     const {
       type, body, mediaUrl, mediaMimeType, mediaDurationSec,
       fileName, fileSizeBytes, replyToId, mentionedUserIds, poll,
     } = req.body;
 
-    if (mutedFromCommunity) {
-      return next(new AppError('You have been muted from posting in the community', 403));
+    if (req.user!.role === 'RESIDENT') {
+      const { mutedFromCommunity } = await getResidentContext(req.user!.userId);
+      if (mutedFromCommunity) {
+        return next(new AppError('You have been muted from posting in the community', 403));
+      }
     }
 
     if (type === 'POLL' && !poll) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Users, Flag, Trash2 } from 'lucide-react';
+import { MessageSquare, Users, Flag, Trash2, Send } from 'lucide-react';
 
 const API_BASE = 'http://localhost:5000/api/v1';
 
@@ -10,7 +10,7 @@ const MEDIA_LABEL: Record<string, string> = { IMAGE: '📷 Photo', VIDEO: '🎬 
 
 const senderLabel = (sender: any) => {
   const resident = sender?.resident;
-  const name = resident?.name ?? sender?.role ?? 'Unknown';
+  const name = resident?.name ?? sender?.manager?.name ?? sender?.role ?? 'Unknown';
   const unit = resident?.unit ? `${resident.unit.tower ? resident.unit.tower + ' ' : ''}${resident.unit.unitNumber}` : null;
   return unit ? `${name} · ${unit}` : name;
 };
@@ -19,6 +19,8 @@ function FeedTab() {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
 
   const load = async () => {
     try {
@@ -36,6 +38,23 @@ function FeedTab() {
     return () => clearInterval(interval);
   }, []);
 
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await fetch(`${API_BASE}/community/messages`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'TEXT', body }),
+      });
+      setDraft('');
+      await load();
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
@@ -46,13 +65,31 @@ function FeedTab() {
     }
   };
 
-  if (loading) return <div className="card">Loading feed…</div>;
+  const composer = (
+    <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 10 }}>
+      <input
+        type="text"
+        className="form-input"
+        placeholder="Message the community feed as Admin Manager…"
+        style={{ flex: 1 }}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+      />
+      <button className="btn btn-primary" onClick={send} disabled={sending || !draft.trim()}>
+        <Send size={14} /> Send
+      </button>
+    </div>
+  );
+
+  if (loading) return <div>{composer}<div className="card">Loading feed…</div></div>;
   if (messages.length === 0) {
-    return <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No messages in the community feed yet.</div>;
+    return <div>{composer}<div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No messages in the community feed yet.</div></div>;
   }
 
   return (
     <div>
+      {composer}
       {messages.map((m: any) => (
         <div key={m.id} className="card" style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

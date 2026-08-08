@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Pencil, Ban, Upload, List, Activity, AlertCircle, UserCog, Search, ChevronDown, Eye, ArrowRightLeft, Star } from 'lucide-react';
+import { Pencil, Ban, Upload, List, Activity, AlertCircle, UserCog, Search, ChevronDown, Eye, Star } from 'lucide-react';
 import GuardProfile from './GuardProfile';
 
 const API_BASE = 'http://localhost:5000/api/v1';
@@ -18,8 +18,8 @@ const GuardManagement: React.FC = () => {
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
 
   const [isAddGuardOpen, setIsAddGuardOpen] = useState(false);
-  const [newGuardForm, setNewGuardForm] = useState({ 
-    name: '', badgeId: '', phone: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: '' 
+  const [newGuardForm, setNewGuardForm] = useState({
+    name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: ''
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,6 +31,8 @@ const GuardManagement: React.FC = () => {
   };
 
   const handleCreateGuard = async () => {
+    if (!newGuardForm.email.trim()) { alert('Email is required so the guard can log in to the guard app'); return; }
+    if (newGuardForm.password.length < 6) { alert('Password must be at least 6 characters'); return; }
     try {
       const response = await fetch(`${API_BASE}/guards`, {
         method: 'POST',
@@ -41,6 +43,8 @@ const GuardManagement: React.FC = () => {
         body: JSON.stringify({
           name: newGuardForm.name || 'Unknown Guard',
           phone: newGuardForm.phone || '0000000000',
+          email: newGuardForm.email,
+          password: newGuardForm.password,
           badgeNumber: newGuardForm.badgeId || `SEC-${Math.floor(Math.random() * 1000)}`,
           status: newGuardForm.status,
           shift: newGuardForm.shift,
@@ -51,7 +55,7 @@ const GuardManagement: React.FC = () => {
       });
       if (response.ok) {
         setIsAddGuardOpen(false);
-        setNewGuardForm({ name: '', badgeId: '', phone: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: '' });
+        setNewGuardForm({ name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: '' });
         fetchData(); // refresh the directory
       } else {
         const errorData = await response.json();
@@ -237,9 +241,6 @@ const GuardManagement: React.FC = () => {
                           <button className="action-btn" title="View Profile" onClick={() => setSelectedGuard(g)}>
                             <Eye size={16} />
                           </button>
-                          <button className="action-btn" title="Reassign Post">
-                            <ArrowRightLeft size={16} />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -409,6 +410,29 @@ const GuardManagement: React.FC = () => {
                     placeholder="+91 98xxx xxxxx" 
                     value={newGuardForm.phone}
                     onChange={e => setNewGuardForm({...newGuardForm, phone: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="guard@example.com"
+                    value={newGuardForm.email}
+                    onChange={e => setNewGuardForm({...newGuardForm, email: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    className="form-input"
+                    placeholder="Login password (min 6 chars)"
+                    value={newGuardForm.password}
+                    onChange={e => setNewGuardForm({...newGuardForm, password: e.target.value})}
                   />
                 </div>
               </div>

@@ -44,7 +44,7 @@ const App: React.FC = () => {
         })
         .catch(console.error);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const handleLogin = (token: string, loggedInUser: any) => {
     setIsAuthenticated(true);

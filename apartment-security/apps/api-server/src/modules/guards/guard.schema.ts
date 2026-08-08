@@ -27,6 +27,8 @@ export const createGuardSchema = z.object({
   body: z.object({
     name: z.string().min(2),
     phone: z.string().min(10),
+    email: z.string().email(),
+    password: z.string().min(6),
     badgeNumber: z.string().min(2),
     status: z.string().optional(),
     shift: z.string().optional(),

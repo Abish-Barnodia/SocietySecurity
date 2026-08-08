@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import api from './api';
 import tokenStorage from './tokenStorage';
 
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
   const [guardProfile, setGuardProfile] = useState<GuardProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const clearSession = async () => {
+  const clearSession = useCallback(async () => {
     setIsAuthenticated(false);
     setUserId(null);
     setUserPhone(null);
@@ -74,9 +74,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
     setGuardProfile(null);
     await tokenStorage.deleteItemAsync(tokenKey).catch(() => {});
     await tokenStorage.deleteItemAsync(refreshTokenKey).catch(() => {});
-  };
+  }, [tokenKey, refreshTokenKey]);
 
-  const hydrateFromMe = async () => {
+  const hydrateFromMe = useCallback(async () => {
     const response = await api.get('/auth/me');
     const { data } = response.data;
     
@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
     } else {
       setGuardProfile(null);
     }
-  };
+  }, [allowedRoles, clearSession]);
 
   useEffect(() => {
     const bootstrapAsync = async () => {
@@ -140,7 +140,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
       setIsLoading(false);
     };
     bootstrapAsync();
-  }, [tokenKey]);
+  }, [tokenKey, hydrateFromMe, clearSession]);
 
   const login = async (email: string, password: string): Promise<void> => {
     setIsLoading(true);

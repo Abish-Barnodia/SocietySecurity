@@ -24,8 +24,8 @@ import { createMessageSchema, reactionSchema, voteSchema, reportSchema, muteSche
 const router = Router();
 router.use(authenticate);
 
-// Resident-only: participate in the chat
-router.post('/messages', requireRole('RESIDENT'), validate(createMessageSchema), createMessage);
+// Resident + Manager: participate in the chat
+router.post('/messages', requireRole('RESIDENT', 'MANAGER'), validate(createMessageSchema), createMessage);
 router.post('/messages/:id/reactions', requireRole('RESIDENT'), validate(reactionSchema), toggleReaction);
 router.post('/messages/:id/report', requireRole('RESIDENT'), validate(reportSchema), reportMessage);
 router.post('/polls/:pollId/vote', requireRole('RESIDENT'), validate(voteSchema), votePoll);

@@ -30,10 +30,10 @@ const EventTimeline = () => {
         const resResidents = await fetch(`${API_BASE}/residents`, { headers });
         if (resResidents.ok) {
           const data = await resResidents.json();
-          const validResidents = (data.data || []).filter((r: any) => r.unit?.unitNumber);
+          const validResidents = (data.data || []).filter((r: any) => r.apartmentNumber);
           setResidentList(validResidents);
           if (validResidents.length > 0) {
-            setSelectedUnit(validResidents[0].unit.unitNumber);
+            setSelectedUnit(validResidents[0].apartmentNumber);
           }
         }
 
@@ -92,7 +92,7 @@ const EventTimeline = () => {
   }, [lastRefresh]);
 
   // Derived state for the title
-  const currentResident = residentList.find(r => r.unit?.unitNumber === selectedUnit);
+  const currentResident = residentList.find(r => r.apartmentNumber === selectedUnit);
   const currentGuard = guardList.find(g => g.id === selectedGuard);
 
   return (
@@ -142,16 +142,16 @@ const EventTimeline = () => {
           {viewType === 'unit' ? (
             // ponytail: Show only first 5 units for UI simplicity instead of a huge list
             residentList.slice(0, 5).map(res => (
-              <button 
-                key={res.id}
-                onClick={() => setSelectedUnit(res.unit.unitNumber)}
-                style={{ 
+              <button
+                key={res.unitId}
+                onClick={() => setSelectedUnit(res.apartmentNumber)}
+                style={{
                   padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                  backgroundColor: selectedUnit === res.unit.unitNumber ? '#008B8B' : '#F3F4F6',
-                  color: selectedUnit === res.unit.unitNumber ? 'white' : '#4B5563'
+                  backgroundColor: selectedUnit === res.apartmentNumber ? '#008B8B' : '#F3F4F6',
+                  color: selectedUnit === res.apartmentNumber ? 'white' : '#4B5563'
                 }}
               >
-                Unit {res.unit.unitNumber} — {res.name}
+                Unit {res.apartmentNumber} — {res.primaryResident?.name}
               </button>
             ))
           ) : (
@@ -175,7 +175,7 @@ const EventTimeline = () => {
         <h3 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 24, borderBottom: '1px solid #E5E7EB', paddingBottom: 12 }}>
           {viewType === 'unit' ? `Timeline for Unit ${selectedUnit}` : `Timeline for ${currentGuard?.name || 'Guard'}`} 
           <span style={{ color: '#9CA3AF', fontWeight: 400 }}>
-            — {viewType === 'unit' ? (currentResident?.name || '') : (currentGuard?.badgeNumber || '')}
+            — {viewType === 'unit' ? (currentResident?.primaryResident?.name || '') : (currentGuard?.badgeNumber || '')}
           </span>
         </h3>
 

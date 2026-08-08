@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export type Page = 'alerts' | 'community';
+export type Page = 'overview' | 'alerts' | 'community';
 
 const NAV_SECTIONS: { label: string; items: { icon: string; label: string; page?: Page }[] }[] = [
   {
     label: 'Operations',
     items: [
-      { icon: '▦', label: 'Dashboard' },
+      { icon: '▦', label: 'Dashboard', page: 'overview' },
       { icon: '🛡️', label: 'Guard Management' },
       { icon: '📇', label: 'Resident Directory' },
       { icon: '🕐', label: 'Event Timeline' },

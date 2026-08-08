@@ -59,6 +59,7 @@ export default function ResidentOnboardingScreen() {
       updateProfile({
         name: resident.name,
         phone: '',
+        email: resident.email ?? null,
         wing: resident.unit?.tower ?? tower,
         flat: resident.unit?.unitNumber ?? flatNumber,
         propertyName: resident.unit?.property?.name ?? '',

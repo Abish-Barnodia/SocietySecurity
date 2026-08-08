@@ -41,7 +41,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           await hydrateFromMe();
         } catch {
-          localStorage.removeItem('managerToken');
+          // Access token expired — attempt silent refresh before giving up
+          const refreshToken = localStorage.getItem('managerRefreshToken');
+          if (refreshToken) {
+            try {
+              const { data } = await api.post('/auth/refresh', { refreshToken });
+              localStorage.setItem('managerToken', data.data.accessToken);
+              localStorage.setItem('managerRefreshToken', data.data.refreshToken);
+              await hydrateFromMe();
+            } catch {
+              localStorage.removeItem('managerToken');
+              localStorage.removeItem('managerRefreshToken');
+            }
+          } else {
+            localStorage.removeItem('managerToken');
+          }
         }
       }
       setIsLoading(false);
@@ -53,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const response = await api.post('/auth/login', { email, password });
     const { data } = response.data;
     localStorage.setItem('managerToken', data.accessToken);
+    localStorage.setItem('managerRefreshToken', data.refreshToken);
     try {
       await hydrateFromMe();
     } catch (error) {
@@ -63,6 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('managerToken');
+    localStorage.removeItem('managerRefreshToken');
     setIsAuthenticated(false);
     setManagerProfile(null);
   };

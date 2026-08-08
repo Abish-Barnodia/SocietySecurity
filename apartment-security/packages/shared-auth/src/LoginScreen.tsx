@@ -54,7 +54,7 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
     } else {
       turn.stopAnimation(() => turn.setValue(0));
     }
-  }, [loading]);
+  }, [loading, turn]);
 
   const rattle = () => {
     shake.setValue(0);
@@ -90,12 +90,10 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
       if (mode === 'login') {
         await login(trimmedEmail, password);
       } else {
-        if (signup) {
-          await signup(trimmedEmail, password);
-        }
+        await signup(trimmedEmail, password);
       }
-    } catch (error: any) {
-      const message = error.message || error.response?.data?.message || `Failed to ${mode}. Please check your credentials or server connection.`;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : (error as any)?.response?.data?.message ?? `Failed to ${mode}. Please check your credentials or server connection.`;
       Alert.alert(mode === 'login' ? 'Login Failed' : 'Sign Up Failed', message);
       rattle();
     } finally {

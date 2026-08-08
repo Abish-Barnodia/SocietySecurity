@@ -82,7 +82,7 @@ const mapPoll = (raw: any): Poll => ({
 const mapMessage = (raw: any, myUserId: string | null): ChatMessage => ({
   id: raw.id,
   senderId: raw.senderId,
-  senderName: raw.sender?.resident?.name ?? 'Resident',
+  senderName: raw.sender?.resident?.name ?? raw.sender?.manager?.name ?? 'Resident',
   senderUnit: formatUnit(raw.sender?.resident?.unit),
   senderRole: raw.sender?.role ?? undefined,
   isMine: raw.senderId === myUserId,
@@ -99,7 +99,7 @@ const mapMessage = (raw: any, myUserId: string | null): ChatMessage => ({
         id: raw.replyTo.id,
         type: raw.replyTo.type,
         body: raw.replyTo.body ?? undefined,
-        senderName: raw.replyTo.sender?.resident?.name ?? 'Resident',
+        senderName: raw.replyTo.sender?.resident?.name ?? raw.replyTo.sender?.manager?.name ?? 'Resident',
       }
     : null,
   reactions: (raw.reactions ?? []).map((r: any) => ({ emoji: r.emoji, userId: r.userId })),

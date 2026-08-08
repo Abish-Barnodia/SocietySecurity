@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
@@ -275,34 +276,32 @@ export const checkInPost = async (req: Request, res: Response, next: NextFunctio
 
 export const createGuard = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, phone, badgeNumber, status, shift, post, dateOfJoining, photoUrl } = req.body;
-    
+    const { name, phone, email, password, badgeNumber, status, shift, post, dateOfJoining, photoUrl } = req.body;
+
     // We assume the admin creating the guard belongs to a property
     const manager = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
     const propertyId = manager ? manager.propertyId : (await prisma.property.findFirst())?.id;
-    
+
     if (!propertyId) return next(new AppError('No property found to associate guard', 400));
 
     // Check if badge is already in use
     const existingBadge = await prisma.guard.findUnique({ where: { badgeNumber } });
     if (existingBadge) return next(new AppError('Badge number already in use', 400));
 
-    // Upsert User
-    let user = await prisma.user.findUnique({ where: { phone } });
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phone,
-          role: 'GUARD',
-          passwordHash: '123456', // default password
-          isActive: true
-        }
-      });
-    }
+    const existingUser = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+    if (existingUser) return next(new AppError('An account with this email or phone already exists', 400));
 
-    // Check if guard already exists for this user
-    const existingGuard = await prisma.guard.findUnique({ where: { userId: user.id } });
-    if (existingGuard) return next(new AppError('A guard with this phone number already exists', 400));
+    // Create the login credential the guard uses in the guard app
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        phone,
+        email,
+        role: 'GUARD',
+        passwordHash,
+        isActive: true
+      }
+    });
 
     // Create Guard
     const guard = await prisma.guard.create({

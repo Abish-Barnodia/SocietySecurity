@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
+import path from 'path';
 import { env } from './config/env';
 import { errorHandler } from './middlewares/error.middleware';
 import { notFoundHandler } from './middlewares/notFound.middleware';
@@ -60,9 +61,12 @@ app.use(cors({
   credentials: true,
 }));
 
-// Body parsing - limited to 1mb to prevent DoS via massive payloads
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+// Static uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Body parsing - limited to 50mb to prevent DoS via massive payloads while allowing base64 image uploads
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // HTTP request logging
 app.use(morgan('combined', {

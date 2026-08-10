@@ -523,9 +523,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = await tokenStorage.getItemAsync('userToken');
       if (!token || cancelled) return;
 
-      const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+      const socket = io(SOCKET_URL, { auth: { token } });
       socketRef.current = socket;
 
+      // Re-fetch persisted alerts on (re)connect so nothing is missed if the
+      // socket was briefly disconnected while a walk-in was submitted.
+      socket.on('connect', () => {
+        fetchAlerts();
+      });
+
+      // Walk-in request emitted directly to the unit room by walkin.controller.ts.
       socket.on('walkin_request', (payload: { entryId: string; visitorName: string; purpose?: string; gatePhotoUrl?: string }) => {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
@@ -537,8 +544,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           time,
           icon: '🔔',
           unread: true,
+          imageUrl: payload.gatePhotoUrl,
         });
         scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
+      });
+
+      // DB-persisted alerts emitted by triggerAlert() to the user's personal room.
+      // This is the reliable path for walk-ins, vehicle alerts, and any other
+      // server-side triggered alert — independent of whether the unit room event fired.
+      socket.on('new_alert', (raw: any) => {
+        const alert = mapAlert(raw);
+        // Avoid duplicates if walkin_request already added it by the same entryId
+        setAlerts((prev) => {
+          const exists = prev.some((a) => a.id === alert.id);
+          return exists ? prev : [alert, ...prev];
+        });
+        // Also surface as a pending walk-in if it has an entryId and isn't already pending
+        if (raw.entryId) {
+          setPendingWalkIns((prev) => {
+            const exists = prev.some((w) => w.id === raw.entryId);
+            if (exists) return prev;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return [{ id: raw.entryId, visitorName: raw.title, purpose: raw.body, gatePhotoUrl: raw.imageUrl, time }, ...prev];
+          });
+        }
+        scheduleLocalNotification(raw.title, raw.body);
       });
 
       // QR-scan arrivals — same shape/handling as a manual walk-in request,
@@ -571,6 +601,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           time,
           icon: '🔔',
           unread: true,
+          imageUrl: payload.visitorPhoto ?? undefined,
         });
         scheduleLocalNotification('Visitor scanned in at the gate', `${payload.visitorName} is waiting — respond within 2 minutes`);
       });

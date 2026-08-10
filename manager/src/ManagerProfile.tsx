@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { User, Shield, Bell } from 'lucide-react';
+import { API_BASE } from './config';
 
 const ManagerProfile = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const API_BASE = 'http://localhost:5000/api/v1';
 
   useEffect(() => {
     const fetchProfile = async () => {

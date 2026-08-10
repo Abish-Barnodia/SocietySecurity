@@ -129,11 +129,13 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('handover_title')}</Text>
+      </View>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
       >
-        <Text style={styles.title}>{t('handover_title')}</Text>
 
         {summary && (
           <>
@@ -247,6 +249,16 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingHorizontal: 16,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginTop: 4 },
   emptyText: { fontSize: 13, color: colors.textMuted, textAlign: 'center' },

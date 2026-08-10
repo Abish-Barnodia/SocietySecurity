@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserCheck, X } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const ExpectedVisitors = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

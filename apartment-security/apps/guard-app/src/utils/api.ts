@@ -1,10 +1,13 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import tokenStorage from './tokenStorage';
 
 // Fallback for Android Emulator is 10.0.2.2, but for physical devices we need the LAN IP
 const debuggerHost = Constants.expoConfig?.hostUri;
-const localhost = debuggerHost ? debuggerHost.split(':')[0] : '192.168.68.73'; // ponytail: default to LAN IP to fix physical device network error
+const localhost = Platform.OS === 'web'
+  ? 'localhost'
+  : (debuggerHost ? debuggerHost.split(':')[0] : '192.168.68.73');
 
 export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `http://${localhost}:5000/api/v1`;
 

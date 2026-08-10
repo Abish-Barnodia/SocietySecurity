@@ -114,7 +114,10 @@ export default function ScanScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('tab_scan')}</Text>
+      </View>
       {result ? (
         <View style={styles.content}>
           <PassSummary
@@ -237,12 +240,22 @@ export default function ScanScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingHorizontal: 16,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
   center: { alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   content: { flex: 1, padding: 20 },
   permissionText: { fontSize: 15, color: colors.textMuted, textAlign: 'center' },

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from './HomeScreen';
 import ScanScreen from './ScanScreen';
@@ -27,10 +27,17 @@ export default function GuardShell() {
   const [tab, setTab] = useState<Tab>('home');
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const styles = getStyles(colors);
 
+  // Android's status bar height is a stable ~24dp regardless of device — use that directly
+  // instead of insets.top, which some Android skins over-report under edge-to-edge, leaving
+  // a large blank gap above every header. iOS notch/Dynamic Island heights genuinely vary
+  // per device, so those stay dynamic.
+  const topPadding = Platform.OS === 'android' ? 24 : insets.top;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, { paddingTop: topPadding }]}>
       <OfflineBanner />
       <View style={styles.body}>
         {tab === 'home' && <HomeScreen onNavigate={setTab} />}
@@ -51,7 +58,7 @@ export default function GuardShell() {
           );
         })}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

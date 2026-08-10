@@ -324,7 +324,7 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const token = await tokenStorage.getItemAsync('userToken');
       if (!token || cancelled) return;
 
-      const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
+      const socket = io(SOCKET_URL, { auth: { token } });
       socketRef.current = socket;
 
       socket.on('community:message:new', (raw: any) => {

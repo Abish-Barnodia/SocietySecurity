@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Pencil, Ban, Upload, List, Activity, AlertCircle, UserCog, Search, ChevronDown, Eye, Star } from 'lucide-react';
 import GuardProfile from './GuardProfile';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const GuardManagement: React.FC = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

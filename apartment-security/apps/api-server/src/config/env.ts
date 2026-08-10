@@ -42,6 +42,7 @@ const envSchema = z.object({
   CLIENT_RESIDENT_APP_URL: z.string().url().default('http://localhost:3000'),
   CLIENT_GUARD_APP_URL: z.string().url().default('http://localhost:3001'),
   CLIENT_MANAGER_URL: z.string().url().default('http://localhost:3002'),
+  API_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

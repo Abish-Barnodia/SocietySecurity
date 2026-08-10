@@ -112,7 +112,7 @@ export default function AlertsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('alerts_title')}</Text>
         {unackedCount > 0 && (
@@ -213,14 +213,23 @@ export default function AlertsScreen() {
         onClose={() => setVehicleModalOpen(false)}
         onSent={handleVehicleAlertSent}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4, gap: 10 },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: colors.text },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingHorizontal: 16,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 10,
+  },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
   headerBadge: { backgroundColor: colors.danger, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   headerBadgeText: { color: colors.white, fontSize: 12, fontWeight: '700' },
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useData, PendingWalkIn } from '../../context/DataContext';
 import api from '../../utils/api';
+import RemoteImage from '../../components/RemoteImage';
 
 type RemoteEntry = {
   id: string;
@@ -146,15 +147,18 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarEmoji}>👨</Text>
+          <Ionicons name="person" size={40} color={colors.primary} />
         </View>
 
         <Text style={styles.title}>Visitor at your gate</Text>
 
         <View style={styles.detailsCard}>
-          {gatePhotoUrl ? (
-            <Image source={{ uri: gatePhotoUrl }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 16 }} resizeMode="cover" />
-          ) : null}
+          <RemoteImage
+            uri={gatePhotoUrl}
+            style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 16 }}
+            resizeMode="cover"
+            colors={colors}
+          />
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Name</Text>
             <Text style={styles.detailValue}>{visitorName}</Text>
@@ -197,14 +201,16 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
           onPress={() => handleAction('DENIED')}
           disabled={buttonsDisabled}
         >
-          <Text style={styles.denyButtonText}>✕ Deny</Text>
+          <Ionicons name="close" size={18} color={colors.textMuted} style={{ marginRight: 6 }} />
+          <Text style={styles.denyButtonText}>Deny</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.approveButton, buttonsDisabled && { opacity: 0.5 }]}
           onPress={() => handleAction('APPROVED')}
           disabled={buttonsDisabled}
         >
-          <Text style={styles.approveButtonText}>✓ Approve</Text>
+          <Ionicons name="checkmark" size={18} color={colors.card} style={{ marginRight: 6 }} />
+          <Text style={styles.approveButtonText}>Approve</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -223,23 +229,15 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     justifyContent: 'center',
   },
   avatarContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.card,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 4,
-    borderColor: '#bfdbfe',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  avatarEmoji: {
-    fontSize: 64,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: colors.border,
   },
   title: {
     fontSize: 24,
@@ -291,28 +289,34 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   denyButton: {
     flex: 1,
-    backgroundColor: colors.danger,
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 8,
   },
   denyButtonText: {
-    color: colors.card,
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: colors.textMuted,
+    fontSize: 16,
+    fontWeight: '600',
   },
   approveButton: {
     flex: 1,
-    backgroundColor: colors.success,
+    flexDirection: 'row',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     marginLeft: 8,
   },
   approveButtonText: {
     color: colors.card,
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

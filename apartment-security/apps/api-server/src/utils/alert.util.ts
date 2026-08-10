@@ -73,6 +73,15 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
     },
   });
 
+  // Emit live socket event to every target user's personal room so the
+  // resident app receives the alert instantly without relying on FCM push.
+  try {
+    const { io } = await import('../server');
+    for (const uid of userIds) {
+      io?.to(`user:${uid}`).emit('new_alert', alert);
+    }
+  } catch { /* server not yet ready during tests */ }
+
   const allFcmTokens = users.flatMap((u) => u.fcmTokens);
 
   // P1: push + SMS simultaneously, no waiting
@@ -108,8 +117,18 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
 };
 
 export const acknowledgeAlert = async (alertId: string, userId: string) => {
+  const alert = await prisma.alert.findFirst({
+    where: {
+      OR: [
+        { id: alertId },
+        { entryId: alertId }
+      ]
+    }
+  });
+  if (!alert) return null;
+
   return prisma.alert.update({
-    where: { id: alertId },
+    where: { id: alert.id },
     data: { status: 'ACKNOWLEDGED', acknowledgedAt: new Date(), acknowledgedBy: userId },
   });
 };

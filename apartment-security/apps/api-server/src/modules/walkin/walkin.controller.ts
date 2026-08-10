@@ -77,6 +77,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       targetUserIds: targetUnit.residents.map((r: any) => r.userId),
       propertyId: targetUnit.propertyId,
       entryId: entry.id,
+      imageUrl: finalPhotoUrl,
     });
 
     return sendSuccess(res, 201, 'Walk-in request sent to residents', entry);

@@ -152,6 +152,13 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
 
     if (!propertyId) return next(new AppError('No property context found', 403));
 
+    // Managers/committee run the property's Alerts & Escalation dashboard —
+    // they need oversight of everything happening on the property (a
+    // resident's own broadcast, a guard's vehicle alert), not just alerts
+    // some triggerAlert() call happened to target at their role. Guards and
+    // residents keep the narrower "alerts addressed to me" feed.
+    const isOversightRole = req.user!.role === 'MANAGER' || req.user!.role === 'COMMITTEE';
+
     const alerts = await prisma.alert.findMany({
       where: {
         propertyId,
@@ -160,10 +167,12 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
         // resident) are both valid ways an alert can be "for" this caller;
         // matching only targetRoles meant any targetUserIds-only alert
         // (walk-in requests, visitor QR approvals) was never fetchable here.
-        OR: [
-          { targetRoles: { has: req.user!.role as any } },
-          { targetUserIds: { has: req.user!.userId } },
-        ],
+        ...(isOversightRole ? {} : {
+          OR: [
+            { targetRoles: { has: req.user!.role as any } },
+            { targetUserIds: { has: req.user!.userId } },
+          ],
+        }),
       },
       orderBy: { createdAt: 'desc' },
       take: 50
@@ -247,7 +256,14 @@ export const claimVehicleAlert = async (req: Request, res: Response, next: NextF
 export const acknowledgeAlertRoute = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
-    const alert = await prisma.alert.findUnique({ where: { id } });
+    const alert = await prisma.alert.findFirst({
+      where: {
+        OR: [
+          { id },
+          { entryId: id }
+        ]
+      }
+    });
     if (!alert) return next(new AppError('Alert not found', 404));
 
     // Same propertyId-scoping as getAlerts — a caller can only acknowledge

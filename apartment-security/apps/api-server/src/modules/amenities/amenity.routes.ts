@@ -4,18 +4,24 @@ import { requireRole } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   getAmenities,
+  createAmenity,
+  updateAmenity,
   bookAmenity,
   cancelBooking
 } from './amenity.controller';
 import {
+  createAmenitySchema,
+  updateAmenitySchema,
   bookAmenitySchema
 } from './amenity.schema';
 
 const router = Router();
 router.use(authenticate);
 
-// Residents can view amenities
-router.get('/', requireRole('RESIDENT'), getAmenities);
+// Residents view bookable amenities; managers view/manage the full list
+router.get('/', requireRole('RESIDENT', 'MANAGER', 'COMMITTEE'), getAmenities);
+router.post('/', requireRole('MANAGER', 'COMMITTEE'), validate(createAmenitySchema), createAmenity);
+router.put('/:id', requireRole('MANAGER', 'COMMITTEE'), validate(updateAmenitySchema), updateAmenity);
 
 // Residents can book
 router.post('/book', requireRole('RESIDENT'), validate(bookAmenitySchema), bookAmenity);

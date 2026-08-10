@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, MoreHorizontal, Megaphone, X } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const AlertsEscalation = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -10,6 +9,8 @@ const AlertsEscalation = () => {
   const [chains, setChains] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [secondsAgo, setSecondsAgo] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN'>('ALL');
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'P1' | 'P2' | 'P3'>('ALL');
 
   // Broadcast Modal State
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
@@ -148,7 +149,7 @@ const AlertsEscalation = () => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'CUSTOM',
+          type: 'GENERAL_NOTICE',
           severity: broadcastForm.severity,
           title: broadcastForm.title,
           message: broadcastForm.message,
@@ -193,6 +194,12 @@ const AlertsEscalation = () => {
     }
   };
 
+  const filteredAlerts = alerts.filter(a =>
+    (statusFilter === 'ALL' || a.status === statusFilter) &&
+    (priorityFilter === 'ALL' || a.priority === priorityFilter)
+  );
+  const criticalActiveCount = alerts.filter(a => a.priority === 'P1' && a.status === 'OPEN').length;
+
   return (
     <div style={{ padding: '24px 32px', flex: 1, overflowY: 'auto', backgroundColor: '#fff', minHeight: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
@@ -202,7 +209,7 @@ const AlertsEscalation = () => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6B7280' }}>
-            <span style={{ fontWeight: 600 }}>{alerts.filter(a => a.status === 'OPEN').length} critical active</span>
+            <span style={{ fontWeight: 600 }}>{criticalActiveCount} critical active</span>
           </div>
           <button 
             onClick={() => setIsBroadcastOpen(true)}
@@ -222,24 +229,33 @@ const AlertsEscalation = () => {
         {/* Left Column - Alert Queue */}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <select style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}>
-              <option>All Alerts</option>
-              <option>Open Alerts</option>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as 'ALL' | 'OPEN')}
+              style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
+            >
+              <option value="ALL">All Alerts</option>
+              <option value="OPEN">Open Alerts</option>
             </select>
-            <select style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}>
-              <option>All Priorities</option>
-              <option>Priority 1 (Critical)</option>
-              <option>Priority 2 (Urgent)</option>
+            <select
+              value={priorityFilter}
+              onChange={e => setPriorityFilter(e.target.value as 'ALL' | 'P1' | 'P2' | 'P3')}
+              style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
+            >
+              <option value="ALL">All Priorities</option>
+              <option value="P1">Priority 1 (Critical)</option>
+              <option value="P2">Priority 2 (Urgent)</option>
+              <option value="P3">Priority 3 (Routine)</option>
             </select>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {alerts.length === 0 && !loading && (
+            {filteredAlerts.length === 0 && !loading && (
               <div style={{ padding: 32, textAlign: 'center', color: '#9CA3AF', border: '1px dashed #E5E7EB', borderRadius: 8 }}>
                 No alerts currently active.
               </div>
             )}
-            {alerts.map(alert => {
+            {filteredAlerts.map(alert => {
               const priority = getPriorityConfig(alert.priority);
               const statusColors = getStatusColor(alert.status);
               const isClosed = alert.status === 'CLOSED' || alert.status === 'ACKNOWLEDGED';
@@ -316,7 +332,7 @@ const AlertsEscalation = () => {
           {chains.map((chain, chainIdx) => (
             <div key={chain.id} style={{ marginBottom: 24, border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', fontWeight: 600, fontSize: 14 }}>
-                Priority {chain.priority} — {chain.priority === 1 ? 'Critical' : chain.priority === 2 ? 'Urgent' : 'Routine'}
+                Priority {chain.priority} — {chain.priority === 'P1' ? 'Critical' : chain.priority === 'P2' ? 'Urgent' : 'Routine'}
               </div>
               <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {chain.steps.map((step: any, idx: number) => (

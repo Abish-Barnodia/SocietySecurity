@@ -1,6 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api from '../utils/api';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
+import api, { API_URL } from '../utils/api';
+import tokenStorage from '../utils/tokenStorage';
 import { useAuth } from '@apartment-security/shared-auth';
+
+const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
 
 export type ComplaintCategory =
   | 'MAINTENANCE'
@@ -146,6 +150,37 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       fetchComplaints();
     }
   }, [isAuthenticated, userRole, fetchComplaints]);
+
+  // The manager resolving/updating a complaint emits `complaint:update` to
+  // the resident's personal socket room (see complaint.controller.ts) — join
+  // it here so status changes (e.g. marked Resolved) show up live instead of
+  // only on the next app open.
+  const socketRef = useRef<Socket | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== 'RESIDENT') return;
+    let cancelled = false;
+
+    (async () => {
+      const token = await tokenStorage.getItemAsync('userToken');
+      if (!token || cancelled) return;
+
+      const socket = io(SOCKET_URL, { auth: { token } });
+      socketRef.current = socket;
+
+      socket.on('complaint:update', (raw: any) => {
+        const mapped = mapComplaint(raw);
+        setComplaints((prev) =>
+          prev.some((c) => c.id === mapped.id) ? prev.map((c) => (c.id === mapped.id ? mapped : c)) : [mapped, ...prev]
+        );
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
+  }, [isAuthenticated, userRole]);
 
   return (
     <ComplaintsContext.Provider

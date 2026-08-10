@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const Dashboard: React.FC = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

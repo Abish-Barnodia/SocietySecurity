@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, Calendar, CheckCircle, Clock, Search, ShieldCheck, UserPlus, FileText, Settings, X, Loader2 } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const WorkforceMgmt = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

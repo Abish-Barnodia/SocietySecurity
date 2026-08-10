@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, ArrowRight } from 'lucide-react';
+import { API_BASE } from './config';
 
 interface LoginProps {
   onLogin: (token: string, user: any) => void;
@@ -12,9 +13,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // ponytail: Hardcoded backend URL for simplicity
-  const API_BASE = 'http://localhost:5000/api/v1';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,30 +52,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-main)', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, sans-serif', padding: 24 }}>
-      <div style={{ 
-        width: '100%', 
-        maxWidth: 960, 
-        backgroundColor: 'white', 
-        borderRadius: 24, 
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.02)',
-        display: 'flex', 
-        overflow: 'hidden',
-        minHeight: 560
-      }}>
+    <div className="login-screen-container">
+      <div className="login-card-container">
         
         {/* Left Side - Branding / Graphic */}
-        <div style={{ 
-          flex: 1, 
-          background: 'var(--bg-sidebar)', 
-          color: 'white', 
-          padding: '48px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
+        <div className="login-left-side">
           {/* Ambient Glows */}
           <div style={{ position: 'absolute', top: '-10%', right: '-10%', width: '350px', height: '350px', background: 'var(--primary)', borderRadius: '50%', filter: 'blur(100px)', opacity: 0.15 }} />
           <div style={{ position: 'absolute', bottom: '-20%', left: '-20%', width: '400px', height: '400px', background: 'var(--primary)', borderRadius: '50%', filter: 'blur(120px)', opacity: 0.1 }} />
@@ -104,14 +83,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
 
         {/* Right Side - Form */}
-        <div style={{ 
-          flex: '0 0 480px', 
-          padding: '64px 48px',
-          display: 'flex', 
-          flexDirection: 'column', 
-          justifyContent: 'center',
-          backgroundColor: 'white'
-        }}>
+        <div className="login-right-side">
           <h2 style={{ margin: '0 0 8px 0', fontSize: 28, fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </h2>

@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert as RNAlert, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert as RNAlert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useData, Alert } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
+import RemoteImage from '../../components/RemoteImage';
 
 // Maps backend priority key to Ionicons name + color
 function AlertIcon({ priority, colors }: { priority: string; colors: any }) {
@@ -41,6 +42,7 @@ function AlertIcon({ priority, colors }: { priority: string; colors: any }) {
     </View>
   );
 }
+
 
 export default function AlertsScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
@@ -117,35 +119,39 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
               {alert.unread && <View style={styles.unreadDot} />}
             </View>
 
-            {alert.imageUrl && (
-              <>
-                <Image source={{ uri: alert.imageUrl }} style={styles.vehicleImage} />
-                {alert.claimedByUserId ? (
-                  <Text style={styles.claimStatus}>
-                    {alert.claimedByUserId === userId ? 'You confirmed this is your vehicle' : `Claimed by ${alert.claimedByName ?? 'another resident'}`}
-                  </Text>
-                ) : (
-                  <View style={styles.claimActions}>
-                    <TouchableOpacity
-                      style={styles.notMineButton}
-                      onPress={() => markAlertRead(alert.id)}
-                    >
-                      <Text style={styles.notMineText}>Not mine</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.claimButton}
-                      onPress={() => handleClaim(alert)}
-                      disabled={claimingId === alert.id}
-                    >
-                      {claimingId === alert.id ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.claimButtonText}>This is my vehicle</Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+            {!!alert.imageUrl && (
+              <View>
+                <RemoteImage uri={alert.imageUrl} style={styles.vehicleImage} colors={colors} />
+                {!alert.entryId && (
+                  <>
+                    {alert.claimedByUserId ? (
+                      <Text style={styles.claimStatus}>
+                        {alert.claimedByUserId === userId ? 'You confirmed this is your vehicle' : `Claimed by ${alert.claimedByName ?? 'another resident'}`}
+                      </Text>
+                    ) : (
+                      <View style={styles.claimActions}>
+                        <TouchableOpacity
+                          style={styles.notMineButton}
+                          onPress={() => markAlertRead(alert.id)}
+                        >
+                          <Text style={styles.notMineText}>Not mine</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.claimButton}
+                          onPress={() => handleClaim(alert)}
+                          disabled={claimingId === alert.id}
+                        >
+                          {claimingId === alert.id ? (
+                            <ActivityIndicator color="#fff" size="small" />
+                          ) : (
+                            <Text style={styles.claimButtonText}>This is my vehicle</Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
                 )}
-              </>
+              </View>
             )}
           </TouchableOpacity>
         ))}
@@ -171,7 +177,7 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
                 <Text style={[styles.alertSubtitle, { marginTop: 12, fontSize: 16 }]}>{selectedAlert.subtitle}</Text>
                 
                 {selectedAlert.imageUrl && (
-                  <Image source={{ uri: selectedAlert.imageUrl }} style={styles.fullImage} resizeMode="contain" />
+                  <RemoteImage uri={selectedAlert.imageUrl} style={styles.fullImage} resizeMode="contain" colors={colors} />
                 )}
 
                 {selectedAlert.imageUrl && (

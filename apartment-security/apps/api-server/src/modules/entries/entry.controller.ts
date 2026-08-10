@@ -156,6 +156,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
         targetUserIds: [pass.resident.userId],
         propertyId: guard.propertyId,
         entryId: entry.id,
+        imageUrl: pass.visitorPhoto ?? undefined,
       });
 
       enriched = {

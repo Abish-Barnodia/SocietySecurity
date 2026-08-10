@@ -17,6 +17,8 @@ import {
   Settings, Search, Bell, User, Menu, ChevronDown, Building, LogOut 
 } from 'lucide-react';
 
+import { API_BASE } from './config';
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -33,7 +35,7 @@ const App: React.FC = () => {
       setUser(JSON.parse(storedUser));
       
       // Fetch full profile for property details
-      fetch('http://localhost:5000/api/v1/auth/me', {
+      fetch(`${API_BASE}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => res.json())

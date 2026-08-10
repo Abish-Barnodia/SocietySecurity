@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Building, ShieldCheck, CheckCircle, AlertTriangle, Key, ArrowRight, User, X, MapPin, Search } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './config';
 
 const EventTimeline = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

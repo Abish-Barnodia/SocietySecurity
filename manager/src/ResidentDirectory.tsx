@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Plus, Users, Key, Megaphone, Loader2, ChevronRight, X, Phone, Mail, Home, Building2 } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { Search, Download, Plus, Users, Key, Loader2, ChevronRight, X, Phone, Mail, Home, Building2, MessageSquareWarning, Check, Pencil } from 'lucide-react';
+import { API_BASE } from './config';
 
 interface FamilyMember {
   id: string;
@@ -29,7 +28,9 @@ const ResidentDirectory = () => {
   const [activeTab, setActiveTab] = useState('directory');
   const [families, setFamilies] = useState<Family[]>([]);
   const [passes, setPasses] = useState<any[]>([]);
-  const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [amenities, setAmenities] = useState<any[]>([]);
+  const [complaints, setComplaints] = useState<any[]>([]);
+  const [resolvingComplaintId, setResolvingComplaintId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [towerFilter, setTowerFilter] = useState('All Towers');
@@ -50,8 +51,9 @@ const ResidentDirectory = () => {
   const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
   const [isFamilyDetailsOpen, setIsFamilyDetailsOpen] = useState(false);
 
-  const [isComposeBroadcastOpen, setIsComposeBroadcastOpen] = useState(false);
-  const [broadcastForm, setBroadcastForm] = useState({ title: '', body: '', targetScope: 'ALL_RESIDENTS' });
+  const [isAddAmenityOpen, setIsAddAmenityOpen] = useState(false);
+  const [editAmenityId, setEditAmenityId] = useState<string | null>(null);
+  const [amenityForm, setAmenityForm] = useState({ name: '', capacity: '10', openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
@@ -77,15 +79,51 @@ const ResidentDirectory = () => {
         const res = await fetch(`${API_BASE}/passes`, { headers });
         const data = await res.json();
         if (data.status === 'success') setPasses(data.data.passes || []);
-      } else if (activeTab === 'broadcasts') {
-        const res = await fetch(`${API_BASE}/broadcasts`, { headers });
+      } else if (activeTab === 'amenities') {
+        const res = await fetch(`${API_BASE}/amenities`, { headers });
         const data = await res.json();
-        if (data.status === 'success') setBroadcasts(data.data);
+        if (data.status === 'success') setAmenities(data.data);
+      } else if (activeTab === 'complaints') {
+        const res = await fetch(`${API_BASE}/complaints`, { headers });
+        const data = await res.json();
+        if (data.status === 'success') setComplaints(data.data);
       }
     } catch (error) {
       console.error('Failed to fetch data', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Keep the complaints queue live while it's open — residents file these
+  // from the app in real time and the manager shouldn't have to switch tabs
+  // away and back to see a new one land.
+  useEffect(() => {
+    if (activeTab !== 'complaints') return;
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  const handleResolveComplaint = async (id: string) => {
+    setResolvingComplaintId(id);
+    try {
+      const res = await fetch(`${API_BASE}/complaints/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
+        body: JSON.stringify({ status: 'RESOLVED' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setComplaints(prev => prev.map(c => c.id === id ? data.data : c));
+        showToast('Complaint marked resolved', 'success');
+      } else {
+        const d = await res.json();
+        showToast(`Failed: ${d.message || 'Unknown error'}`, 'error');
+      }
+    } catch {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setResolvingComplaintId(null);
     }
   };
 
@@ -189,26 +227,36 @@ const ResidentDirectory = () => {
     showToast('CSV exported', 'success');
   };
 
-  const handleComposeBroadcast = async () => {
+  const handleSaveAmenity = async () => {
+    if (!amenityForm.name.trim()) { showToast('Amenity name is required', 'error'); return; }
     try {
-      const res = await fetch(`${API_BASE}/broadcasts`, {
-        method: 'POST',
+      const url = editAmenityId ? `${API_BASE}/amenities/${editAmenityId}` : `${API_BASE}/amenities`;
+      const res = await fetch(url, {
+        method: editAmenityId ? 'PUT' : 'POST',
         headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(broadcastForm)
+        body: JSON.stringify({ ...amenityForm, capacity: Number(amenityForm.capacity) })
       });
       if (res.ok) {
-        setIsComposeBroadcastOpen(false);
-        setBroadcastForm({ title: '', body: '', targetScope: 'ALL_RESIDENTS' });
-        showToast('Broadcast sent!', 'success');
+        setIsAddAmenityOpen(false);
+        setEditAmenityId(null);
+        setAmenityForm({ name: '', capacity: '10', openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' });
+        showToast(editAmenityId ? 'Amenity updated' : 'Amenity added', 'success');
         fetchData();
       } else { const d = await res.json(); showToast(`Failed: ${d.message || 'Unknown error'}`, 'error'); }
     } catch (e) { showToast('An unexpected error occurred', 'error'); }
   };
 
+  const openEditAmenity = (amenity: any) => {
+    setEditAmenityId(amenity.id);
+    setAmenityForm({ name: amenity.name, capacity: String(amenity.capacity), openTime: amenity.openTime, closeTime: amenity.closeTime, status: amenity.status });
+    setIsAddAmenityOpen(true);
+  };
+
   const tabs = [
     { id: 'directory', label: 'Directory', icon: <Users size={16} /> },
     { id: 'passes', label: 'Credentials & Passes', icon: <Key size={16} /> },
-    { id: 'broadcasts', label: 'Broadcast History', icon: <Megaphone size={16} /> },
+    { id: 'amenities', label: 'Amenities', icon: <Building2 size={16} /> },
+    { id: 'complaints', label: 'Complaints', icon: <MessageSquareWarning size={16} /> },
   ];
 
   return (
@@ -392,23 +440,87 @@ const ResidentDirectory = () => {
             </div>
           )}
 
-          {activeTab === 'broadcasts' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {broadcasts.length === 0
-                ? <p style={{ color: 'var(--text-muted)' }}>No broadcasts yet.</p>
-                : broadcasts.map(b => (
-                  <div key={b.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{b.title}</h3>
-                      <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#FEF3C7', color: '#B45309' }}>important</span>
+          {activeTab === 'amenities' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                  onClick={() => { setEditAmenityId(null); setAmenityForm({ name: '', capacity: '10', openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' }); setIsAddAmenityOpen(true); }}>
+                  <Plus size={16} /> Add Amenity
+                </button>
+              </div>
+              {amenities.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)' }}>No amenities added yet. Residents won't see any until you add one.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+                  {amenities.map(a => (
+                    <div key={a.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{a.name}</h3>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                          backgroundColor: a.status === 'AVAILABLE' ? '#DCFCE7' : a.status === 'MAINTENANCE' ? '#FEE2E2' : '#F1F5F9',
+                          color: a.status === 'AVAILABLE' ? '#15803D' : a.status === 'MAINTENANCE' ? '#991B1B' : '#475569',
+                        }}>
+                          {a.status.toLowerCase()}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>{a.openTime} &ndash; {a.closeTime}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Capacity: {a.capacity} people</div>
+                      <button
+                        onClick={() => openEditAmenity(a)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #E2E8F0', color: '#475569', borderRadius: 6, cursor: 'pointer' }}>
+                        <Pencil size={13} /> Edit
+                      </button>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>By {b.sentBy} &middot; {new Date(b.sentAt).toLocaleString()}</div>
-                    <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>{b.body}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'complaints' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {complaints.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)' }}>No complaints raised yet.</p>
+              ) : complaints.map(c => {
+                const isResolved = c.status === 'RESOLVED' || c.status === 'CLOSED';
+                return (
+                  <div key={c.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 12 }}>
+                      <div>
+                        <h3 style={{ margin: '0 0 4px 0', fontSize: 15, fontWeight: 600 }}>{c.title}</h3>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {c.resident?.name || 'Unknown'} &middot; {c.resident?.unit ? `${c.resident.unit.tower ? c.resident.unit.tower + ' ' : ''}${c.resident.unit.unitNumber}` : 'N/A'} &middot; {new Date(c.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#475569' }}>{c.category}</span>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                          backgroundColor: isResolved ? '#DCFCE7' : c.status === 'IN_PROGRESS' ? '#E0F2FE' : '#FEF3C7',
+                          color: isResolved ? '#15803D' : c.status === 'IN_PROGRESS' ? '#0369A1' : '#B45309',
+                        }}>
+                          {c.status.replace('_', ' ').toLowerCase()}
+                        </span>
+                      </div>
+                    </div>
+                    <p style={{ margin: '0 0 14px 0', fontSize: 14, lineHeight: 1.5, color: 'var(--text-main)' }}>{c.description}</p>
+                    {isResolved ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#15803D' }}>
+                        <Check size={14} /> Resolved
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleResolveComplaint(c.id)}
+                        disabled={resolvingComplaintId === c.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', opacity: resolvingComplaintId === c.id ? 0.6 : 1 }}
+                      >
+                        <Check size={14} /> {resolvingComplaintId === c.id ? 'Marking done...' : 'Mark Done'}
+                      </button>
+                    )}
                   </div>
-                ))}
-              <button className="btn btn-outline" style={{ marginTop: 8, alignSelf: 'center', backgroundColor: 'white' }} onClick={() => setIsComposeBroadcastOpen(true)}>
-                + Compose New Broadcast
-              </button>
+                );
+              })}
             </div>
           )}
         </>
@@ -640,39 +752,52 @@ const ResidentDirectory = () => {
         </div>
       )}
 
-      {/* ===== COMPOSE BROADCAST MODAL ===== */}
-      {isComposeBroadcastOpen && (
-        <div className="modal-overlay" onClick={() => setIsComposeBroadcastOpen(false)}>
+      {/* ===== ADD/EDIT AMENITY MODAL ===== */}
+      {isAddAmenityOpen && (
+        <div className="modal-overlay" onClick={() => setIsAddAmenityOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
-                <h3 className="modal-title">Compose Broadcast</h3>
-                <p className="modal-subtitle">Send an announcement to all residents</p>
+                <h3 className="modal-title">{editAmenityId ? 'Edit Amenity' : 'Add Amenity'}</h3>
+                <p className="modal-subtitle">Residents see this in the amenities tab of the resident app</p>
               </div>
-              <button className="modal-close" onClick={() => setIsComposeBroadcastOpen(false)}>&times;</button>
+              <button className="modal-close" onClick={() => setIsAddAmenityOpen(false)}>&times;</button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label className="form-label">Title</label>
-                <input type="text" className="form-input" placeholder="e.g. Water Supply Interruption"
-                  value={broadcastForm.title} onChange={e => setBroadcastForm({ ...broadcastForm, title: e.target.value })} />
+                <label className="form-label">Name</label>
+                <input type="text" className="form-input" placeholder="e.g. Swimming Pool"
+                  value={amenityForm.name} onChange={e => setAmenityForm({ ...amenityForm, name: e.target.value })} />
               </div>
-              <div>
-                <label className="form-label">Message</label>
-                <textarea className="form-input" placeholder="Enter your message..." style={{ height: 100, resize: 'none' }}
-                  value={broadcastForm.body} onChange={e => setBroadcastForm({ ...broadcastForm, body: e.target.value })} />
+              <div className="form-row">
+                <div>
+                  <label className="form-label">Capacity</label>
+                  <input type="number" min={1} className="form-input" value={amenityForm.capacity}
+                    onChange={e => setAmenityForm({ ...amenityForm, capacity: e.target.value })} />
+                </div>
+                <div>
+                  <label className="form-label">Status</label>
+                  <select className="form-input" value={amenityForm.status} onChange={e => setAmenityForm({ ...amenityForm, status: e.target.value })}>
+                    <option value="AVAILABLE">Available</option>
+                    <option value="MAINTENANCE">Under Maintenance</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="form-label">Target Scope</label>
-                <select className="form-input" value={broadcastForm.targetScope} onChange={e => setBroadcastForm({ ...broadcastForm, targetScope: e.target.value })}>
-                  <option value="ALL_RESIDENTS">All Residents</option>
-                  <option value="TOWER_A">Tower A Only</option>
-                  <option value="TOWER_B">Tower B Only</option>
-                </select>
+              <div className="form-row">
+                <div>
+                  <label className="form-label">Opens at</label>
+                  <input type="time" className="form-input" value={amenityForm.openTime}
+                    onChange={e => setAmenityForm({ ...amenityForm, openTime: e.target.value })} />
+                </div>
+                <div>
+                  <label className="form-label">Closes at</label>
+                  <input type="time" className="form-input" value={amenityForm.closeTime}
+                    onChange={e => setAmenityForm({ ...amenityForm, closeTime: e.target.value })} />
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsComposeBroadcastOpen(false)}>Cancel</button>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#D97706', borderColor: '#D97706' }} onClick={handleComposeBroadcast}>Send Broadcast</button>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsAddAmenityOpen(false)}>Cancel</button>
+                <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveAmenity}>{editAmenityId ? 'Save Changes' : 'Add Amenity'}</button>
               </div>
             </div>
           </div>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, MapPin, Clock, Phone, Calendar, Edit, Flag, Award, History, CheckCircle, ShieldAlert, AlertTriangle, AlertCircle, ScanLine, CalendarDays, Star, Loader2, ArrowRightLeft, X } from 'lucide-react';
+import { API_BASE } from './config';
 
 interface GuardProfileProps {
   guard: any; // Basic info passed from roster
   onBack: () => void;
 }
 
-const API_BASE = 'http://localhost:5000/api/v1';
 
 const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack }) => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';

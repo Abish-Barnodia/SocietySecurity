@@ -14,3 +14,10 @@ export const checkVehicleSchema = z.object({
     registrationNo: z.string().min(4)
   })
 });
+
+export const updateParkingCapacitySchema = z.object({
+  body: z.object({
+    residentParkingSlots: z.number().int().min(0),
+    visitorParkingSlots: z.number().int().min(0),
+  })
+});

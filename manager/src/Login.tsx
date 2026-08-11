@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ArrowRight } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 interface LoginProps {
@@ -64,7 +64,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <div style={{ position: 'relative', zIndex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 60 }}>
               <div style={{ background: 'var(--primary)', padding: 10, borderRadius: 12, boxShadow: '0 4px 12px rgba(0, 200, 150, 0.3)' }}>
-                <ShieldCheck size={28} strokeWidth={2.5} color="white" />
+                <Icon name="shield-check" size={28} color="white" />
               </div>
               <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: '0.5px' }}>SecureGate</span>
             </div>
@@ -177,7 +177,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               onMouseOut={(e) => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
             >
               {loading ? 'Processing...' : (isLogin ? 'Sign In to Portal' : 'Create Account')} 
-              {!loading && <ArrowRight size={18} strokeWidth={2.5} />}
+              {!loading && <Icon name="arrow-right" size={18} />}
             </button>
             
             <div style={{ textAlign: 'center', marginTop: 16 }}>

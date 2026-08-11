@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { User, Shield, Bell } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const ManagerProfile = () => {
@@ -47,7 +47,7 @@ const ManagerProfile = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
           <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--primary-bg)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-            <User size={48} />
+            <Icon name="user" size={48} />
           </div>
           <h2 style={{ fontSize: 20, marginBottom: 4 }}>{managerData.name || 'Admin'}</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 8 }}>{profile.role === 'MANAGER' ? 'Facility Manager' : profile.role}</p>
@@ -73,9 +73,9 @@ const ManagerProfile = () => {
 
         <div className="card">
           <div style={{ display: 'flex', gap: 24, borderBottom: '1px solid var(--border-color)', paddingBottom: 16, marginBottom: 24 }}>
-            <button className="tab-btn active"><User size={16} /> General</button>
-            <button className="tab-btn"><Shield size={16} /> Security</button>
-            <button className="tab-btn"><Bell size={16} /> Notifications</button>
+            <button className="tab-btn active"><Icon name="user" size={16} /> General</button>
+            <button className="tab-btn"><Icon name="shield" size={16} /> Security</button>
+            <button className="tab-btn"><Icon name="bell" size={16} /> Notifications</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>

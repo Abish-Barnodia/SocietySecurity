@@ -4,6 +4,7 @@ import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 import { verifySignedQRPayload } from '../../utils/qr.util';
+import { assignParkingSlot, releaseParkingSlot } from '../../utils/parking.util';
 import { io } from '../../server';
 import bcrypt from 'bcryptjs';
 
@@ -118,6 +119,8 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       });
     }
 
+    await assignParkingSlot(entry.id, guard.propertyId, vehicleNumber);
+
     let enriched: Record<string, unknown> = denialReason ? { reason: denialReason } : {};
 
     if (qrApproval) {
@@ -185,6 +188,8 @@ export const logExit = async (req: Request, res: Response, next: NextFunction) =
       where: { id },
       data: { exitAt: exitAt ? new Date(exitAt) : new Date() }
     });
+
+    await releaseParkingSlot(id);
 
     await auditLog(req.user!.userId, 'LOG_EXIT', 'Entry', id);
     return sendSuccess(res, 200, 'Exit logged', updated);

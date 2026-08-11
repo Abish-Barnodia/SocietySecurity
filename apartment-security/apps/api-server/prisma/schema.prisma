@@ -14,9 +14,12 @@ model Property {
   pincode          String
   totalUnits       Int
   totalTowers      Int               @default(1)
+  residentParkingSlots Int           @default(0)
+  visitorParkingSlots  Int           @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   amenities        Amenity[]
+  parkingSlots     ParkingSlot[]
   broadcasts       Broadcast[]
   chatMessages     ChatMessage[]
   complaints       Complaint[]
@@ -242,6 +245,7 @@ model Entry {
   unit           Unit               @relation(fields: [unitId], references: [id])
   usageHistory   PassUsageHistory[]
   walkinApproval WalkinApproval?
+  parkingSlot    ParkingSlot?
 }
 
 model WalkinApproval {
@@ -365,6 +369,19 @@ model Vehicle {
   unit           Unit     @relation(fields: [unitId], references: [id])
 
   @@unique([unitId, registrationNo])
+}
+
+model ParkingSlot {
+  id         String   @id @default(cuid())
+  propertyId String
+  zone       String
+  code       String
+  entryId    String?  @unique
+  createdAt  DateTime @default(now())
+  property   Property @relation(fields: [propertyId], references: [id])
+  entry      Entry?   @relation(fields: [entryId], references: [id])
+
+  @@unique([propertyId, code])
 }
 
 model Amenity {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, MapPin, Clock, Phone, Calendar, Edit, Flag, Award, History, CheckCircle, ShieldAlert, AlertTriangle, AlertCircle, ScanLine, CalendarDays, Star, Loader2, ArrowRightLeft, X } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 interface GuardProfileProps {
@@ -79,7 +79,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <Loader2 className="spin" size={48} color="var(--primary)" />
+        <Icon name="loader-2" className="spin" size={48} color="var(--primary)" />
       </div>
     );
   }
@@ -95,7 +95,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           cursor: 'pointer', marginBottom: 20, padding: 0 
         }}
       >
-        <ArrowLeft size={16} /> Back to Guards
+        <Icon name="arrow-left" size={16} /> Back to Guards
       </button>
 
       {/* Main Profile Card */}
@@ -129,16 +129,16 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
               
               <div style={{ display: 'flex', gap: 24, color: 'var(--text-muted)', fontSize: 13 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <MapPin size={14} /> {guard.lastPost?.entryPoint?.name || 'Unassigned'}
+                  <Icon name="map-pin" size={14} /> {guard.lastPost?.entryPoint?.name || 'Unassigned'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={14} /> {guard.lastShift ? `${new Date(guard.lastShift.startedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${guard.lastShift.endedAt ? new Date(guard.lastShift.endedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Now'}` : 'No active shift'}
+                  <Icon name="clock" size={14} /> {guard.lastShift ? `${new Date(guard.lastShift.startedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${guard.lastShift.endedAt ? new Date(guard.lastShift.endedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Now'}` : 'No active shift'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Phone size={14} /> {guard.phone ? `+91 ${guard.phone.replace('+91', '')}` : 'No phone'}
+                  <Icon name="phone" size={14} /> {guard.phone ? `+91 ${guard.phone.replace('+91', '')}` : 'No phone'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Calendar size={14} /> Joined {guard.createdAt ? new Date(guard.createdAt).toLocaleDateString('en-US', {month:'short', year:'numeric'}) : 'Unknown'}
+                  <Icon name="calendar" size={14} /> Joined {guard.createdAt ? new Date(guard.createdAt).toLocaleDateString('en-US', {month:'short', year:'numeric'}) : 'Unknown'}
                 </div>
               </div>
             </div>
@@ -146,10 +146,10 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           
           <div style={{ display: 'flex', gap: 12 }}>
             <button className="btn btn-outline" onClick={() => setIsEditOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px' }}>
-              <Edit size={14} /> Edit
+              <Icon name="edit" size={14} /> Edit
             </button>
             <button className="btn btn-outline" onClick={() => setIsFlagOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px', color: '#D97706', borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }}>
-              <Flag size={14} /> Flag
+              <Icon name="flag" size={14} /> Flag
             </button>
           </div>
         </div>
@@ -166,7 +166,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Rating</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {guard.stats?.rating || 0} <Star size={20} fill="#F59E0B" color="#F59E0B" />
+              {guard.stats?.rating || 0} <Icon name="star-filled" size={20} color="#F59E0B" />
             </div>
           </div>
           <div>
@@ -179,7 +179,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
       {/* Certifications Card */}
       <div className="card" style={{ marginBottom: 24, padding: '20px 32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, fontWeight: 600, color: 'var(--text-main)' }}>
-          <Award size={18} color="var(--text-muted)" /> Certifications & Training
+          <Icon name="award" size={18} color="var(--text-muted)" /> Certifications & Training
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           {guard.certifications?.length > 0 ? (
@@ -196,7 +196,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
         {/* Activity Timeline */}
         <div className="card" style={{ padding: 32 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24, fontWeight: 600, color: 'var(--text-main)' }}>
-            <History size={18} color="var(--text-muted)" /> Activity Timeline
+            <Icon name="history" size={18} color="var(--text-muted)" /> Activity Timeline
           </div>
           
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 20 }}>Today</div>
@@ -216,7 +216,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                         backgroundColor: isCheckIn ? '#E6FBF5' : (isIncident ? '#FEE2E2' : '#FFFBEB'), 
                         color: isCheckIn ? '#00A676' : (isIncident ? '#EF4444' : '#D97706') 
                       }}>
-                        {isCheckIn ? <MapPin size={16} /> : (isIncident ? <AlertCircle size={16} /> : <ScanLine size={16} />)}
+                        {isCheckIn ? <Icon name="map-pin" size={16} /> : (isIncident ? <Icon name="alert-circle" size={16} /> : <Icon name="scan" size={16} />)}
                       </div>
                       {idx !== guard.timeline.length - 1 && (
                         <div style={{ width: 2, height: '100%', backgroundColor: '#F1F5F9', marginTop: -4, marginBottom: -24 }}></div>
@@ -244,7 +244,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           {/* Current Shift */}
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, fontWeight: 600, color: 'var(--text-main)' }}>
-              <Clock size={16} color="var(--text-muted)" /> Current Shift
+              <Icon name="clock" size={16} color="var(--text-muted)" /> Current Shift
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13, marginBottom: 24 }}>
@@ -276,10 +276,10 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button className="btn btn-outline" onClick={() => setIsForceClearOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', color: '#D97706', borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }}>
-                <AlertTriangle size={16} /> Force Clear / Flag
+                <Icon name="alert-triangle" size={16} /> Force Clear / Flag
               </button>
               <button className="btn btn-outline" onClick={() => setIsReassignOpen(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', backgroundColor: '#F8FAFC' }}>
-                <ArrowRightLeft size={16} /> Reassign Post
+                <Icon name="arrows-exchange" size={16} /> Reassign Post
               </button>
             </div>
           </div>
@@ -287,7 +287,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           {/* Recent Handovers */}
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, fontWeight: 600, color: 'var(--text-main)' }}>
-              <History size={16} color="var(--text-muted)" /> Recent Handovers
+              <Icon name="history" size={16} color="var(--text-muted)" /> Recent Handovers
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -321,7 +321,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
       <div className="card" style={{ padding: 0 }}>
         <div style={{ padding: '24px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--text-main)' }}>
-            <CalendarDays size={18} color="var(--text-muted)" /> Shift History
+            <Icon name="calendar-week" size={18} color="var(--text-muted)" /> Shift History
           </div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{guard.recentShifts?.length || 0} shifts</div>
         </div>
@@ -375,7 +375,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                 <h3 className="modal-title">Edit Guard Profile</h3>
                 <p className="modal-subtitle">Update basic details for this guard.</p>
               </div>
-              <button className="modal-close" onClick={() => setIsEditOpen(false)}><X size={20} /></button>
+              <button className="modal-close" onClick={() => setIsEditOpen(false)}><Icon name="x" size={20} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -405,7 +405,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                 <h3 className="modal-title" style={{ color: '#D97706' }}>Flag Guard</h3>
                 <p className="modal-subtitle">Log an incident against this guard.</p>
               </div>
-              <button className="modal-close" onClick={() => setIsFlagOpen(false)}><X size={20} /></button>
+              <button className="modal-close" onClick={() => setIsFlagOpen(false)}><Icon name="x" size={20} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -437,7 +437,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                 <h3 className="modal-title">Reassign Post</h3>
                 <p className="modal-subtitle">Move guard to a different active post.</p>
               </div>
-              <button className="modal-close" onClick={() => setIsReassignOpen(false)}><X size={20} /></button>
+              <button className="modal-close" onClick={() => setIsReassignOpen(false)}><Icon name="x" size={20} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
@@ -464,7 +464,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                 <h3 className="modal-title" style={{ color: '#DC2626' }}>Force Clear Shift</h3>
                 <p className="modal-subtitle">Immediately end the guard's current shift.</p>
               </div>
-              <button className="modal-close" onClick={() => setIsForceClearOpen(false)}><X size={20} /></button>
+              <button className="modal-close" onClick={() => setIsForceClearOpen(false)}><Icon name="x" size={20} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <p style={{ fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>

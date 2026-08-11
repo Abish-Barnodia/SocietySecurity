@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@iconify-json/tabler": "^1.2.38",
     "@iconify/react": "^6.0.2",
-    "lucide-react": "^1.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

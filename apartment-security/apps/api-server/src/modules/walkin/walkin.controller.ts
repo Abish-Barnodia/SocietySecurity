@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
+import { assignParkingSlot } from '../../utils/parking.util';
 
 export const requestWalkin = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -42,10 +43,13 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
         status: 'PENDING_APPROVAL',
         visitorName,
         visitorPhone,
-        notes: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
+        vehicleNumber,
+        notes: purpose,
         gatePhotoUrl: finalPhotoUrl
       }
     });
+
+    await assignParkingSlot(entry.id, targetUnit.propertyId, vehicleNumber);
 
     await auditLog(req.user!.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
 
@@ -54,7 +58,8 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
     io?.to(`unit_${unitId}`).emit('walkin_request', {
       entryId: entry.id,
       visitorName,
-      purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
+      purpose,
+      vehicleNumber,
       gatePhotoUrl: finalPhotoUrl
     });
 
@@ -64,7 +69,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
         entryId: entry.id,
         residentId: targetUnit.residents[0].id, // Assign to the first resident (usually primary)
         visitorName,
-        purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : (purpose || ''),
+        purpose: purpose || '',
         timeoutAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes timeout
       }
     });

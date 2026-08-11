@@ -533,9 +533,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       // Walk-in request emitted directly to the unit room by walkin.controller.ts.
-      socket.on('walkin_request', (payload: { entryId: string; visitorName: string; purpose?: string; gatePhotoUrl?: string }) => {
+      socket.on('walkin_request', (payload: { entryId: string; visitorName: string; purpose?: string; vehicleNumber?: string | null; gatePhotoUrl?: string }) => {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
+        setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, vehicleNumber: payload.vehicleNumber, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
         addAlert({
           id: payload.entryId,
           entryId: payload.entryId,

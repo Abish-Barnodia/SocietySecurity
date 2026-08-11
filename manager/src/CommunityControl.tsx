@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Users, Flag, Trash2, Send } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -76,7 +76,7 @@ function FeedTab() {
         onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
       />
       <button className="btn btn-primary" onClick={send} disabled={sending || !draft.trim()}>
-        <Send size={14} /> Send
+        <Icon name="send" size={14} /> Send
       </button>
     </div>
   );
@@ -104,7 +104,7 @@ function FeedTab() {
               disabled={deletingId === m.id}
               title="Remove message"
             >
-              <Trash2 size={14} />
+              <Icon name="trash" size={14} />
             </button>
           </div>
 
@@ -286,9 +286,9 @@ const CommunityControl: React.FC = () => {
   const [tab, setTab] = useState<'feed' | 'members' | 'flagged'>('feed');
 
   const tabs: { key: typeof tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'feed', label: 'Community Feed', icon: <MessageSquare size={15} /> },
-    { key: 'members', label: 'Members', icon: <Users size={15} /> },
-    { key: 'flagged', label: 'Flagged Content', icon: <Flag size={15} /> },
+    { key: 'feed', label: 'Community Feed', icon: <Icon name="message" size={15} /> },
+    { key: 'members', label: 'Members', icon: <Icon name="users" size={15} /> },
+    { key: 'flagged', label: 'Flagged Content', icon: <Icon name="flag" size={15} /> },
   ];
 
   return (

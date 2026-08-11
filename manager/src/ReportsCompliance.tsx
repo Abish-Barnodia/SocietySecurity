@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, ShieldCheck, ClipboardList, Download, FileDown } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -62,7 +62,7 @@ function MonthlyReportsTab() {
           {[now.getFullYear(), now.getFullYear() - 1].map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
         <button className="btn btn-primary" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleDownload} disabled={downloading || loading}>
-          <Download size={14} /> {downloading ? 'Generating…' : 'Download PDF'}
+          <Icon name="download" size={14} /> {downloading ? 'Generating…' : 'Download PDF'}
         </button>
       </div>
 
@@ -138,7 +138,7 @@ function AuditTrailTab() {
     <div>
       <div style={{ display: 'flex', marginBottom: 16 }}>
         <button className="btn btn-outline" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }} onClick={exportCsv} disabled={logs.length === 0}>
-          <FileDown size={14} /> Export CSV
+          <Icon name="file-download" size={14} /> Export CSV
         </button>
       </div>
 
@@ -215,9 +215,9 @@ const ReportsCompliance: React.FC = () => {
   const [tab, setTab] = useState<'monthly' | 'audit' | 'compliance'>('monthly');
 
   const tabs: { key: typeof tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'monthly', label: 'Monthly Reports', icon: <FileText size={15} /> },
-    { key: 'audit', label: 'Audit Trail', icon: <ClipboardList size={15} /> },
-    { key: 'compliance', label: 'Compliance Dashboard', icon: <ShieldCheck size={15} /> },
+    { key: 'monthly', label: 'Monthly Reports', icon: <Icon name="file-text" size={15} /> },
+    { key: 'audit', label: 'Audit Trail', icon: <Icon name="clipboard-list" size={15} /> },
+    { key: 'compliance', label: 'Compliance Dashboard', icon: <Icon name="shield-check" size={15} /> },
   ];
 
   return (

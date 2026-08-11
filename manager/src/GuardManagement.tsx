@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Pencil, Ban, Upload, List, Activity, AlertCircle, UserCog, Search, ChevronDown, Eye, Star } from 'lucide-react';
+import Icon from './Icon';
 import GuardProfile from './GuardProfile';
 import { API_BASE } from './config';
 
@@ -133,25 +133,25 @@ const GuardManagement: React.FC = () => {
           onClick={() => setActiveTab('roster')}
           className={`tab-btn ${activeTab === 'roster' ? 'active' : ''}`}
         >
-          <List size={16} /> Guard Roster
+          <Icon name="list" size={16} /> Guard Roster
         </button>
         <button 
           onClick={() => setActiveTab('live')}
           className={`tab-btn ${activeTab === 'live' ? 'active' : ''}`}
         >
-          <Activity size={16} /> Live Monitoring
+          <Icon name="activity" size={16} /> Live Monitoring
         </button>
         <button 
           onClick={() => setActiveTab('incidents')}
           className={`tab-btn ${activeTab === 'incidents' ? 'active' : ''}`}
         >
-          <AlertCircle size={16} /> Incidents
+          <Icon name="alert-circle" size={16} /> Incidents
         </button>
         <button 
           onClick={() => setActiveTab('overrides')}
           className={`tab-btn ${activeTab === 'overrides' ? 'active' : ''}`}
         >
-          <UserCog size={16} /> Override Log
+          <Icon name="user-cog" size={16} /> Override Log
         </button>
       </div>
 
@@ -163,7 +163,7 @@ const GuardManagement: React.FC = () => {
           <div style={{ padding: '0 0 24px 0' }}>
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, padding: '0 24px', alignItems: 'center' }}>
               <div className="search-container" style={{ width: 320 }}>
-                <Search size={16} className="search-icon" />
+                <Icon name="search" size={16} className="search-icon" />
                 <input type="text" placeholder="Search guards..." className="form-input search-input" />
               </div>
               <select className="form-input" style={{ width: 140, cursor: 'pointer' }} defaultValue="All Shifts">
@@ -232,13 +232,13 @@ const GuardManagement: React.FC = () => {
                       </td>
                       <td style={{ padding: '16px', fontSize: 13, fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          4.5 <Star size={14} fill="#F59E0B" color="#F59E0B" />
+                          4.5 <Icon name="star-filled" size={14} color="#F59E0B" />
                         </div>
                       </td>
                       <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <button className="action-btn" title="View Profile" onClick={() => setSelectedGuard(g)}>
-                            <Eye size={16} />
+                            <Icon name="eye" size={16} />
                           </button>
                         </div>
                       </td>
@@ -370,7 +370,7 @@ const GuardManagement: React.FC = () => {
                     {newGuardForm.photoUrl ? (
                       <img src={newGuardForm.photoUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <Upload size={24} color="var(--text-muted)" />
+                      <Icon name="upload" size={24} color="var(--text-muted)" />
                     )}
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--primary)', cursor: 'pointer', fontWeight: 500 }} onClick={() => fileInputRef.current?.click()}>

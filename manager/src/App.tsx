@@ -9,20 +9,16 @@ import ExpectedVisitors from './ExpectedVisitors';
 import CommunityControl from './CommunityControl';
 import ReportsCompliance from './ReportsCompliance';
 import WorkforceMgmt from './WorkforceMgmt';
+import ParkingVehicles from './ParkingVehicles';
 import Login from './Login';
 import ManagerProfile from './ManagerProfile';
-import { 
-  LayoutDashboard, ShieldCheck, Users, Clock, AlertTriangle, 
-  UserCheck, Car, Video, FileText, UsersRound, CalendarDays, 
-  Settings, Search, Bell, User, Menu, ChevronDown, Building, LogOut 
-} from 'lucide-react';
+import Icon from './Icon';
 
 import { API_BASE } from './config';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -32,8 +28,7 @@ const App: React.FC = () => {
     const storedUser = localStorage.getItem('user');
     if (token && storedUser) {
       setIsAuthenticated(true);
-      setUser(JSON.parse(storedUser));
-      
+
       // Fetch full profile for property details
       fetch(`${API_BASE}/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -48,9 +43,8 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  const handleLogin = (token: string, loggedInUser: any) => {
+  const handleLogin = (_token: string, _loggedInUser: any) => {
     setIsAuthenticated(true);
-    setUser(loggedInUser);
   };
 
   const handleLogout = () => {
@@ -58,7 +52,6 @@ const App: React.FC = () => {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     setIsAuthenticated(false);
-    setUser(null);
   };
 
   if (!isAuthenticated) {
@@ -66,21 +59,21 @@ const App: React.FC = () => {
   }
 
   const operationsNav = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-    { id: 'guards', label: 'Guard Management', icon: <ShieldCheck size={18} /> },
-    { id: 'residents', label: 'Resident Directory', icon: <Users size={18} /> },
-    { id: 'timeline', label: 'Event Timeline', icon: <Clock size={18} /> },
-    { id: 'alerts', label: 'Alerts & Escalation', icon: <AlertTriangle size={18} />, badge: '4' },
-    { id: 'expected', label: 'Expected Visitors', icon: <UserCheck size={18} /> },
-    { id: 'parking', label: 'Parking & Vehicles', icon: <Car size={18} /> },
-    { id: 'cctv', label: 'CCTV Monitoring', icon: <Video size={18} /> }
+    { id: 'dashboard', label: 'Dashboard', icon: <Icon name="layout-dashboard" size={18} /> },
+    { id: 'guards', label: 'Guard Management', icon: <Icon name="shield-check" size={18} /> },
+    { id: 'residents', label: 'Resident Directory', icon: <Icon name="users" size={18} /> },
+    { id: 'timeline', label: 'Event Timeline', icon: <Icon name="clock" size={18} /> },
+    { id: 'alerts', label: 'Alerts & Escalation', icon: <Icon name="alert-triangle" size={18} />, badge: '4' },
+    { id: 'expected', label: 'Expected Visitors', icon: <Icon name="user-check" size={18} /> },
+    { id: 'parking', label: 'Parking & Vehicles', icon: <Icon name="car" size={18} /> },
+    { id: 'cctv', label: 'CCTV Monitoring', icon: <Icon name="video" size={18} /> }
   ];
 
   const adminNav = [
-    { id: 'reports', label: 'Reports', icon: <FileText size={18} /> },
-    { id: 'community', label: 'Community Control', icon: <UsersRound size={18} /> },
-    { id: 'workforce', label: 'Workforce Mgmt', icon: <CalendarDays size={18} /> },
-    { id: 'settings', label: 'Settings', icon: <Settings size={18} /> }
+    { id: 'reports', label: 'Reports', icon: <Icon name="file-text" size={18} /> },
+    { id: 'community', label: 'Community Control', icon: <Icon name="users-group" size={18} /> },
+    { id: 'workforce', label: 'Workforce Mgmt', icon: <Icon name="calendar-week" size={18} /> },
+    { id: 'settings', label: 'Settings', icon: <Icon name="settings" size={18} /> }
   ];
 
   return (
@@ -89,14 +82,14 @@ const App: React.FC = () => {
       <aside className="sidebar" style={{ width: isSidebarCollapsed ? 80 : 260, transition: 'width 0.2s' }}>
         <div className="sidebar-header" style={{ marginBottom: 12 }}>
           <div style={{ background: 'var(--primary)', padding: '6px', borderRadius: '6px', color: 'white', display: 'flex' }}>
-            <ShieldCheck size={20} />
+            <Icon name="shield-check" size={20} />
           </div>
           {!isSidebarCollapsed && <span>SecureGate</span>}
           <div 
             style={{ marginLeft: 'auto', color: 'var(--text-muted)', cursor: 'pointer' }}
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           >
-            <Menu size={20} />
+            <Icon name="menu-2" size={20} />
           </div>
         </div>
         
@@ -159,7 +152,7 @@ const App: React.FC = () => {
             title="Logout"
             style={{ marginLeft: 'auto', color: 'var(--text-sidebar)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
           >
-            <LogOut size={16} />
+            <Icon name="logout" size={16} />
           </button>
         </div>
       </aside>
@@ -177,7 +170,7 @@ const App: React.FC = () => {
             <input type="text" className="search-bar" placeholder="Search units, guards, passes..." />
             
             <div className="topbar-icon" onClick={() => setActiveTab('alerts')} style={{ cursor: 'pointer' }}>
-              <Bell size={18} />
+              <Icon name="bell" size={18} />
               <span style={{ 
                 position: 'absolute', top: 6, right: 6, 
                 background: 'var(--warning)', borderRadius: '50%', 
@@ -186,13 +179,13 @@ const App: React.FC = () => {
             </div>
             
             <div className="topbar-icon" onClick={() => setActiveTab('profile')} style={{ background: 'var(--primary-bg)', color: 'var(--primary)', cursor: 'pointer' }}>
-              <User size={18} />
+              <Icon name="user" size={18} />
             </div>
 
             <div className="property-selector">
-              <Building size={16} color="var(--text-muted)" />
+              <Icon name="building" size={16} color="var(--text-muted)" />
               {fullProfile?.manager?.property?.name || 'Loading...'}
-              <ChevronDown size={16} color="var(--text-muted)" />
+              <Icon name="chevron-down" size={16} color="var(--text-muted)" />
             </div>
           </div>
         </header>
@@ -205,11 +198,12 @@ const App: React.FC = () => {
           {activeTab === 'timeline' && <EventTimeline />}
           {activeTab === 'alerts' && <AlertsEscalation />}
           {activeTab === 'expected' && <ExpectedVisitors />}
+          {activeTab === 'parking' && <ParkingVehicles />}
           {activeTab === 'community' && <CommunityControl />}
           {activeTab === 'reports' && <ReportsCompliance />}
           {activeTab === 'workforce' && <WorkforceMgmt />}
           {activeTab === 'profile' && <ManagerProfile />}
-          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'profile' && (
+          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'profile' && (
             <div className="card">
               <h2>{operationsNav.concat(adminNav).find(i => i.id === activeTab)?.label}</h2>
               <p>This module is under construction.</p>

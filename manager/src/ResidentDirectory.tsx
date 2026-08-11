@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Plus, Users, Key, Loader2, ChevronRight, X, Phone, Mail, Home, Building2, MessageSquareWarning, Check, Pencil } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 interface FamilyMember {
@@ -253,10 +253,10 @@ const ResidentDirectory = () => {
   };
 
   const tabs = [
-    { id: 'directory', label: 'Directory', icon: <Users size={16} /> },
-    { id: 'passes', label: 'Credentials & Passes', icon: <Key size={16} /> },
-    { id: 'amenities', label: 'Amenities', icon: <Building2 size={16} /> },
-    { id: 'complaints', label: 'Complaints', icon: <MessageSquareWarning size={16} /> },
+    { id: 'directory', label: 'Directory', icon: <Icon name="users" size={16} /> },
+    { id: 'passes', label: 'Credentials & Passes', icon: <Icon name="key" size={16} /> },
+    { id: 'amenities', label: 'Amenities', icon: <Icon name="building-skyscraper" size={16} /> },
+    { id: 'complaints', label: 'Complaints', icon: <Icon name="message-exclamation" size={16} /> },
   ];
 
   return (
@@ -269,10 +269,10 @@ const ResidentDirectory = () => {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'white' }} onClick={handleExportCSV}>
-            <Download size={16} /> Export CSV
+            <Icon name="download" size={16} /> Export CSV
           </button>
           <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setIsAddResidentOpen(true)}>
-            <Plus size={16} /> Add Household
+            <Icon name="plus" size={16} /> Add Household
           </button>
         </div>
       </div>
@@ -295,7 +295,7 @@ const ResidentDirectory = () => {
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-          <Loader2 className="spin" size={32} color="var(--primary)" />
+          <Icon name="loader-2" className="spin" size={32} color="var(--primary)" />
         </div>
       ) : (
         <>
@@ -304,7 +304,7 @@ const ResidentDirectory = () => {
               {/* Search & Filters */}
               <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
                 <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-                  <Search size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                  <Icon name="search" size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
                   <input type="text" className="form-input" placeholder="Search by family, unit, or member name..."
                     style={{ paddingLeft: 36, backgroundColor: 'white' }}
                     value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
@@ -318,9 +318,9 @@ const ResidentDirectory = () => {
               {/* Stats */}
               <div style={{ display: 'flex', gap: 14, marginBottom: 24 }}>
                 {[
-                  { icon: <Home size={16} color="var(--primary)" />, value: filteredFamilies.length, label: 'Families' },
-                  { icon: <Users size={16} color="var(--primary)" />, value: filteredFamilies.reduce((s, f) => s + f.totalMembers, 0), label: 'Total Residents' },
-                  { icon: <Building2 size={16} color="var(--primary)" />, value: uniqueTowers.length - 1, label: 'Towers' },
+                  { icon: <Icon name="home" size={16} color="var(--primary)" />, value: filteredFamilies.length, label: 'Families' },
+                  { icon: <Icon name="users" size={16} color="var(--primary)" />, value: filteredFamilies.reduce((s, f) => s + f.totalMembers, 0), label: 'Total Residents' },
+                  { icon: <Icon name="building-skyscraper" size={16} color="var(--primary)" />, value: uniqueTowers.length - 1, label: 'Towers' },
                 ].map(stat => (
                   <div key={stat.label} style={{ backgroundColor: 'white', borderRadius: 10, border: '1px solid var(--border-color)', padding: '12px 18px', display: 'flex', gap: 10, alignItems: 'center' }}>
                     {stat.icon}
@@ -335,7 +335,7 @@ const ResidentDirectory = () => {
               {/* Family Cards */}
               {filteredFamilies.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
-                  <Users size={40} style={{ marginBottom: 12, opacity: 0.25 }} />
+                  <Icon name="users" size={40} style={{ marginBottom: 12, opacity: 0.25 }} />
                   <p style={{ margin: 0, fontSize: 15 }}>{searchQuery ? 'No families match your search.' : 'No families yet. Click "Add Household" to get started!'}</p>
                 </div>
               ) : (
@@ -353,7 +353,7 @@ const ResidentDirectory = () => {
                           <div>
                             <h3 style={{ margin: '0 0 5px 0', fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{displayName(family)}</h3>
                             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <Home size={11} /> Unit {family.apartmentNumber} &middot; {family.tower}
+                              <Icon name="home" size={11} /> Unit {family.apartmentNumber} &middot; {family.tower}
                             </p>
                           </div>
                           <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: active ? '#E0F2FE' : '#FEE2E2', color: active ? '#0369A1' : '#991B1B' }}>
@@ -386,7 +386,7 @@ const ResidentDirectory = () => {
                           <button
                             onClick={e => { e.stopPropagation(); setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
                             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                            View Family <ChevronRight size={14} />
+                            View Family <Icon name="chevron-right" size={14} />
                           </button>
                           {active ? (
                             <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
@@ -445,7 +445,7 @@ const ResidentDirectory = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
                 <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                   onClick={() => { setEditAmenityId(null); setAmenityForm({ name: '', capacity: '10', openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' }); setIsAddAmenityOpen(true); }}>
-                  <Plus size={16} /> Add Amenity
+                  <Icon name="plus" size={16} /> Add Amenity
                 </button>
               </div>
               {amenities.length === 0 ? (
@@ -469,7 +469,7 @@ const ResidentDirectory = () => {
                       <button
                         onClick={() => openEditAmenity(a)}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #E2E8F0', color: '#475569', borderRadius: 6, cursor: 'pointer' }}>
-                        <Pencil size={13} /> Edit
+                        <Icon name="pencil" size={13} /> Edit
                       </button>
                     </div>
                   ))}
@@ -507,7 +507,7 @@ const ResidentDirectory = () => {
                     <p style={{ margin: '0 0 14px 0', fontSize: 14, lineHeight: 1.5, color: 'var(--text-main)' }}>{c.description}</p>
                     {isResolved ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#15803D' }}>
-                        <Check size={14} /> Resolved
+                        <Icon name="check" size={14} /> Resolved
                       </div>
                     ) : (
                       <button
@@ -515,7 +515,7 @@ const ResidentDirectory = () => {
                         disabled={resolvingComplaintId === c.id}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', opacity: resolvingComplaintId === c.id ? 0.6 : 1 }}
                       >
-                        <Check size={14} /> {resolvingComplaintId === c.id ? 'Marking done...' : 'Mark Done'}
+                        <Icon name="check" size={14} /> {resolvingComplaintId === c.id ? 'Marking done...' : 'Mark Done'}
                       </button>
                     )}
                   </div>
@@ -535,13 +535,13 @@ const ResidentDirectory = () => {
               <div>
                 <h2 style={{ margin: '0 0 6px 0', fontSize: 20, fontWeight: 700 }}>{displayName(selectedFamily)}</h2>
                 <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-muted)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Home size={12} /> Unit {selectedFamily.apartmentNumber}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building2 size={12} /> {selectedFamily.tower}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="home" size={12} /> Unit {selectedFamily.apartmentNumber}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="building-skyscraper" size={12} /> {selectedFamily.tower}</span>
                   <span>Floor {selectedFamily.floor}</span>
                 </div>
               </div>
               <button onClick={() => setIsFamilyDetailsOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
-                <X size={20} />
+                <Icon name="x" size={20} />
               </button>
             </div>
 
@@ -590,8 +590,8 @@ const ResidentDirectory = () => {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                      {member.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Phone size={12} />{member.phone}</div>}
-                      {member.email && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Mail size={12} />{member.email}</div>}
+                      {member.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="phone" size={12} />{member.phone}</div>}
+                      {member.email && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="mail" size={12} />{member.email}</div>}
                       {!member.phone && !member.email && <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No contact info</div>}
                     </div>
                   </div>

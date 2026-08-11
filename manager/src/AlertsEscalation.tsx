@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, ShieldAlert, CheckCircle2, MoreHorizontal, Megaphone, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const AlertsEscalation = () => {
@@ -8,9 +8,11 @@ const AlertsEscalation = () => {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [chains, setChains] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [secondsAgo, setSecondsAgo] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN'>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'P1' | 'P2' | 'P3'>('ALL');
+  // ponytail: defaulting to today's date for quick real-time view
+  const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+
 
   // Broadcast Modal State
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
@@ -28,7 +30,7 @@ const AlertsEscalation = () => {
         fetch(`${API_BASE}/escalation/chains`, { headers })
       ]);
 
-      const unifiedAlerts = [];
+      const unifiedAlerts: any[] = [];
 
       // 1. Process Incidents
       if (incRes.status === 'fulfilled' && incRes.value.ok) {
@@ -88,7 +90,6 @@ const AlertsEscalation = () => {
       unifiedAlerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       
       setAlerts(unifiedAlerts);
-      setSecondsAgo(0);
 
       // 4. Process Chains
       if (chainsRes.status === 'fulfilled' && chainsRes.value.ok) {
@@ -107,11 +108,6 @@ const AlertsEscalation = () => {
     fetchAllData();
     const interval = setInterval(fetchAllData, 15000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const timer = setInterval(() => setSecondsAgo(s => s + 1), 1000);
-    return () => clearInterval(timer);
   }, []);
 
   const handleResolve = async (alert: any) => {
@@ -194,10 +190,12 @@ const AlertsEscalation = () => {
     }
   };
 
-  const filteredAlerts = alerts.filter(a =>
-    (statusFilter === 'ALL' || a.status === statusFilter) &&
-    (priorityFilter === 'ALL' || a.priority === priorityFilter)
-  );
+  const filteredAlerts = alerts.filter(a => {
+    const alertDate = new Date(a.createdAt).toISOString().split('T')[0];
+    return (statusFilter === 'ALL' || a.status === statusFilter) &&
+           (priorityFilter === 'ALL' || a.priority === priorityFilter) &&
+           (!dateFilter || alertDate === dateFilter);
+  });
   const criticalActiveCount = alerts.filter(a => a.priority === 'P1' && a.status === 'OPEN').length;
 
   return (
@@ -219,7 +217,7 @@ const AlertsEscalation = () => {
               fontWeight: 600, fontSize: 14, cursor: 'pointer' 
             }}
           >
-            <Megaphone size={16} /> Broadcast Alert
+            <Icon name="speakerphone" size={16} /> Broadcast Alert
           </button>
         </div>
       </div>
@@ -247,9 +245,15 @@ const AlertsEscalation = () => {
               <option value="P2">Priority 2 (Urgent)</option>
               <option value="P3">Priority 3 (Routine)</option>
             </select>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
+            />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', paddingRight: 8 }}>
             {filteredAlerts.length === 0 && !loading && (
               <div style={{ padding: 32, textAlign: 'center', color: '#9CA3AF', border: '1px dashed #E5E7EB', borderRadius: 8 }}>
                 No alerts currently active.
@@ -310,7 +314,7 @@ const AlertsEscalation = () => {
                     </div>
                   ) : isClosed ? (
                     <div style={{ color: '#9CA3AF' }}>
-                      <CheckCircle2 size={20} />
+                      <Icon name="circle-check" size={20} />
                     </div>
                   ) : null}
                 </div>
@@ -329,7 +333,7 @@ const AlertsEscalation = () => {
              </div>
           )}
 
-          {chains.map((chain, chainIdx) => (
+          {chains.map((chain) => (
             <div key={chain.id} style={{ marginBottom: 24, border: '1px solid #E5E7EB', borderRadius: 8, overflow: 'hidden' }}>
               <div style={{ padding: '12px 16px', backgroundColor: '#F9FAFB', borderBottom: '1px solid #E5E7EB', fontWeight: 600, fontSize: 14 }}>
                 Priority {chain.priority} — {chain.priority === 'P1' ? 'Critical' : chain.priority === 'P2' ? 'Urgent' : 'Routine'}
@@ -362,7 +366,7 @@ const AlertsEscalation = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 24, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Broadcast Alert</h2>
-              <button onClick={() => setIsBroadcastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={20}/></button>
+              <button onClick={() => setIsBroadcastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={20}/></button>
             </div>
             
             <p style={{ margin: '0 0 20px 0', fontSize: 14, color: '#4B5563' }}>Send a real-time push notification to both Residents and Guards.</p>

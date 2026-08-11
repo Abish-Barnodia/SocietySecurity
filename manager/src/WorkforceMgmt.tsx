@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Calendar, CheckCircle, Clock, Search, ShieldCheck, UserPlus, FileText, Settings, X, Loader2 } from 'lucide-react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const WorkforceMgmt = () => {
@@ -116,9 +116,9 @@ const WorkforceMgmt = () => {
   };
 
   const tabs = [
-    { id: 'leaveRecords', label: 'Leave Records', icon: <FileText size={16} /> },
-    { id: 'workerPool', label: 'Worker Pool', icon: <UserPlus size={16} /> },
-    { id: 'activeAssignments', label: 'Active Assignments', icon: <Briefcase size={16} /> }
+    { id: 'leaveRecords', label: 'Leave Records', icon: <Icon name="file-text" size={16} /> },
+    { id: 'workerPool', label: 'Worker Pool', icon: <Icon name="user-plus" size={16} /> },
+    { id: 'activeAssignments', label: 'Active Assignments', icon: <Icon name="briefcase" size={16} /> }
   ];
 
   return (
@@ -159,7 +159,7 @@ const WorkforceMgmt = () => {
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-          <Loader2 className="spin" size={32} color="var(--primary)" />
+          <Icon name="loader-2" className="spin" size={32} color="var(--primary)" />
         </div>
       ) : (
         <>
@@ -227,7 +227,7 @@ const WorkforceMgmt = () => {
                 activeAssignments.map(a => (
                   <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 16, backgroundColor: 'white', borderRadius: 8, border: '1px solid var(--border-color)', padding: '16px 20px' }}>
                     <div style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
-                      <ShieldCheck size={20} />
+                      <Icon name="shield-check" size={20} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -285,7 +285,7 @@ const WorkforceMgmt = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Add Worker</h2>
-              <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={24}/></button>
+              <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={24}/></button>
             </div>
             
             <form onSubmit={handleAddWorker} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -352,7 +352,7 @@ const WorkforceMgmt = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Assign to Post</h2>
-              <button onClick={() => setIsAssignModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={24}/></button>
+              <button onClick={() => setIsAssignModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={24}/></button>
             </div>
             
             <form onSubmit={handleAssignPost} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

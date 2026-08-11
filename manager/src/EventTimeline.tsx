@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Building, ShieldCheck, CheckCircle, AlertTriangle, Key, ArrowRight, User, X, MapPin, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import Icon from './Icon';
 import { API_BASE } from './config';
 
 const EventTimeline = () => {
@@ -120,7 +120,7 @@ const EventTimeline = () => {
               boxShadow: viewType === 'unit' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
             }}
           >
-            <Building size={16} /> By Unit
+            <Icon name="building" size={16} /> By Unit
           </button>
           <button 
             onClick={() => setViewType('guard')}
@@ -132,7 +132,7 @@ const EventTimeline = () => {
               boxShadow: viewType === 'guard' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
             }}
           >
-            <ShieldCheck size={16} /> By Guard
+            <Icon name="shield-check" size={16} /> By Guard
           </button>
         </div>
 
@@ -189,11 +189,11 @@ const EventTimeline = () => {
                 width: 32, height: 32, borderRadius: '50%', backgroundColor: evt.iconBg, 
                 display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 
               }}>
-                {evt.iconType === 'ArrowRight' && <ArrowRight size={16} color={evt.iconColor} />}
-                {evt.iconType === 'CheckCircle' && <CheckCircle size={16} color={evt.iconColor} />}
-                {evt.iconType === 'AlertTriangle' && <AlertTriangle size={16} color={evt.iconColor} />}
-                {evt.iconType === 'XCircle' && <X size={16} color={evt.iconColor} />}
-                {evt.iconType === 'Key' && <Key size={16} color={evt.iconColor} />}
+                {evt.iconType === 'ArrowRight' && <Icon name="arrow-right" size={16} color={evt.iconColor} />}
+                {evt.iconType === 'CheckCircle' && <Icon name="circle-check" size={16} color={evt.iconColor} />}
+                {evt.iconType === 'AlertTriangle' && <Icon name="alert-triangle" size={16} color={evt.iconColor} />}
+                {evt.iconType === 'XCircle' && <Icon name="x" size={16} color={evt.iconColor} />}
+                {evt.iconType === 'Key' && <Icon name="key" size={16} color={evt.iconColor} />}
               </div>
               <div style={{ flex: 1, backgroundColor: '#F9FAFB', borderRadius: 8, padding: 16, border: '1px solid #F3F4F6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -206,20 +206,20 @@ const EventTimeline = () => {
                 <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{evt.description}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#6B7280' }}>
                   {evt.guard && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><ShieldCheck size={14} /> {evt.guard}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="shield-check" size={14} /> {evt.guard}</span>
                   )}
                   {evt.unit && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building size={14} /> {evt.unit}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="building" size={14} /> {evt.unit}</span>
                   )}
                   {evt.gate && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={14} /> {evt.gate}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="map-pin" size={14} /> {evt.gate}</span>
                   )}
                   {evt.pass && (
                     <span 
                       style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#008B8B', fontWeight: 500, cursor: 'pointer' }}
                       onClick={() => setSelectedPass(evt.pass)}
                     >
-                      <Key size={14} /> {evt.pass}
+                      <Icon name="key" size={14} /> {evt.pass}
                     </span>
                   )}
                   {evt.linkedEvent && (
@@ -244,7 +244,7 @@ const EventTimeline = () => {
           <div style={{ padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E5E7EB' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Key size={20} color="#0284C7" />
+                <Icon name="key" size={20} color="#0284C7" />
               </div>
               <div>
                 <h3 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700, color: '#111827' }}>{selectedPass}</h3>
@@ -252,7 +252,7 @@ const EventTimeline = () => {
               </div>
             </div>
             <button onClick={() => setSelectedPass(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
-              <X size={20} />
+              <Icon name="x" size={20} />
             </button>
           </div>
           

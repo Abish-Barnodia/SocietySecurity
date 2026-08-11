@@ -92,20 +92,6 @@ const Dashboard: React.FC = () => {
   ];
 
   // --- Actions ---
-  const handleApprove = async (id: string) => {
-    try {
-      await fetch(`${API_BASE}/walkins/${id}/approve`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
-      fetchData(); // Refresh data
-    } catch (err) { console.error(err); }
-  };
-
-  const handleDeny = async (id: string) => {
-    try {
-      await fetch(`${API_BASE}/walkins/${id}/deny`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
-      fetchData();
-    } catch (err) { console.error(err); }
-  };
-
   const handleAcknowledge = async (id: string) => {
     try {
       await fetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });

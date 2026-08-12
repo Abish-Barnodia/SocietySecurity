@@ -28,6 +28,8 @@ import ComplaintDetailScreen from '../screens/resident/ComplaintDetailScreen';
 import CreateComplaintScreen from '../screens/resident/CreateComplaintScreen';
 import DomesticWorkersScreen from '../screens/resident/DomesticWorkersScreen';
 import WorkerFormScreen from '../screens/resident/WorkerFormScreen';
+import EventsScreen from '../screens/resident/EventsScreen';
+import MaintenanceScreen from '../screens/resident/MaintenanceScreen';
 
 // Shared Screens
 import AlertsScreen from '../screens/shared/AlertsScreen';
@@ -59,6 +61,8 @@ export type RootStackParamList = {
   CreateComplaint: undefined;
   DomesticWorkers: undefined;
   WorkerForm: { workerId?: string };
+  Events: undefined;
+  Maintenance: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -149,6 +153,8 @@ export default function AppNavigator() {
           <Stack.Screen name="CreateComplaint" component={CreateComplaintScreen} options={{ headerShown: true, title: 'New Complaint' }} />
           <Stack.Screen name="DomesticWorkers" component={DomesticWorkersScreen} options={{ headerShown: false }} />
           <Stack.Screen name="WorkerForm" component={WorkerFormScreen} options={{ headerShown: true, title: 'Worker' }} />
+          <Stack.Screen name="Events" component={EventsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ headerShown: false }} />
         </>
       )}
     </Stack.Navigator>

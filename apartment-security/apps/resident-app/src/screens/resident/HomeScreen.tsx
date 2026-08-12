@@ -190,6 +190,18 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
             </View>
             <Text style={styles.actionBtnText}>Complaints</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigateTo('Events')}>
+            <View style={styles.actionIconWrap}>
+              <Ionicons name="calendar" size={20} color={colors.textMuted} />
+            </View>
+            <Text style={styles.actionBtnText}>Events</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigateTo('Maintenance')}>
+            <View style={styles.actionIconWrap}>
+              <Ionicons name="receipt" size={20} color={colors.textMuted} />
+            </View>
+            <Text style={styles.actionBtnText}>Maintenance</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtnFull, { backgroundColor: colors.dangerLight }]} onPress={() => setEmergencyOpen(true)}>
             <View style={styles.actionIconWrap}>
               <Ionicons name="alert-circle" size={22} color={colors.danger} />

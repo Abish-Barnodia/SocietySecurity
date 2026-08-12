@@ -28,6 +28,9 @@ import { communityRouter } from './modules/community/community.routes';
 import { complaintRouter } from './modules/complaints/complaint.routes';
 import { domesticWorkerRouter } from './modules/domesticWorkers/domesticWorker.routes';
 import { escalationRouter } from './modules/escalation/escalation.routes';
+import { eventRouter } from './modules/events/event.routes';
+import { maintenanceRouter } from './modules/maintenance/maintenance.routes';
+import { fundRouter } from './modules/funds/fund.routes';
 
 const app = express();
 
@@ -101,6 +104,9 @@ app.use(`${API}/community`, communityRouter);
 app.use(`${API}/complaints`, complaintRouter);
 app.use(`${API}/domestic-workers`, domesticWorkerRouter);
 app.use(`${API}/escalation`, escalationRouter);
+app.use(`${API}/events`, eventRouter);
+app.use(`${API}/maintenance`, maintenanceRouter);
+app.use(`${API}/funds`, fundRouter);
 
 // 404 handler
 app.use(notFoundHandler);

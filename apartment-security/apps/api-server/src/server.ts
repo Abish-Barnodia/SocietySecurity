@@ -19,6 +19,12 @@ export const io = new Server(server, {
         env.CLIENT_MANAGER_URL,
       ];
       if (allowed.includes(origin)) return callback(null, true);
+      
+      // In development, allow localhost origins for Web clients (like Expo on :8081)
+      if (env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
+        return callback(null, true);
+      }
+      
       callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
     },
     credentials: true,

@@ -35,6 +35,9 @@ const envSchema = z.object({
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_ID: z.string().optional(),
   
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+
   QR_HMAC_SECRET: z.string().min(32, { message: 'QR_HMAC_SECRET must be at least 32 characters — set it in .env' }),
   OTP_EXPIRY_MINUTES: z.string().default('10').transform(Number),
   EMERGENCY_SMS_NUMBER: z.string().optional(),

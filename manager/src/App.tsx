@@ -10,6 +10,9 @@ import CommunityControl from './CommunityControl';
 import ReportsCompliance from './ReportsCompliance';
 import WorkforceMgmt from './WorkforceMgmt';
 import ParkingVehicles from './ParkingVehicles';
+import EventsManagement from './EventsManagement';
+import MaintenanceManagement from './MaintenanceManagement';
+import FundManagement from './FundManagement';
 import Login from './Login';
 import ManagerProfile from './ManagerProfile';
 import Icon from './Icon';
@@ -73,6 +76,9 @@ const App: React.FC = () => {
     { id: 'reports', label: 'Reports', icon: <Icon name="file-text" size={18} /> },
     { id: 'community', label: 'Community Control', icon: <Icon name="users-group" size={18} /> },
     { id: 'workforce', label: 'Workforce Mgmt', icon: <Icon name="calendar-week" size={18} /> },
+    { id: 'events', label: 'Events', icon: <Icon name="calendar-event" size={18} /> },
+    { id: 'maintenance', label: 'Maintenance', icon: <Icon name="receipt" size={18} /> },
+    { id: 'funds', label: 'Fund Management', icon: <Icon name="wallet" size={18} /> },
     { id: 'settings', label: 'Settings', icon: <Icon name="settings" size={18} /> }
   ];
 
@@ -192,7 +198,7 @@ const App: React.FC = () => {
 
         {/* Page Content */}
         <div className="page-content">
-          {activeTab === 'dashboard' && <Dashboard />}
+          {activeTab === 'dashboard' && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'guards' && <GuardManagement />}
           {activeTab === 'residents' && <ResidentDirectory />}
           {activeTab === 'timeline' && <EventTimeline />}
@@ -202,8 +208,11 @@ const App: React.FC = () => {
           {activeTab === 'community' && <CommunityControl />}
           {activeTab === 'reports' && <ReportsCompliance />}
           {activeTab === 'workforce' && <WorkforceMgmt />}
+          {activeTab === 'events' && <EventsManagement />}
+          {activeTab === 'maintenance' && <MaintenanceManagement />}
+          {activeTab === 'funds' && <FundManagement />}
           {activeTab === 'profile' && <ManagerProfile />}
-          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'profile' && (
+          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'events' && activeTab !== 'maintenance' && activeTab !== 'funds' && activeTab !== 'profile' && (
             <div className="card">
               <h2>{operationsNav.concat(adminNav).find(i => i.id === activeTab)?.label}</h2>
               <p>This module is under construction.</p>

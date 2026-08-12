@@ -7,6 +7,8 @@ import { DataProvider } from './src/context/DataContext';
 import { CommunityProvider } from './src/context/CommunityContext';
 import { ComplaintsProvider } from './src/context/ComplaintsContext';
 import { DomesticWorkersProvider } from './src/context/DomesticWorkersContext';
+import { EventsProvider } from './src/context/EventsContext';
+import { MaintenanceProvider } from './src/context/MaintenanceContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -72,7 +74,11 @@ export default function App() {
               <CommunityProvider>
                 <ComplaintsProvider>
                   <DomesticWorkersProvider>
-                    <ThemedApp />
+                    <EventsProvider>
+                      <MaintenanceProvider>
+                        <ThemedApp />
+                      </MaintenanceProvider>
+                    </EventsProvider>
                   </DomesticWorkersProvider>
                 </ComplaintsProvider>
               </CommunityProvider>

@@ -30,6 +30,8 @@ model Property {
   invoices         Invoice[]
   managers         Manager[]
   units            Unit[]
+  events           Event[]
+  fundTransactions FundTransaction[]
 }
 
 model EntryPoint {
@@ -115,6 +117,7 @@ model Resident {
   unit                 Unit             @relation(fields: [unitId], references: [id])
   user                 User             @relation(fields: [userId], references: [id])
   walkinApprovals      WalkinApproval[]
+  eventRSVPs           EventRSVP[]
 }
 
 model Guard {
@@ -483,14 +486,15 @@ model Invoice {
 }
 
 model Payment {
-  id            String   @id @default(cuid())
-  invoiceId     String
-  amount        Float
-  method        String
-  transactionId String?  @unique
-  status        String
-  paidAt        DateTime @default(now())
-  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+  id              String   @id @default(cuid())
+  invoiceId       String
+  amount          Float
+  method          String
+  transactionId   String?  @unique
+  razorpayOrderId String?  @unique
+  status          String
+  paidAt          DateTime @default(now())
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
 }
 
 model ChatMessage {
@@ -791,4 +795,45 @@ enum WorkerType {
   GARDENER
   SECURITY_GUARD
   OTHER
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  propertyId  String
+  title       String
+  description String
+  location    String?
+  startDate   DateTime
+  endDate     DateTime
+  organizerId String?
+  status      String   @default("UPCOMING")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  property    Property @relation(fields: [propertyId], references: [id])
+  rsvps       EventRSVP[]
+}
+
+model EventRSVP {
+  id         String   @id @default(cuid())
+  eventId    String
+  residentId String
+  status     String   @default("GOING") // GOING, MAYBE, DECLINED
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id])
+  resident   Resident @relation(fields: [residentId], references: [id])
+
+  @@unique([eventId, residentId])
+}
+
+model FundTransaction {
+  id          String   @id @default(cuid())
+  propertyId  String
+  amount      Float
+  type        String   // INCOME, EXPENSE
+  category    String?
+  description String?
+  date        DateTime @default(now())
+  recordedById String?
+  createdAt   DateTime @default(now())
+  property    Property @relation(fields: [propertyId], references: [id])
 }

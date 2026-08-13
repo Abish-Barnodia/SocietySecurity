@@ -294,7 +294,30 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
     if (!isValid) {
       return next(new AppError('Invalid email or password', 401));
     }
-    
+
+    // ponytail: Leave restriction enforced at backend auth layer, not frontend
+    if (user.role === 'GUARD') {
+      const guard = await prisma.guard.findUnique({ where: { userId: user.id }, select: { id: true } });
+      if (guard) {
+        const now = new Date();
+        const activeLeave = await prisma.guardLeave.findFirst({
+          where: {
+            guardId: guard.id,
+            status: 'APPROVED',
+            startDate: { lte: now },
+            endDate: { gte: now },
+          },
+        });
+        if (activeLeave) {
+          const fmt = (d: Date) => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          return next(new AppError(
+            `You are currently on leave from ${fmt(activeLeave.startDate)} to ${fmt(activeLeave.endDate)}. You cannot access the Guard App during your leave period.`,
+            403
+          ));
+        }
+      }
+    }
+
     const payload = { userId: user.id, role: user.role };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
@@ -316,6 +339,7 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
     next(error);
   }
 };
+
 
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {

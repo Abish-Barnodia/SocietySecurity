@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import GuardLeaveManagement from './GuardLeaveManagement';
 import { API_BASE } from './config';
 
 const WorkforceMgmt = () => {
@@ -116,9 +117,10 @@ const WorkforceMgmt = () => {
   };
 
   const tabs = [
-    { id: 'leaveRecords', label: 'Leave Records', icon: <Icon name="file-text" size={16} /> },
-    { id: 'workerPool', label: 'Worker Pool', icon: <Icon name="user-plus" size={16} /> },
-    { id: 'activeAssignments', label: 'Active Assignments', icon: <Icon name="briefcase" size={16} /> }
+    { id: 'workerPool', label: 'Worker Pool', icon: <Icon name="users" size={16} /> },
+    { id: 'activeAssignments', label: 'Active Assignments', icon: <Icon name="briefcase" size={16} /> },
+    { id: 'leaves', label: 'Leaves & Time Off', icon: <Icon name="calendar-off" size={16} /> },
+    { id: 'schedules', label: 'Shift Schedules', icon: <Icon name="calendar-time" size={16} /> }
   ];
 
   return (
@@ -251,8 +253,13 @@ const WorkforceMgmt = () => {
             </div>
           )}
 
-          {/* LEAVE RECORDS */}
-          {activeTab === 'leaveRecords' && (
+          {/* LEAVES */}
+          {activeTab === 'leaves' && (
+            <GuardLeaveManagement />
+          )}
+
+          {/* SCHEDULES */}
+          {activeTab === 'schedules' && (
             <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>

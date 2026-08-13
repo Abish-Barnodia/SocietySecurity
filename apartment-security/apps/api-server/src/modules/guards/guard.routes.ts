@@ -13,7 +13,13 @@ import {
   getShiftSummary,
   getRoster,
   getMyProfile,
-  assignGuardToPost
+  assignGuardToPost,
+  createLeave,
+  getLeaves,
+  cancelLeave,
+  getSalarySlip,
+  createSalaryOrder,
+  verifySalaryPayment,
 } from './guard.controller';
 import {
   startShiftSchema,
@@ -36,8 +42,18 @@ router.get('/me', requireRole('GUARD'), getMyProfile);
 router.get('/directory', requireRole('MANAGER', 'COMMITTEE'), getDirectory);
 router.get('/active', requireRole('MANAGER', 'COMMITTEE'), getActiveGuards);
 
+// Leave management (manager only)
+router.get('/leaves',              requireRole('MANAGER', 'COMMITTEE'), getLeaves);
+router.post('/leaves',             requireRole('MANAGER', 'COMMITTEE'), createLeave);
+router.patch('/leaves/:id/cancel', requireRole('MANAGER', 'COMMITTEE'), cancelLeave);
+
+// Salary management (manager only)
+router.get('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), createSalaryOrder);
+router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), verifySalaryPayment);
+
 router.post('/', requireRole('MANAGER', 'COMMITTEE'), validate(createGuardSchema), createGuard);
-router.post('/:id/assign', requireRole('MANAGER', 'COMMITTEE'), assignGuardToPost);
-router.get('/:id/profile', requireRole('MANAGER', 'COMMITTEE'), getGuardProfile);
+router.post('/:id/assign',   requireRole('MANAGER', 'COMMITTEE'), assignGuardToPost);
+router.get('/:id/salary',    requireRole('MANAGER', 'COMMITTEE'), getSalarySlip);
+router.get('/:id/profile',   requireRole('MANAGER', 'COMMITTEE'), getGuardProfile);
 
 export { router as guardRouter };

@@ -16,6 +16,12 @@ const GuardManagement: React.FC = () => {
 
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
 
+  // Salary slip
+  const [salarySlip, setSalarySlip] = useState<any>(null);
+  const [salaryLoading, setSalaryLoading] = useState(false);
+  const [salaryError, setSalaryError] = useState('');
+  const [salaryPayingId, setSalaryPayingId] = useState<string | null>(null);
+
   const [isAddGuardOpen, setIsAddGuardOpen] = useState(false);
   const [newGuardForm, setNewGuardForm] = useState({
     name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: ''
@@ -63,6 +69,92 @@ const GuardManagement: React.FC = () => {
     } catch (err) {
       console.error(err);
       alert('Error creating guard');
+    }
+  };
+
+  const openSalaryModal = async (guard: any) => {
+    setSalarySlip(null);
+    setSalaryError('');
+    setSalaryLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/guards/${guard.id}/salary`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setSalarySlip(data.data);
+      } else {
+        setSalaryError(data.message || 'Failed to load salary slip');
+      }
+    } catch (err) {
+      setSalaryError('Network error');
+    } finally {
+      setSalaryLoading(false);
+    }
+  };
+
+  const handlePaySalary = async () => {
+    if (!salarySlip) return;
+    if (salarySlip.status === 'PAID') { alert('Salary is already paid for this month.'); return; }
+
+    setSalaryPayingId(salarySlip.id);
+    try {
+      // 1. Create Razorpay order
+      const orderRes = await fetch(`${API_BASE}/guards/salary/${salarySlip.id}/create-order`, {
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) { alert(orderData.message || 'Failed to create order'); setSalaryPayingId(null); return; }
+
+      const { orderId, amount, currency, keyId } = orderData.data;
+
+      // 2. Load Razorpay checkout SDK if not already loaded
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).Razorpay) { resolve(); return; }
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+        document.body.appendChild(script);
+      });
+
+      // 3. Open checkout
+      const options = {
+        key: keyId,
+        amount,
+        currency,
+        name: 'SecureGate',
+        description: `Salary Payment — ${salarySlip.guard.name} (${salarySlip.monthYear})`,
+        order_id: orderId,
+        handler: async (response: any) => {
+          // 4. Verify server-side
+          const verifyRes = await fetch(`${API_BASE}/guards/salary/${salarySlip.id}/verify`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            })
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyRes.ok && verifyData.status === 'success') {
+            setSalarySlip((prev: any) => ({ ...prev, status: 'PAID', paidAt: verifyData.data.paidAt, transactionId: verifyData.data.transactionId }));
+          } else {
+            alert('Payment verification failed: ' + (verifyData.message || 'Unknown error'));
+          }
+          setSalaryPayingId(null);
+        },
+        modal: { ondismiss: () => setSalaryPayingId(null) },
+        theme: { color: '#00C896' },
+        prefill: { name: salarySlip.guard.name },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      alert(err.message || 'Payment failed');
+      setSalaryPayingId(null);
     }
   };
 
@@ -239,6 +331,9 @@ const GuardManagement: React.FC = () => {
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                           <button className="action-btn" title="View Profile" onClick={() => setSelectedGuard(g)}>
                             <Icon name="eye" size={16} />
+                          </button>
+                          <button className="action-btn" title="Pay Salary" onClick={() => openSalaryModal(g)} style={{ color: '#16a34a' }}>
+                            <Icon name="indian-rupee" size={16} />
                           </button>
                         </div>
                       </td>
@@ -489,6 +584,88 @@ const GuardManagement: React.FC = () => {
               <button className="btn btn-outline" onClick={() => setIsAddGuardOpen(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleCreateGuard}>Create Guard</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Salary Slip Modal */}
+      {(salaryLoading || salarySlip || salaryError) && (
+        <div className="modal-overlay" onClick={() => { if (!salaryPayingId) { setSalarySlip(null); setSalaryError(''); } }}>
+          <div className="modal-content" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Salary Slip</h3>
+                <p className="modal-subtitle">{salarySlip ? `${salarySlip.guard?.name} — ${new Date(salarySlip.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}` : 'Loading...'}</p>
+              </div>
+              <button className="modal-close" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>×</button>
+            </div>
+            <div className="modal-body">
+              {salaryLoading && <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>Generating salary slip...</div>}
+              {salaryError && <div style={{ padding: 16, background: '#ffebee', color: '#c62828', borderRadius: 6 }}>{salaryError}</div>}
+              {salarySlip && (
+                <div>
+                  {/* Status Banner */}
+                  {salarySlip.status === 'PAID' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#dcfce7', color: '#166534', borderRadius: 8, marginBottom: 20, fontWeight: 600 }}>
+                      <Icon name="check-circle" size={18} /> Salary Paid — {salarySlip.paidAt ? new Date(salarySlip.paidAt).toLocaleDateString('en-IN') : ''}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fefce8', color: '#854d0e', borderRadius: 8, marginBottom: 20, fontWeight: 600 }}>
+                      <Icon name="clock" size={18} /> Payment Pending
+                    </div>
+                  )}
+
+                  {/* Breakdown Table */}
+                  <div style={{ border: '1px solid var(--border-color)', borderRadius: 8, overflow: 'hidden', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-color)' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Guard</span>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{salarySlip.guard?.name} ({salarySlip.guard?.badgeNumber})</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Month</span>
+                      <span style={{ fontSize: 13 }}>{new Date(salarySlip.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Base Salary</span>
+                      <span style={{ fontSize: 13 }}>₹{salarySlip.baseSalary?.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', background: salarySlip.deductions > 0 ? '#fff7ed' : undefined }}>
+                      <span style={{ color: salarySlip.deductions > 0 ? '#c2410c' : 'var(--text-muted)', fontSize: 13 }}>
+                        Leave Deductions {salarySlip.leaveDays > 0 ? `(${salarySlip.leaveDays} days × ₹${salarySlip.deductionPerDay}/day)` : ''}
+                      </span>
+                      <span style={{ fontSize: 13, color: salarySlip.deductions > 0 ? '#c2410c' : undefined }}>− ₹{salarySlip.deductions?.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-color)' }}>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>Net Payable</span>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: '#16a34a' }}>₹{salarySlip.netAmount?.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {salarySlip.transactionId && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Transaction ID: {salarySlip.transactionId}</div>
+                  )}
+                </div>
+              )}
+            </div>
+            {salarySlip && salarySlip.status !== 'PAID' && (
+              <div className="modal-footer">
+                <button className="btn btn-outline" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>Close</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handlePaySalary}
+                  disabled={!!salaryPayingId}
+                  style={{ background: '#16a34a', border: 'none', display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Icon name="indian-rupee" size={16} />
+                  {salaryPayingId ? 'Processing...' : `Pay ₹${salarySlip?.netAmount?.toLocaleString('en-IN')} via Razorpay`}
+                </button>
+              </div>
+            )}
+            {salarySlip && salarySlip.status === 'PAID' && (
+              <div className="modal-footer">
+                <button className="btn btn-outline" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>Close</button>
+              </div>
+            )}
           </div>
         </div>
       )}

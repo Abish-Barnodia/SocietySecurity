@@ -1,6 +1,9 @@
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/prisma';
+import { razorpay } from '../../config/razorpay';
+import { env } from '../../config/env';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
@@ -446,5 +449,201 @@ export const getGuardProfile = async (req: Request, res: Response, next: NextFun
     };
 
     return sendSuccess(res, 200, 'Guard profile', profileData);
+  } catch (err) { next(err); }
+};
+
+// ── Leave Management ─────────────────────────────────────────────────────────
+
+export const createLeave = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { guardId, startDate, endDate, reason } = req.body;
+
+    if (!guardId || !startDate || !endDate || !reason) {
+      return next(new AppError('guardId, startDate, endDate, and reason are required', 400));
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return next(new AppError('Invalid date format', 400));
+    }
+    if (start > end) {
+      return next(new AppError('startDate cannot be after endDate', 400));
+    }
+
+    const guard = await prisma.guard.findUnique({ where: { id: guardId } });
+    if (!guard) return next(new AppError('Guard not found', 404));
+
+    // Conflict check: no overlapping APPROVED leaves
+    const conflict = await prisma.guardLeave.findFirst({
+      where: {
+        guardId,
+        status: 'APPROVED',
+        startDate: { lte: end },
+        endDate: { gte: start },
+      },
+    });
+    if (conflict) return next(new AppError('Guard already has an approved leave overlapping these dates', 409));
+
+    const leave = await prisma.guardLeave.create({
+      data: { guardId, startDate: start, endDate: end, reason, createdById: req.user!.userId },
+    });
+
+    await auditLog(req.user!.userId, 'CREATE_GUARD_LEAVE', 'GuardLeave', leave.id);
+    return sendSuccess(res, 201, 'Leave assigned successfully', leave);
+  } catch (err) { next(err); }
+};
+
+export const getLeaves = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { guardId } = req.query;
+    const where = guardId ? { guardId: guardId as string } : {};
+
+    const leaves = await prisma.guardLeave.findMany({
+      where,
+      include: { guard: { select: { name: true, badgeNumber: true } } },
+      orderBy: { startDate: 'desc' },
+    });
+
+    return sendSuccess(res, 200, 'Guard leaves', leaves);
+  } catch (err) { next(err); }
+};
+
+export const cancelLeave = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const leave = await prisma.guardLeave.findUnique({ where: { id } });
+    if (!leave) return next(new AppError('Leave record not found', 404));
+    if (leave.status === 'CANCELLED') return next(new AppError('Leave is already cancelled', 400));
+
+    const updated = await prisma.guardLeave.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
+
+    await auditLog(req.user!.userId, 'CANCEL_GUARD_LEAVE', 'GuardLeave', id);
+    return sendSuccess(res, 200, 'Leave cancelled', updated);
+  } catch (err) { next(err); }
+};
+
+// ── Salary Management ────────────────────────────────────────────────────────
+
+const BASE_SALARY = 15000; // ₹ per month
+const LEAVE_DEDUCTION_PER_DAY = 500; // ₹ per approved leave day
+
+// Calculates overlap days between a leave and the given month
+const overlapDays = (leaveStart: Date, leaveEnd: Date, monthStart: Date, monthEnd: Date): number => {
+  const start = leaveStart < monthStart ? monthStart : leaveStart;
+  const end = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+  if (start > end) return 0;
+  return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+export const getSalarySlip = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params; // guard id
+    const { month } = req.query; // e.g. "2026-08", defaults to current month
+
+    const guard = await prisma.guard.findUnique({
+      where: { id },
+      select: { id: true, name: true, badgeNumber: true },
+    });
+    if (!guard) return next(new AppError('Guard not found', 404));
+
+    const monthYear = (month as string) || new Date().toISOString().slice(0, 7);
+    const [year, mon] = monthYear.split('-').map(Number);
+    const monthStart = new Date(year, mon - 1, 1);
+    const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999); // last ms of month
+
+    // Find any existing PAID record — don't recalculate if already paid
+    const existing = await prisma.guardSalary.findUnique({ where: { guardId_monthYear: { guardId: id, monthYear } } });
+    if (existing?.status === 'PAID') {
+      return sendSuccess(res, 200, 'Salary slip', { ...existing, guard });
+    }
+
+    // Calculate leave deductions for this month
+    const leaves = await prisma.guardLeave.findMany({
+      where: { guardId: id, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+    });
+    const leaveDays = leaves.reduce((sum, l) => sum + overlapDays(l.startDate, l.endDate, monthStart, monthEnd), 0);
+    const deductions = Math.min(leaveDays * LEAVE_DEDUCTION_PER_DAY, BASE_SALARY);
+    const netAmount = BASE_SALARY - deductions;
+
+    // Upsert a PENDING record so we have a stable ID for payment
+    const salary = await prisma.guardSalary.upsert({
+      where: { guardId_monthYear: { guardId: id, monthYear } },
+      update: { baseSalary: BASE_SALARY, deductions, netAmount },
+      create: { guardId: id, monthYear, baseSalary: BASE_SALARY, deductions, netAmount },
+    });
+
+    return sendSuccess(res, 200, 'Salary slip', {
+      ...salary,
+      guard,
+      leaveDays,
+      deductionPerDay: LEAVE_DEDUCTION_PER_DAY,
+    });
+  } catch (err) { next(err); }
+};
+
+export const createSalaryOrder = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!razorpay) return next(new AppError('Payment gateway not configured', 500));
+
+    const { id } = req.params; // guardSalary id
+    const salary = await prisma.guardSalary.findUnique({ where: { id }, include: { guard: { select: { name: true } } } });
+    if (!salary) return next(new AppError('Salary record not found', 404));
+    if (salary.status === 'PAID') return next(new AppError('Salary already paid', 400));
+
+    const amountPaise = Math.round(salary.netAmount * 100);
+    const order = await razorpay.orders.create({
+      amount: amountPaise,
+      currency: 'INR',
+      receipt: salary.id,
+      notes: { guardSalaryId: salary.id, guard: salary.guard.name },
+    });
+
+    await prisma.guardSalary.update({ where: { id }, data: { razorpayOrderId: order.id } });
+
+    return sendSuccess(res, 201, 'Order created', {
+      orderId: order.id,
+      amount: amountPaise,
+      currency: 'INR',
+      keyId: env.RAZORPAY_KEY_ID,
+      salaryId: salary.id,
+    });
+  } catch (err) { next(err); }
+};
+
+export const verifySalaryPayment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!env.RAZORPAY_KEY_SECRET) return next(new AppError('Payment gateway not configured', 500));
+
+    const { id } = req.params; // guardSalary id
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return next(new AppError('Missing Razorpay payment fields', 400));
+    }
+
+    const salary = await prisma.guardSalary.findUnique({ where: { id } });
+    if (!salary) return next(new AppError('Salary record not found', 404));
+    if (salary.razorpayOrderId !== razorpay_order_id) return next(new AppError('Order ID mismatch', 400));
+    if (salary.status === 'PAID') return sendSuccess(res, 200, 'Already paid', salary);
+
+    const expectedSig = crypto
+      .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSig !== razorpay_signature) {
+      return next(new AppError('Payment signature verification failed', 400));
+    }
+
+    const updated = await prisma.guardSalary.update({
+      where: { id },
+      data: { status: 'PAID', transactionId: razorpay_payment_id, paidAt: new Date() },
+    });
+
+    await auditLog(req.user!.userId, 'PAY_GUARD_SALARY', 'GuardSalary', id);
+    return sendSuccess(res, 200, 'Salary payment verified', updated);
   } catch (err) { next(err); }
 };

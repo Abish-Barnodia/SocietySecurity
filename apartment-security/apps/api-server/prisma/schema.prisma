@@ -121,20 +121,22 @@ model Resident {
 }
 
 model Guard {
-  id           String      @id @default(cuid())
-  userId       String      @unique
+  id           String       @id @default(cuid())
+  userId       String       @unique
   propertyId   String
   name         String
-  badgeNumber  String      @unique
-  isOnDuty     Boolean     @default(false)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  badgeNumber  String       @unique
+  isOnDuty     Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   entries      Entry[]
-  property     Property    @relation(fields: [propertyId], references: [id])
-  user         User        @relation(fields: [userId], references: [id])
+  property     Property     @relation(fields: [propertyId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
   postCheckIns GuardPost[]
   incidents    Incident[]
   shifts       Shift[]
+  leaves       GuardLeave[]
+  salaries     GuardSalary[]
 }
 
 model Manager {
@@ -836,4 +838,37 @@ model FundTransaction {
   recordedById String?
   createdAt   DateTime @default(now())
   property    Property @relation(fields: [propertyId], references: [id])
+}
+
+model GuardLeave {
+  id          String   @id @default(cuid())
+  guardId     String
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  status      String   @default("APPROVED") // APPROVED | CANCELLED
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  guard       Guard    @relation(fields: [guardId], references: [id])
+
+  @@index([guardId])
+}
+
+model GuardSalary {
+  id              String    @id @default(cuid())
+  guardId         String
+  monthYear       String    // e.g. "2026-08"
+  baseSalary      Float
+  deductions      Float
+  netAmount       Float
+  status          String    @default("PENDING") // PENDING | PAID
+  razorpayOrderId String?   @unique
+  transactionId   String?   @unique
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  guard           Guard     @relation(fields: [guardId], references: [id])
+
+  @@unique([guardId, monthYear])
 }

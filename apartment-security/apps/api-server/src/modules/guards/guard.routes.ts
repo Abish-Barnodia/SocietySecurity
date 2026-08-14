@@ -48,7 +48,7 @@ router.post('/leaves',             requireRole('MANAGER', 'COMMITTEE'), createLe
 router.patch('/leaves/:id/cancel', requireRole('MANAGER', 'COMMITTEE'), cancelLeave);
 
 // Salary management (manager only)
-router.get('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), createSalaryOrder);
+router.post('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), createSalaryOrder);
 router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), verifySalaryPayment);
 
 router.post('/', requireRole('MANAGER', 'COMMITTEE'), validate(createGuardSchema), createGuard);

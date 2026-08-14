@@ -8,6 +8,7 @@ const GuardManagement: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'incidents' | 'overrides'>('roster');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [guards, setGuards] = useState<any[]>([]);
   const [activeGuards, setActiveGuards] = useState<any[]>([]);
@@ -21,6 +22,9 @@ const GuardManagement: React.FC = () => {
   const [salaryLoading, setSalaryLoading] = useState(false);
   const [salaryError, setSalaryError] = useState('');
   const [salaryPayingId, setSalaryPayingId] = useState<string | null>(null);
+  // ponytail: editable overrides for base salary & deductions
+  const [editBase, setEditBase] = useState<number | ''>('');
+  const [editDed, setEditDed] = useState<number | ''>('');
 
   const [isAddGuardOpen, setIsAddGuardOpen] = useState(false);
   const [newGuardForm, setNewGuardForm] = useState({
@@ -76,6 +80,8 @@ const GuardManagement: React.FC = () => {
     setSalarySlip(null);
     setSalaryError('');
     setSalaryLoading(true);
+    setEditBase('');
+    setEditDed('');
     try {
       const res = await fetch(`${API_BASE}/guards/${guard.id}/salary`, {
         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -83,6 +89,8 @@ const GuardManagement: React.FC = () => {
       const data = await res.json();
       if (res.ok && data.status === 'success') {
         setSalarySlip(data.data);
+        setEditBase(data.data.baseSalary ?? 15000);
+        setEditDed(data.data.deductions ?? 0);
       } else {
         setSalaryError(data.message || 'Failed to load salary slip');
       }
@@ -100,8 +108,11 @@ const GuardManagement: React.FC = () => {
     setSalaryPayingId(salarySlip.id);
     try {
       // 1. Create Razorpay order
+      const editedNet = Number(editBase || 0) - Number(editDed || 0);
       const orderRes = await fetch(`${API_BASE}/guards/salary/${salarySlip.id}/create-order`, {
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overrideAmount: editedNet })
       });
       const orderData = await orderRes.json();
       if (!orderRes.ok) { alert(orderData.message || 'Failed to create order'); setSalaryPayingId(null); return; }
@@ -167,7 +178,7 @@ const GuardManagement: React.FC = () => {
       };
 
       const [dirRes, activeRes, incRes, auditRes] = await Promise.allSettled([
-        fetch(`${API_BASE}/guards/directory`, { headers }),
+        fetch(`${API_BASE}/guards/directory?date=${selectedDate}`, { headers }),
         fetch(`${API_BASE}/guards/active`, { headers }),
         fetch(`${API_BASE}/incidents`, { headers }),
         fetch(`${API_BASE}/reports/audit`, { headers })
@@ -198,7 +209,7 @@ const GuardManagement: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedDate]);
 
   if (selectedGuard) {
     return <GuardProfile guard={selectedGuard} onBack={() => setSelectedGuard(null)} />;
@@ -269,6 +280,14 @@ const GuardManagement: React.FC = () => {
                 <option value="On Post">On Post</option>
                 <option value="Offline">Offline</option>
               </select>
+              <input 
+                type="date" 
+                className="form-input" 
+                style={{ width: 140, cursor: 'pointer' }}
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+              />
               <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>{guards.length} guards</span>
             </div>
             
@@ -279,7 +298,7 @@ const GuardManagement: React.FC = () => {
                   <th style={{ padding: '12px 16px' }}>Status</th>
                   <th style={{ padding: '12px 16px' }}>Post</th>
                   <th style={{ padding: '12px 16px' }}>Shift</th>
-                  <th style={{ padding: '12px 16px' }}>Entries Today</th>
+                  <th style={{ padding: '12px 16px' }}>Entries ({selectedDate === new Date().toISOString().split('T')[0] ? 'Today' : selectedDate})</th>
                   <th style={{ padding: '12px 16px' }}>Rating</th>
                   <th style={{ padding: '12px 24px', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -320,7 +339,7 @@ const GuardManagement: React.FC = () => {
                         06:00 - 14:00
                       </td>
                       <td style={{ padding: '16px', fontWeight: 600, fontSize: 14 }}>
-                        {g.lastShift?.totalEntries || Math.floor(Math.random() * 50 + 20)}
+                        {g.entriesCount !== undefined ? g.entriesCount : (g.lastShift?.totalEntries || 0)}
                       </td>
                       <td style={{ padding: '16px', fontSize: 13, fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -333,7 +352,7 @@ const GuardManagement: React.FC = () => {
                             <Icon name="eye" size={16} />
                           </button>
                           <button className="action-btn" title="Pay Salary" onClick={() => openSalaryModal(g)} style={{ color: '#16a34a' }}>
-                            <Icon name="indian-rupee" size={16} />
+                            <Icon name="currency-rupee" size={16} />
                           </button>
                         </div>
                       </td>
@@ -625,19 +644,41 @@ const GuardManagement: React.FC = () => {
                       <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Month</span>
                       <span style={{ fontSize: 13 }}>{new Date(salarySlip.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border-color)' }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Base Salary</span>
-                      <span style={{ fontSize: 13 }}>₹{salarySlip.baseSalary?.toLocaleString('en-IN')}</span>
+                      {salarySlip.status === 'PAID' ? (
+                        <span style={{ fontSize: 13 }}>₹{Number(editBase).toLocaleString('en-IN')}</span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 13 }}>₹</span>
+                          <input
+                            type="number" min={0}
+                            value={editBase}
+                            onChange={e => setEditBase(e.target.value === '' ? '' : Number(e.target.value))}
+                            style={{ width: 100, padding: '4px 8px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', background: salarySlip.deductions > 0 ? '#fff7ed' : undefined }}>
-                      <span style={{ color: salarySlip.deductions > 0 ? '#c2410c' : 'var(--text-muted)', fontSize: 13 }}>
-                        Leave Deductions {salarySlip.leaveDays > 0 ? `(${salarySlip.leaveDays} days × ₹${salarySlip.deductionPerDay}/day)` : ''}
-                      </span>
-                      <span style={{ fontSize: 13, color: salarySlip.deductions > 0 ? '#c2410c' : undefined }}>− ₹{salarySlip.deductions?.toLocaleString('en-IN')}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid var(--border-color)', background: Number(editDed) > 0 ? '#fff7ed' : undefined }}>
+                      <span style={{ color: Number(editDed) > 0 ? '#c2410c' : 'var(--text-muted)', fontSize: 13 }}>Leave Deductions</span>
+                      {salarySlip.status === 'PAID' ? (
+                        <span style={{ fontSize: 13, color: Number(editDed) > 0 ? '#c2410c' : undefined }}>− ₹{Number(editDed).toLocaleString('en-IN')}</span>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ fontSize: 13, color: '#c2410c' }}>− ₹</span>
+                          <input
+                            type="number" min={0}
+                            value={editDed}
+                            onChange={e => setEditDed(e.target.value === '' ? '' : Number(e.target.value))}
+                            style={{ width: 100, padding: '4px 8px', border: '1px solid var(--border-color)', borderRadius: 6, fontSize: 13, textAlign: 'right' }}
+                          />
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg-color)' }}>
                       <span style={{ fontWeight: 700, fontSize: 15 }}>Net Payable</span>
-                      <span style={{ fontWeight: 700, fontSize: 15, color: '#16a34a' }}>₹{salarySlip.netAmount?.toLocaleString('en-IN')}</span>
+                      <span style={{ fontWeight: 700, fontSize: 15, color: '#16a34a' }}>₹{(Number(editBase || 0) - Number(editDed || 0)).toLocaleString('en-IN')}</span>
                     </div>
                   </div>
 
@@ -648,21 +689,43 @@ const GuardManagement: React.FC = () => {
               )}
             </div>
             {salarySlip && salarySlip.status !== 'PAID' && (
-              <div className="modal-footer">
-                <button className="btn btn-outline" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>Close</button>
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                {/* 👱‍♀️ ponytail: minimalist HTML blob download, zero dependencies */}
+                <button className="btn btn-outline" onClick={() => {
+                  const net = Number(editBase||0) - Number(editDed||0);
+                  const content = `<html><body style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;"><h2>SALARY SLIP / INVOICE</h2><p><strong>Guard:</strong> ${salarySlip.guard?.name} (${salarySlip.guard?.badgeNumber})</p><p><strong>Month:</strong> ${new Date(salarySlip.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</p><hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;"/><p>Base Salary: &#8377;${Number(editBase||0).toLocaleString('en-IN')}</p><p>Leave Deductions: -&#8377;${Number(editDed||0).toLocaleString('en-IN')}</p><h3>Net Payable: &#8377;${net.toLocaleString('en-IN')}</h3><p><strong>Status:</strong> ${salarySlip.status}</p>${salarySlip.transactionId ? `<p>Transaction ID: ${salarySlip.transactionId}</p>` : ''}<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;"/><p style="font-size: 12px; color: gray;">Generated by SecureGate</p></body></html>`;
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(new Blob([content], { type: 'text/html' }));
+                  a.download = `Invoice_${salarySlip.guard?.badgeNumber}_${salarySlip.monthYear}.html`;
+                  a.click();
+                }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="download" size={16} /> Download
+                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-outline" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>Close</button>
                 <button
                   className="btn btn-primary"
                   onClick={handlePaySalary}
                   disabled={!!salaryPayingId}
                   style={{ background: '#16a34a', border: 'none', display: 'flex', alignItems: 'center', gap: 8 }}
                 >
-                  <Icon name="indian-rupee" size={16} />
-                  {salaryPayingId ? 'Processing...' : `Pay ₹${salarySlip?.netAmount?.toLocaleString('en-IN')} via Razorpay`}
+                  <Icon name="currency-rupee" size={16} />
+                  {salaryPayingId ? 'Processing...' : `Pay ₹${(Number(editBase||0) - Number(editDed||0)).toLocaleString('en-IN')} via Razorpay`}
                 </button>
+                </div>
               </div>
             )}
             {salarySlip && salarySlip.status === 'PAID' && (
-              <div className="modal-footer">
+              <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+                <button className="btn btn-outline" onClick={() => {
+                  const content = `<html><body style="font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;"><h2>SALARY SLIP / INVOICE</h2><p><strong>Guard:</strong> ${salarySlip.guard?.name} (${salarySlip.guard?.badgeNumber})</p><p><strong>Month:</strong> ${new Date(salarySlip.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</p><hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;"/><p>Base Salary: &#8377;${salarySlip.baseSalary?.toLocaleString('en-IN')}</p><p>Leave Deductions: -&#8377;${salarySlip.deductions?.toLocaleString('en-IN')}</p><h3>Net Payable: &#8377;${salarySlip.netAmount?.toLocaleString('en-IN')}</h3><p><strong>Status:</strong> ${salarySlip.status}</p>${salarySlip.transactionId ? `<p>Transaction ID: ${salarySlip.transactionId}</p>` : ''}<hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;"/><p style="font-size: 12px; color: gray;">Generated by SecureGate</p></body></html>`;
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(new Blob([content], { type: 'text/html' }));
+                  a.download = `Invoice_${salarySlip.guard?.badgeNumber}_${salarySlip.monthYear}.html`;
+                  a.click();
+                }} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="download" size={16} /> Download
+                </button>
                 <button className="btn btn-outline" onClick={() => { setSalarySlip(null); setSalaryError(''); }}>Close</button>
               </div>
             )}

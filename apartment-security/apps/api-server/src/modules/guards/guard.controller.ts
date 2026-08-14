@@ -47,6 +47,12 @@ export const getMyProfile = async (req: Request, res: Response, next: NextFuncti
 
 export const getDirectory = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const dateQuery = req.query.date as string;
+    const startOfDay = dateQuery ? new Date(dateQuery) : new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setHours(23, 59, 59, 999);
+
     const guards = await prisma.guard.findMany({
       include: {
         user: { select: { phone: true } },
@@ -58,6 +64,18 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
           orderBy: { checkedInAt: 'desc' },
           take: 1,
           include: { entryPoint: true }
+        },
+        _count: {
+          select: {
+            entries: {
+              where: {
+                entryAt: {
+                  gte: startOfDay,
+                  lte: endOfDay
+                }
+              }
+            }
+          }
         }
       }
     });
@@ -69,7 +87,8 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
       badgeNumber: g.badgeNumber,
       isOnDuty: g.isOnDuty,
       lastShift: g.shifts[0] || null,
-      lastPost: g.postCheckIns[0] || null
+      lastPost: g.postCheckIns[0] || null,
+      entriesCount: g._count?.entries || 0
     }));
 
     return sendSuccess(res, 200, 'Guard directory', formatted);
@@ -594,7 +613,12 @@ export const createSalaryOrder = async (req: Request, res: Response, next: NextF
     if (!salary) return next(new AppError('Salary record not found', 404));
     if (salary.status === 'PAID') return next(new AppError('Salary already paid', 400));
 
-    const amountPaise = Math.round(salary.netAmount * 100);
+    // ponytail: use UI-edited amount if provided, else fall back to stored netAmount
+    const finalAmount = (req.body?.overrideAmount && Number(req.body.overrideAmount) > 0)
+      ? Number(req.body.overrideAmount)
+      : salary.netAmount;
+
+    const amountPaise = Math.round(finalAmount * 100);
     const order = await razorpay.orders.create({
       amount: amountPaise,
       currency: 'INR',

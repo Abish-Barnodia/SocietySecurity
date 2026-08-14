@@ -231,6 +231,7 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
           select: {
             id: true,
             name: true,
+            alertPreferences: true,
             property: { select: { name: true } }
           }
         }
@@ -244,6 +245,17 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
   } catch (error) {
     next(error);
   }
+};
+
+export const updateManagerAlertPreferences = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { preferences } = req.body;
+    const manager = await prisma.manager.update({
+      where: { userId: req.user!.userId },
+      data: { alertPreferences: preferences },
+    });
+    return sendSuccess(res, 200, 'Alert preferences updated', manager.alertPreferences);
+  } catch (err) { next(err); }
 };
 
 export const signupEmail = async (req: Request, res: Response, next: NextFunction) => {

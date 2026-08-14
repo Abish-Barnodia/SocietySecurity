@@ -140,13 +140,14 @@ model Guard {
 }
 
 model Manager {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  propertyId String
-  name       String
-  createdAt  DateTime @default(now())
-  property   Property @relation(fields: [propertyId], references: [id])
-  user       User     @relation(fields: [userId], references: [id])
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  propertyId       String
+  name             String
+  alertPreferences Json     @default("{}")
+  createdAt        DateTime @default(now())
+  property         Property @relation(fields: [propertyId], references: [id])
+  user             User     @relation(fields: [userId], references: [id])
 }
 
 model CommitteeMember {

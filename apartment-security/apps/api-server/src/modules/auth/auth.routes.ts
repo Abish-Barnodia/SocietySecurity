@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword } from './auth.controller';
+import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences } from './auth.controller';
 import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema';
+import { alertPreferencesSchema } from '../residents/resident.schema';
 import { validate } from '../../middlewares/validate.middleware';
 import { authenticate } from '../../middlewares/auth.middleware';
+import { requireRole } from '../../middlewares/role.middleware';
 import { authRateLimiter } from '../../middlewares/rateLimiter.middleware';
 
 const router = Router();
@@ -18,5 +20,6 @@ router.post('/logout',      authenticate, logout);
 router.post('/logout-all',  authenticate, logoutAllDevices);
 router.post('/fcm-token',   authenticate, validate(registerFcmTokenSchema), registerFcmToken);
 router.get('/me',           authenticate, getMe);
+router.put('/me/alerts',    authenticate, requireRole('MANAGER'), validate(alertPreferencesSchema), updateManagerAlertPreferences);
 
 export { router as authRouter };

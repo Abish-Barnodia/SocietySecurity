@@ -2,9 +2,9 @@
   --primary: #00C896;
   --primary-hover: #00A67C;
   --primary-bg: #E6F9F4;
-  --bg-sidebar: #1A1D1C;
-  --bg-sidebar-hover: #242927;
-  --bg-sidebar-active: #0D2B24;
+  --bg-sidebar: #111817;
+  --bg-sidebar-hover: #1C2321;
+  --bg-sidebar-active: #0D2925;
   --bg-main: #F8FAFC;
   --bg-card: #FFFFFF;
   --text-main: #0F172A;
@@ -21,6 +21,41 @@
   --radius-lg: 12px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Dark theme — applied via [data-theme="dark"] on <html>, set from the
+   manager's saved Platform Config preference (see Settings.tsx / App.tsx). */
+[data-theme="dark"] {
+  --primary-bg: #0D2B24;
+  --bg-sidebar: #101312;
+  --bg-sidebar-hover: #1A1D1C;
+  --bg-sidebar-active: #0D2B24;
+  --bg-main: #0B0F0E;
+  --bg-card: #161A19;
+  --text-main: #E7ECEA;
+  --text-muted: #8B9591;
+  --text-sidebar: #7A857F;
+  --text-sidebar-active: #FFFFFF;
+  --border-color: #262B29;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .search-bar,
+[data-theme="dark"] .table-header-row,
+[data-theme="dark"] .table-row,
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .login-right-side {
+  background-color: var(--bg-card);
+}
+
+[data-theme="dark"] .table-row:hover {
+  background-color: var(--bg-sidebar-hover);
+}
+
+[data-theme="dark"] .action-btn,
+[data-theme="dark"] .btn-outline {
+  background-color: var(--bg-card);
 }
 
 * {
@@ -45,60 +80,70 @@ body {
 
 .sidebar {
   width: 260px;
-  background-color: var(--bg-sidebar);
+  background: linear-gradient(180deg, #111817 0%, #0e1413 100%);
   color: var(--text-sidebar);
   display: flex;
   flex-direction: column;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 2px 0 16px rgba(0,0,0,0.25);
 }
 
 .sidebar-header {
-  padding: 24px 20px;
+  padding: 22px 20px 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-weight: 600;
-  font-size: 18px;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 17px;
   color: white;
+  letter-spacing: -0.3px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  margin-bottom: 4px;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 12px;
+  gap: 1px;
+  padding: 0 10px;
 }
 
 .sidebar-section {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  letter-spacing: 0.5px;
-  padding: 16px 20px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #3D5450;
+  letter-spacing: 1.2px;
+  padding: 18px 14px 6px;
   text-transform: uppercase;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  color: var(--text-sidebar);
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  color: #7A9490;
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  position: relative;
+  border-left: 2px solid transparent;
 }
 
 .nav-item:hover {
-  background-color: var(--bg-sidebar-hover);
-  color: var(--text-sidebar-active);
+  background-color: rgba(255,255,255,0.05);
+  color: #C8DDD9;
+  border-left-color: rgba(0,200,150,0.3);
 }
 
 .nav-item.active {
-  background-color: var(--bg-sidebar-active);
-  color: var(--primary);
+  background: linear-gradient(90deg, rgba(0,200,150,0.12) 0%, rgba(0,200,150,0.04) 100%);
+  color: #00C896;
+  border-left-color: #00C896;
+  font-weight: 600;
 }
 
 .main-content {
@@ -167,6 +212,10 @@ body {
   border-radius: 50%;
   cursor: pointer;
   position: relative;
+  transition: background-color 0.15s, color 0.15s, transform 0.15s;
+}
+.topbar-icon:active {
+  transform: scale(0.92);
 }
 .topbar-icon:hover {
   background-color: var(--bg-main);
@@ -560,8 +609,33 @@ body {
   font-size: 20px;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   line-height: 1;
+  border-radius: 8px;
+  display: flex;
+  transition: background-color 0.15s, color 0.15s;
+}
+.modal-close:hover {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+}
+.modal-close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* One consistent keyboard-focus ring for every interactive control in the
+   app — icon buttons included — instead of each component inventing (or
+   forgetting) its own. */
+.btn:focus-visible,
+.tab-btn:focus-visible,
+.action-btn:focus-visible,
+.action-icon:focus-visible,
+.topbar-icon:focus-visible,
+.nav-item:focus-visible,
+.form-input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .modal-body {
@@ -620,26 +694,112 @@ body {
   object-fit: cover;
 }
 
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }
+
 /* ── Login Screen ── */
 .login-screen-container {
+  position: relative;
   display: flex;
   height: 100vh;
-  background: var(--bg-main);
   align-items: center;
   justify-content: center;
   font-family: 'Inter', sans-serif;
   padding: 24px;
+  overflow: hidden;
+  background: #060a09;
+}
+
+/* Darkened architectural backdrop — a real photo, heavily tinted so it reads
+   as atmosphere rather than a literal stock image behind the card. */
+.login-bg-photo {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(160deg, rgba(6,10,9,0.94) 0%, rgba(8,22,18,0.87) 45%, rgba(6,10,9,0.96) 100%),
+    url('https://picsum.photos/seed/securegate-skyline/1920/1080');
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.6) brightness(0.6);
+}
+
+/* A faint, slowly-drifting coverage grid — the one signature touch: this is
+   a security portal, and the backdrop should feel quietly monitored. */
+.login-bg-grid {
+  position: absolute;
+  inset: -48px;
+  background-image:
+    linear-gradient(rgba(0,200,150,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,150,0.07) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse 65% 60% at 50% 50%, black 0%, transparent 78%);
+          mask-image: radial-gradient(ellipse 65% 60% at 50% 50%, black 0%, transparent 78%);
+  animation: gridDrift 50s linear infinite;
+}
+
+@keyframes gridDrift {
+  from { background-position: 0 0, 0 0; }
+  to { background-position: 46px 46px, 46px 46px; }
+}
+
+.login-glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+}
+
+.login-glow-orb.a {
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle, rgba(0,200,150,0.32), transparent 70%);
+  top: -12%;
+  left: -8%;
+  animation: loginDriftA 26s ease-in-out infinite;
+}
+
+.login-glow-orb.b {
+  width: 540px;
+  height: 540px;
+  background: radial-gradient(circle, rgba(0,200,150,0.2), transparent 70%);
+  bottom: -18%;
+  right: -10%;
+  animation: loginDriftB 32s ease-in-out infinite;
+}
+
+@keyframes loginDriftA {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(36px, 26px) scale(1.08); }
+}
+
+@keyframes loginDriftB {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-28px, -34px) scale(1.05); }
 }
 
 .login-card-container {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 960px;
   background-color: white;
   border-radius: 24px;
-  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.02);
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06), 0 0 120px -30px rgba(0,200,150,0.28);
   display: flex;
   overflow: hidden;
   min-height: 560px;
+  animation: loginCardRise 0.6s cubic-bezier(0.16,1,0.3,1) both;
+}
+
+@keyframes loginCardRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bg-grid, .login-glow-orb, .login-card-container {
+    animation: none !important;
+  }
 }
 
 .login-left-side {

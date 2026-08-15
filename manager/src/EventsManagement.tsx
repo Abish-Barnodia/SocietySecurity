@@ -118,7 +118,7 @@ const EventsManagement: React.FC = () => {
                   <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: s.bg, color: s.text }}>{ev.status.toLowerCase()}</span>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>{formatRange(ev.startDate, ev.endDate)}</div>
-                {ev.location && <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>📍 {ev.location}</div>}
+                {ev.location && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}><Icon name="map-pin" size={13} /> {ev.location}</div>}
                 <p style={{ fontSize: 13, color: 'var(--text-main)', margin: '0 0 14px 0' }}>{ev.description}</p>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ev._count?.rsvps ?? 0} going</span>

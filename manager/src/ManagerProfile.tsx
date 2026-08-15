@@ -95,6 +95,63 @@ function SecurityTab({ email }: { email: string }) {
   );
 }
 
+function EditProfileModal({ name, phone, onClose, onSaved }: { name: string; phone: string; onClose: () => void; onSaved: (patch: { name: string; phone: string }) => void }) {
+  const [form, setForm] = useState({ name, phone });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/auth/me/profile`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: form.name.trim(), phone: form.phone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.status !== 'success') throw new Error(data.message || 'Could not save changes');
+      onSaved({ name: form.name.trim(), phone: form.phone.trim() });
+    } catch (e: any) {
+      setError(e.message || 'Could not save changes. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ width: 420 }}>
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Edit Profile</h3>
+            <p className="modal-subtitle">Update your name and phone number</p>
+          </div>
+          <button className="modal-close" onClick={onClose}><Icon name="x" size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label className="form-label">Full Name</label>
+            <input type="text" className="form-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div>
+            <label className="form-label">Phone</label>
+            <input type="tel" className="form-input" placeholder="+919876543210" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          {error && <p style={{ margin: 0, fontSize: 13, color: '#991B1B' }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={save} disabled={saving || !form.name.trim()}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NotificationsTab({ initial }: { initial: Record<string, boolean> }) {
   const [prefs, setPrefs] = useState<Record<string, boolean>>({ emailAlerts: true, pushAlerts: true, paymentAlerts: true, dailyDigest: false, ...initial });
   const [saving, setSaving] = useState(false);
@@ -152,6 +209,7 @@ const ManagerProfile = () => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'general' | 'security' | 'notifications'>('general');
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -186,10 +244,22 @@ const ManagerProfile = () => {
           <h1 className="page-title">My Profile</h1>
           <p className="page-subtitle">Manage your account, security settings, and preferences</p>
         </div>
-        <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          Edit Profile
+        <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setIsEditOpen(true)}>
+          <Icon name="pencil" size={14} /> Edit Profile
         </button>
       </div>
+
+      {isEditOpen && (
+        <EditProfileModal
+          name={managerData.name || ''}
+          phone={profile.phone || ''}
+          onClose={() => setIsEditOpen(false)}
+          onSaved={(patch) => {
+            setProfile((prev: any) => ({ ...prev, phone: patch.phone || null, manager: { ...prev.manager, name: patch.name } }));
+            setIsEditOpen(false);
+          }}
+        />
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>

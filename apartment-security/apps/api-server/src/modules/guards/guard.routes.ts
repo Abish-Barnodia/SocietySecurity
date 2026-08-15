@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   startShift,
@@ -39,21 +40,21 @@ router.post('/post/checkin', requireRole('GUARD'), validate(checkInPostSchema), 
 router.get('/roster', requireRole('GUARD'), getRoster);
 router.get('/me', requireRole('GUARD'), getMyProfile);
 
-router.get('/directory', requireRole('MANAGER', 'COMMITTEE'), getDirectory);
-router.get('/active', requireRole('MANAGER', 'COMMITTEE'), getActiveGuards);
+router.get('/directory', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), getDirectory);
+router.get('/active', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), getActiveGuards);
 
-// Leave management (manager only)
-router.get('/leaves',              requireRole('MANAGER', 'COMMITTEE'), getLeaves);
-router.post('/leaves',             requireRole('MANAGER', 'COMMITTEE'), createLeave);
-router.patch('/leaves/:id/cancel', requireRole('MANAGER', 'COMMITTEE'), cancelLeave);
+// Leave management (manager only) — surfaced on the Workforce Mgmt page
+router.get('/leaves',              requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), getLeaves);
+router.post('/leaves',             requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), createLeave);
+router.patch('/leaves/:id/cancel', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), cancelLeave);
 
-// Salary management (manager only)
-router.post('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), createSalaryOrder);
-router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), verifySalaryPayment);
+// Salary management (manager only) — also Workforce Mgmt
+router.post('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), createSalaryOrder);
+router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), verifySalaryPayment);
 
-router.post('/', requireRole('MANAGER', 'COMMITTEE'), validate(createGuardSchema), createGuard);
-router.post('/:id/assign',   requireRole('MANAGER', 'COMMITTEE'), assignGuardToPost);
-router.get('/:id/salary',    requireRole('MANAGER', 'COMMITTEE'), getSalarySlip);
-router.get('/:id/profile',   requireRole('MANAGER', 'COMMITTEE'), getGuardProfile);
+router.post('/', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), validate(createGuardSchema), createGuard);
+router.post('/:id/assign',   requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), assignGuardToPost);
+router.get('/:id/salary',    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), getSalarySlip);
+router.get('/:id/profile',   requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), getGuardProfile);
 
 export { router as guardRouter };

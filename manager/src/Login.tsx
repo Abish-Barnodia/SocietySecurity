@@ -53,6 +53,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="login-screen-container">
+      <div className="login-bg-photo" />
+      <div className="login-bg-grid" />
+      <div className="login-glow-orb a" />
+      <div className="login-glow-orb b" />
       <div className="login-card-container">
         
         {/* Left Side - Branding / Graphic */}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   broadcastAlert,
@@ -20,7 +21,7 @@ const router = Router();
 router.use(authenticate);
 
 // Manager / Committee / Guard broadcasts an alert
-router.post('/broadcast', requireRole('MANAGER', 'COMMITTEE', 'GUARD'), validate(createAlertSchema), broadcastAlert);
+router.post('/broadcast', requireRole('MANAGER', 'COMMITTEE', 'GUARD'), requireManagerPermission('alerts'), validate(createAlertSchema), broadcastAlert);
 
 // Anyone can trigger a silent duress alert
 router.post('/duress', validate(triggerDuressSchema), triggerDuress);

@@ -251,8 +251,8 @@ const EventTimeline = () => {
                 <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Pass Details</p>
               </div>
             </div>
-            <button onClick={() => setSelectedPass(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
-              <Icon name="x" size={20} />
+            <button onClick={() => setSelectedPass(null)} className="modal-close">
+              <Icon name="x" size={18} />
             </button>
           </div>
           

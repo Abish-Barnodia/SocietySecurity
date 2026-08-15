@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import {
   getOperationsOverview,
   generateMonthlyReport,
@@ -11,6 +12,7 @@ import {
 
 const router = Router();
 router.use(authenticate);
+router.use(requireManagerPermission('reports'));
 
 // Managers and Committee can view operations overview
 router.get('/overview', requireRole('MANAGER', 'COMMITTEE'), getOperationsOverview);

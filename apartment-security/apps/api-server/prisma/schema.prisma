@@ -32,6 +32,8 @@ model Property {
   units            Unit[]
   events           Event[]
   fundTransactions FundTransaction[]
+  settings         PropertySetting[]
+  managerPortalLock ManagerPortalLock?
 }
 
 model EntryPoint {
@@ -145,9 +147,28 @@ model Manager {
   propertyId       String
   name             String
   alertPreferences Json     @default("{}")
+  // Module ids this manager may access (see PERMISSION_MODULES on the frontend).
+  // Empty array = full access — keeps every manager created before this field
+  // existed (and any manager not explicitly restricted) working unchanged.
+  permissions      Json     @default("[]")
   createdAt        DateTime @default(now())
   property         Property @relation(fields: [propertyId], references: [id])
   user             User     @relation(fields: [userId], references: [id])
+}
+
+// One row per property: holds whichever single manager currently has an
+// active Manager Portal session for that property. A manager login attempt
+// atomically claims this row (see loginEmail); it's released on logout,
+// deactivation, force-logout, or inactivity expiry.
+model ManagerPortalLock {
+  id              String    @id @default(cuid())
+  propertyId      String    @unique
+  activeManagerId String?
+  sessionToken    String?
+  loginAt         DateTime?
+  lastActivityAt  DateTime?
+  expiresAt       DateTime?
+  property        Property  @relation(fields: [propertyId], references: [id])
 }
 
 model CommitteeMember {
@@ -872,4 +893,16 @@ model GuardSalary {
   guard           Guard     @relation(fields: [guardId], references: [id])
 
   @@unique([guardId, monthYear])
+}
+
+model PropertySetting {
+  id         String   @id @default(cuid())
+  propertyId String
+  key        String
+  value      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  property   Property @relation(fields: [propertyId], references: [id])
+
+  @@unique([propertyId, key])
 }

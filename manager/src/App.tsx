@@ -15,9 +15,17 @@ import MaintenanceManagement from './MaintenanceManagement';
 import FundManagement from './FundManagement';
 import Login from './Login';
 import ManagerProfile from './ManagerProfile';
+import Settings, { applyManagerTheme } from './Settings';
+import CCTVMonitoring from './CCTVMonitoring';
 import Icon from './Icon';
 
 import { API_BASE } from './config';
+
+// Applied synchronously at module load (before first paint) from the locally
+// cached theme choice, so there's no flash of the wrong theme on refresh.
+// Settings.tsx reconciles this against the DB value once it loads.
+const cachedTheme = localStorage.getItem('managerTheme');
+if (cachedTheme) applyManagerTheme(cachedTheme);
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -26,31 +34,52 @@ const App: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    // ponytail: Simple auth check on load
     const token = localStorage.getItem('accessToken');
     const storedUser = localStorage.getItem('user');
-    if (token && storedUser) {
-      setIsAuthenticated(true);
+    if (!token || !storedUser) return;
 
-      // Fetch full profile for property details
-      fetch(`${API_BASE}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+    setIsAuthenticated(true);
+
+    // Fetch full profile for property details, and confirm the stored token
+    // is actually still valid — a stale/expired/session-ended token (e.g.
+    // a manager whose Manager Portal session ended) must bounce back to
+    // Login instead of leaving the app stuck with no data ever loading.
+    fetch(`${API_BASE}/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+          setFullProfile(data.data);
+        } else {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          setIsAuthenticated(false);
+        }
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'success') {
-            setFullProfile(data.data);
-          }
-        })
-        .catch(console.error);
-    }
+      .catch(console.error);
   }, [isAuthenticated]);
 
   const handleLogin = (_token: string, _loggedInUser: any) => {
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Must actually hit the backend — for a manager this is what releases
+    // the single-active-session lock immediately instead of leaving the
+    // portal blocked for everyone else until the idle timeout.
+    const token = localStorage.getItem('accessToken');
+    const storedRefreshToken = localStorage.getItem('refreshToken');
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: storedRefreshToken }),
+      });
+    } catch {
+      // Log out locally regardless of network/API failure.
+    }
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
@@ -85,37 +114,57 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       {/* Sidebar */}
-      <aside className="sidebar" style={{ width: isSidebarCollapsed ? 80 : 260, transition: 'width 0.2s' }}>
-        <div className="sidebar-header" style={{ marginBottom: 12 }}>
-          <div style={{ background: 'var(--primary)', padding: '6px', borderRadius: '6px', color: 'white', display: 'flex' }}>
-            <Icon name="shield-check" size={20} />
-          </div>
-          {!isSidebarCollapsed && <span>SecureGate</span>}
-          <div 
-            style={{ marginLeft: 'auto', color: 'var(--text-muted)', cursor: 'pointer' }}
+      <aside className="sidebar" style={{ width: isSidebarCollapsed ? 72 : 260, transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)' }}>
+        {/* Logo / Brand */}
+        <div className="sidebar-header" style={{ marginBottom: 0, justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}>
+          {!isSidebarCollapsed && (
+            <div style={{
+              background: 'linear-gradient(135deg, #00C896 0%, #00A67C 100%)',
+              padding: '7px', borderRadius: '9px', color: 'white', display: 'flex',
+              boxShadow: '0 2px 8px rgba(0,200,150,0.35)', flexShrink: 0
+            }}>
+              <Icon name="shield-check" size={20} />
+            </div>
+          )}
+          {!isSidebarCollapsed && (
+            <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: '-0.5px', color: 'white' }}>SecureGate</span>
+          )}
+          <div
+            style={{
+              marginLeft: isSidebarCollapsed ? 0 : 'auto',
+              color: '#94A3B8', cursor: 'pointer', padding: 6, borderRadius: 6,
+              transition: 'color 0.15s, background 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            onMouseEnter={e => { e.currentTarget.style.color = '#00C896'; e.currentTarget.style.background = 'rgba(0,200,150,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.background = 'transparent'; }}
           >
             <Icon name="menu-2" size={20} />
           </div>
         </div>
         
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="sidebar-section">▼ Operations</div>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          {!isSidebarCollapsed && <div className="sidebar-section">Operations</div>}
+          {isSidebarCollapsed && <div style={{ height: 16 }} />}
           <nav className="sidebar-nav">
             {operationsNav.map(item => (
-              <a 
-                key={item.id} 
+              <a
+                key={item.id}
                 href="#"
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab(item.id);
-                }}
+                title={isSidebarCollapsed ? item.label : undefined}
+                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                {!isSidebarCollapsed && item.label}
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
+                {!isSidebarCollapsed && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>}
                 {!isSidebarCollapsed && item.badge && (
-                  <span style={{ marginLeft: 'auto', background: 'var(--warning)', color: 'white', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+                  <span style={{
+                    marginLeft: 'auto', background: '#F59E0B', color: 'white',
+                    borderRadius: '50%', width: 18, height: 18,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, fontWeight: 700, flexShrink: 0
+                  }}>
                     {item.badge}
                   </span>
                 )}
@@ -123,43 +172,71 @@ const App: React.FC = () => {
             ))}
           </nav>
 
-          <div className="sidebar-section" style={{ marginTop: 8 }}>▼ Administration</div>
+          {!isSidebarCollapsed && <div className="sidebar-section" style={{ marginTop: 4 }}>Administration</div>}
+          {isSidebarCollapsed && <div style={{ height: 12 }} />}
           <nav className="sidebar-nav">
             {adminNav.map(item => (
-              <a 
-                key={item.id} 
+              <a
+                key={item.id}
                 href="#"
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActiveTab(item.id);
-                }}
+                title={isSidebarCollapsed ? item.label : undefined}
+                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                {!isSidebarCollapsed && item.label}
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
+                {!isSidebarCollapsed && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>}
               </a>
             ))}
           </nav>
         </div>
 
-        {/* User Profile */}
-        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--bg-sidebar-hover)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#0D2B24', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600 }}>
-            {fullProfile?.manager?.name?.substring(0, 2) || 'AM'}
+        {/* User Footer */}
+        <div
+          style={{
+            padding: isSidebarCollapsed ? '14px 0' : '14px 16px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex', alignItems: 'center',
+            gap: 10,
+            background: 'rgba(0,0,0,0.2)',
+            justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
+            cursor: 'pointer',
+          }}
+          onClick={() => !isSidebarCollapsed && setActiveTab('profile')}
+        >
+          <div style={{
+            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+            background: 'linear-gradient(135deg, #00C896 0%, #00A67C 100%)',
+            color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: 13, letterSpacing: '0.5px',
+            boxShadow: '0 0 0 2px rgba(0,200,150,0.3)',
+          }}>
+            {(fullProfile?.manager?.name?.substring(0, 2) || 'AM').toUpperCase()}
           </div>
           {!isSidebarCollapsed && (
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'white' }}>{fullProfile?.manager?.name || 'Loading...'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-sidebar)' }}>{fullProfile?.role === 'MANAGER' ? 'Facility Manager' : 'Admin'}</div>
-            </div>
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {fullProfile?.manager?.name || 'Loading...'}
+                </div>
+                <div style={{ fontSize: 11, color: '#3D5450', marginTop: 1 }}>
+                  {fullProfile?.role === 'MANAGER' ? 'Facility Manager' : 'Admin'}
+                </div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+                title="Logout"
+                style={{
+                  flexShrink: 0, color: '#3D5450', background: 'transparent',
+                  border: 'none', cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', padding: 6, borderRadius: 6, transition: 'color 0.15s'
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#EF4444')}
+                onMouseLeave={e => (e.currentTarget.style.color = '#3D5450')}
+              >
+                <Icon name="logout" size={16} />
+              </button>
+            </>
           )}
-          <button 
-            onClick={handleLogout}
-            title="Logout"
-            style={{ marginLeft: 'auto', color: 'var(--text-sidebar)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
-          >
-            <Icon name="logout" size={16} />
-          </button>
         </div>
       </aside>
 
@@ -212,7 +289,9 @@ const App: React.FC = () => {
           {activeTab === 'maintenance' && <MaintenanceManagement />}
           {activeTab === 'funds' && <FundManagement />}
           {activeTab === 'profile' && <ManagerProfile />}
-          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'events' && activeTab !== 'maintenance' && activeTab !== 'funds' && activeTab !== 'profile' && (
+          {activeTab === 'settings' && <Settings />}
+          {activeTab === 'cctv' && <CCTVMonitoring />}
+          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'events' && activeTab !== 'maintenance' && activeTab !== 'funds' && activeTab !== 'profile' && activeTab !== 'settings' && activeTab !== 'cctv' && (
             <div className="card">
               <h2>{operationsNav.concat(adminNav).find(i => i.id === activeTab)?.label}</h2>
               <p>This module is under construction.</p>

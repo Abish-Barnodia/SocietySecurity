@@ -2,13 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/prisma';
 import { createOTP, verifyOTP } from '../../utils/otp.util';
-import { signAccessToken, signRefreshToken, rotateRefreshToken } from '../../utils/jwt.util';
+import { signAccessToken, signRefreshToken, rotateRefreshToken, verifyRefreshToken } from '../../utils/jwt.util';
 import { sendSMS } from '../../utils/sms.util';
 import { sendEmail } from '../../utils/email.service';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 import { logger } from '../../utils/logger.util';
+import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_MS } from '../../utils/managerPortalLock.util';
 
 export const requestOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -108,11 +109,35 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     // Fetch user to get real role (never trust stored token payload for role)
     const user = await prisma.user.findUnique({
       where: { id: storedToken.userId },
-      select: { role: true }
+      include: { manager: true },
     });
     if (!user) return next(new AppError('User no longer exists', 401));
+    if (!user.isActive) return next(new AppError('This account has been deactivated', 401));
 
-    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: user.role });
+    // A manager silently refreshing shouldn't be able to keep their session
+    // alive after a force-logout or expiry — re-check the lock, not just the
+    // refresh token's own validity.
+    let managerSessionToken: string | undefined;
+    if (user.role === 'MANAGER' && user.manager) {
+      const decoded = verifyRefreshToken(refreshToken);
+      const lock = await prisma.managerPortalLock.findUnique({ where: { propertyId: user.manager.propertyId } });
+      const now = new Date();
+      const holdsLock = lock
+        && lock.activeManagerId === user.manager.id
+        && lock.sessionToken === decoded.managerSessionToken
+        && lock.expiresAt && lock.expiresAt > now;
+
+      if (!holdsLock) {
+        return next(new AppError('Your Manager Portal session has ended. Please log in again.', 401));
+      }
+      managerSessionToken = lock.sessionToken!;
+      await prisma.managerPortalLock.update({
+        where: { propertyId: user.manager.propertyId },
+        data: { lastActivityAt: now, expiresAt: new Date(now.getTime() + MANAGER_SESSION_IDLE_MS) },
+      });
+    }
+
+    const newAccessToken = signAccessToken({ userId: storedToken.userId, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) });
     const newRefreshToken = await rotateRefreshToken(refreshToken);
 
     // Update DB
@@ -150,6 +175,10 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       }).catch((err: any) => logger.warn('Logout token update failed', err));
     }
 
+    if (req.user?.role === 'MANAGER' && req.user.managerId && req.user.propertyId) {
+      await releaseManagerPortalLock(req.user.propertyId, req.user.managerId, req.user.managerSessionToken);
+    }
+
     return sendSuccess(res, 200, 'Logged out successfully');
   } catch (error) {
     next(error);
@@ -164,6 +193,10 @@ export const logoutAllDevices = async (req: Request, res: Response, next: NextFu
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    if (req.user?.role === 'MANAGER' && req.user.managerId && req.user.propertyId) {
+      await releaseManagerPortalLock(req.user.propertyId, req.user.managerId, req.user.managerSessionToken);
+    }
 
     await auditLog(userId, 'LOGOUT_ALL_DEVICES', 'User', userId);
 
@@ -247,6 +280,26 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+export const updateMyManagerProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, phone } = req.body;
+
+    if (name !== undefined) {
+      await prisma.manager.update({ where: { userId: req.user!.userId }, data: { name } });
+    }
+    if (phone !== undefined) {
+      try {
+        await prisma.user.update({ where: { id: req.user!.userId }, data: { phone: phone || null } });
+      } catch (err: any) {
+        if (err.code === 'P2002') return next(new AppError('That phone number is already in use', 400));
+        throw err;
+      }
+    }
+
+    return sendSuccess(res, 200, 'Profile updated');
+  } catch (err) { next(err); }
+};
+
 export const updateManagerAlertPreferences = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { preferences } = req.body;
@@ -298,13 +351,29 @@ export const signupEmail = async (req: Request, res: Response, next: NextFunctio
 export const loginEmail = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email }, include: { manager: true } });
     if (!user || !user.passwordHash) {
       return next(new AppError('Invalid email or password', 401));
     }
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
       return next(new AppError('Invalid email or password', 401));
+    }
+    if (!user.isActive) {
+      return next(new AppError('This account has been deactivated', 403));
+    }
+
+    // Managers get exactly one active Manager Portal session per property —
+    // claim it atomically before issuing any tokens. If another manager
+    // already holds it, the login is rejected outright (no tokens minted),
+    // not just blocked on the next request.
+    let managerSessionToken: string | undefined;
+    if (user.role === 'MANAGER' && user.manager) {
+      const token = await claimManagerPortalLock(user.manager.propertyId, user.manager.id);
+      if (!token) {
+        return next(new AppError('The Manager Portal is currently being used by another manager. Please try again later.', 409));
+      }
+      managerSessionToken = token;
     }
 
     // ponytail: Leave restriction enforced at backend auth layer, not frontend
@@ -330,16 +399,16 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       }
     }
 
-    const payload = { userId: user.id, role: user.role };
+    const payload = { userId: user.id, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
-    
+
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + 30);
     await prisma.refreshToken.create({
       data: { userId: user.id, token: refreshToken, expiresAt: expiryDate }
     });
-    
+
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     
     return sendSuccess(res, 200, 'Login successful', {

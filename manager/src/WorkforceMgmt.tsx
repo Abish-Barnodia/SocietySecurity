@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import EmptyState from './EmptyState';
 import GuardLeaveManagement from './GuardLeaveManagement';
 import { API_BASE } from './config';
 
@@ -169,7 +170,7 @@ const WorkforceMgmt = () => {
           {activeTab === 'workerPool' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {workers.length === 0 ? (
-                <div style={{ gridColumn: '1 / -1', padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>No workers found in directory.</div>
+                <div style={{ gridColumn: '1 / -1' }}><EmptyState icon="users" message="No workers found in directory." /></div>
               ) : (
                 workers.map(w => (
                   <div key={w.id} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20 }}>
@@ -183,7 +184,7 @@ const WorkforceMgmt = () => {
                           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Security Guard • {w.badgeNumber}</div>
                         </div>
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#D97706', display: 'flex', alignItems: 'center', gap: 4 }}>★ 4.5</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 4 }}>4.5 <Icon name="star-filled" size={13} color="var(--warning)" /></span>
                     </div>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 20 }}>
@@ -274,8 +275,8 @@ const WorkforceMgmt = () => {
                 <tbody>
                   {leaves.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No leave records found in database.
+                      <td colSpan={5}>
+                        <EmptyState icon="calendar-off" message="No leave records found." />
                       </td>
                     </tr>
                   ) : null}
@@ -292,7 +293,7 @@ const WorkforceMgmt = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Add Worker</h2>
-              <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={24}/></button>
+              <button onClick={() => setIsAddModalOpen(false)} className="modal-close"><Icon name="x" size={18}/></button>
             </div>
             
             <form onSubmit={handleAddWorker} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -359,7 +360,7 @@ const WorkforceMgmt = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Assign to Post</h2>
-              <button onClick={() => setIsAssignModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={24}/></button>
+              <button onClick={() => setIsAssignModalOpen(false)} className="modal-close"><Icon name="x" size={18}/></button>
             </div>
             
             <form onSubmit={handleAssignPost} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

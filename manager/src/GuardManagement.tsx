@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
+import EmptyState from './EmptyState';
 import GuardProfile from './GuardProfile';
 import { API_BASE } from './config';
 
@@ -223,10 +224,11 @@ const GuardManagement: React.FC = () => {
           <p className="page-subtitle">Roster management, real-time monitoring, incident review, and manual override tracking</p>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button onClick={fetchData} className="btn btn-outline" disabled={isRefreshing}>
-            {isRefreshing ? 'Refreshing...' : '↻ Refresh'}
+          <button onClick={fetchData} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} disabled={isRefreshing}>
+            <span style={{ display: 'flex', transform: isRefreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.5s ease' }}><Icon name="refresh" size={14} /></span>
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button className="btn btn-primary" onClick={() => setIsAddGuardOpen(true)}>+ Add Guard</button>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsAddGuardOpen(true)}><Icon name="plus" size={16} /> Add Guard</button>
         </div>
       </div>
 
@@ -305,7 +307,7 @@ const GuardManagement: React.FC = () => {
               </thead>
               <tbody>
                 {guards.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No guards found in directory.</td></tr>
+                  <tr><td colSpan={7}><EmptyState icon="shield-check" message="No guards found in directory." compact /></td></tr>
                 ) : (
                   guards.map((g, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }} className="table-row">
@@ -343,7 +345,7 @@ const GuardManagement: React.FC = () => {
                       </td>
                       <td style={{ padding: '16px', fontSize: 13, fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          4.5 <Icon name="star-filled" size={14} color="#F59E0B" />
+                          4.5 <Icon name="star-filled" size={14} color="var(--warning)" />
                         </div>
                       </td>
                       <td style={{ padding: '16px 24px', textAlign: 'right' }}>
@@ -368,7 +370,7 @@ const GuardManagement: React.FC = () => {
         {activeTab === 'live' && (
           <div style={{ padding: 24, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {activeGuards.length === 0 ? (
-              <div style={{ gridColumn: '1 / -1', padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>No guards are currently active on duty.</div>
+              <div style={{ gridColumn: '1 / -1' }}><EmptyState icon="user-check" message="No guards are currently active on duty." /></div>
             ) : (
               activeGuards.map((g, idx) => (
                 <div key={idx} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
@@ -442,7 +444,7 @@ const GuardManagement: React.FC = () => {
               </thead>
               <tbody>
                 {auditLogs.length === 0 ? (
-                  <tr><td colSpan={4} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No audit logs found.</td></tr>
+                  <tr><td colSpan={4}><EmptyState icon="clipboard-list" message="No audit logs found." compact /></td></tr>
                 ) : (
                   auditLogs.map((log, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -626,7 +628,7 @@ const GuardManagement: React.FC = () => {
                   {/* Status Banner */}
                   {salarySlip.status === 'PAID' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#dcfce7', color: '#166534', borderRadius: 8, marginBottom: 20, fontWeight: 600 }}>
-                      <Icon name="check-circle" size={18} /> Salary Paid — {salarySlip.paidAt ? new Date(salarySlip.paidAt).toLocaleDateString('en-IN') : ''}
+                      <Icon name="circle-check" size={18} /> Salary Paid — {salarySlip.paidAt ? new Date(salarySlip.paidAt).toLocaleDateString('en-IN') : ''}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fefce8', color: '#854d0e', borderRadius: 8, marginBottom: 20, fontWeight: 600 }}>

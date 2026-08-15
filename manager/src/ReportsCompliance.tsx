@@ -44,12 +44,12 @@ function MonthlyReportsTab() {
   };
 
   const stats = summary ? [
-    { title: 'Total Entries', value: summary.entries.total, icon: '🚪' },
-    { title: 'Digital Entry Rate', value: `${summary.entries.digitalRate}%`, icon: '📱' },
-    { title: 'Incidents Logged', value: summary.incidents.total, icon: '⚠️', sub: `${summary.incidents.open} open · ${summary.incidents.closed} closed` },
-    { title: 'Guard Shifts Completed', value: summary.guards.shiftsCompleted, icon: '🛡️' },
-    { title: 'Active Passes', value: summary.credentials.activePasses, icon: '🪪' },
-    { title: 'Pass Anomalies', value: summary.credentials.anomalies.length, icon: '🚩', type: summary.credentials.anomalies.length > 0 ? 'warning' : 'positive' },
+    { title: 'Total Entries', value: summary.entries.total, icon: 'door-enter' },
+    { title: 'Digital Entry Rate', value: `${summary.entries.digitalRate}%`, icon: 'device-mobile' },
+    { title: 'Incidents Logged', value: summary.incidents.total, icon: 'alert-triangle', sub: `${summary.incidents.open} open · ${summary.incidents.closed} closed` },
+    { title: 'Guard Shifts Completed', value: summary.guards.shiftsCompleted, icon: 'shield-check' },
+    { title: 'Active Passes', value: summary.credentials.activePasses, icon: 'id-badge' },
+    { title: 'Pass Anomalies', value: summary.credentials.anomalies.length, icon: 'flag', type: summary.credentials.anomalies.length > 0 ? 'warning' : 'positive' },
   ] : [];
 
   return (
@@ -75,7 +75,7 @@ function MonthlyReportsTab() {
           <div className="stats-grid">
             {stats.map((s) => (
               <div key={s.title} className="stat-card">
-                <div className="stat-icon">{s.icon}</div>
+                <div className="stat-icon"><Icon name={s.icon} size={16} /></div>
                 <div className="stat-value">{s.value}</div>
                 <div className="stat-title">{s.title}</div>
                 {s.sub && <div className={`stat-subtext ${s.type ?? ''}`}>{s.sub}</div>}
@@ -84,7 +84,7 @@ function MonthlyReportsTab() {
           </div>
 
           <div className="card">
-            <div className="card-title"><div className="card-title-icon">📊 Incidents by Type</div></div>
+            <div className="card-title"><div className="card-title-icon"><Icon name="chart-bar" size={16} /> Incidents by Type</div></div>
             {Object.keys(summary.incidents.byType).length === 0 ? (
               <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No incidents logged this period.</div>
             ) : (
@@ -99,7 +99,7 @@ function MonthlyReportsTab() {
 
           {summary.credentials.anomalies.length > 0 && (
             <div className="card">
-              <div className="card-title"><div className="card-title-icon">🚩 Pass Anomalies — stale credentials (60+ days past validity, still active)</div></div>
+              <div className="card-title"><div className="card-title-icon"><Icon name="flag" size={16} /> Pass Anomalies — stale credentials (60+ days past validity, still active)</div></div>
               {summary.credentials.anomalies.map((p: any) => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)', fontSize: 13 }}>
                   <span>{p.resident?.name ?? 'Unknown resident'} · Unit {p.unit?.tower ? `${p.unit.tower} ` : ''}{p.unit?.unitNumber}</span>
@@ -190,9 +190,9 @@ function ComplianceDashboardTab() {
   const pct = (v: number | null) => (v === null ? '—' : `${v}%`);
 
   const stats = [
-    { title: 'Alert Acknowledgement Rate', value: pct(metrics.alertAcknowledgementRate), sub: `${metrics.alertsTotal} alerts, last ${metrics.periodDays}d`, icon: '✅' },
-    { title: `P1 SLA Compliance (≤${metrics.p1SlaMinutes}min)`, value: pct(metrics.p1SlaComplianceRate), sub: `${metrics.p1AlertsTotal} P1 alerts, last ${metrics.periodDays}d`, icon: '⏱️', type: metrics.p1SlaComplianceRate !== null && metrics.p1SlaComplianceRate < 80 ? 'negative' : 'positive' },
-    { title: 'Shift Handover Completion', value: pct(metrics.shiftHandoverCompletionRate), sub: `${metrics.shiftsCompleted} shifts, last ${metrics.periodDays}d`, icon: '🔄' },
+    { title: 'Alert Acknowledgement Rate', value: pct(metrics.alertAcknowledgementRate), sub: `${metrics.alertsTotal} alerts, last ${metrics.periodDays}d`, icon: 'circle-check' },
+    { title: `P1 SLA Compliance (≤${metrics.p1SlaMinutes}min)`, value: pct(metrics.p1SlaComplianceRate), sub: `${metrics.p1AlertsTotal} P1 alerts, last ${metrics.periodDays}d`, icon: 'stopwatch', type: metrics.p1SlaComplianceRate !== null && metrics.p1SlaComplianceRate < 80 ? 'negative' : 'positive' },
+    { title: 'Shift Handover Completion', value: pct(metrics.shiftHandoverCompletionRate), sub: `${metrics.shiftsCompleted} shifts, last ${metrics.periodDays}d`, icon: 'refresh' },
   ];
 
   return (
@@ -200,7 +200,7 @@ function ComplianceDashboardTab() {
       <div className="stats-grid">
         {stats.map((s) => (
           <div key={s.title} className="stat-card">
-            <div className="stat-icon">{s.icon}</div>
+            <div className="stat-icon"><Icon name={s.icon} size={16} /></div>
             <div className="stat-value">{s.value}</div>
             <div className="stat-title">{s.title}</div>
             <div className={`stat-subtext ${s.type ?? ''}`}>{s.sub}</div>

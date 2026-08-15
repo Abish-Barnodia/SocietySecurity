@@ -22,6 +22,13 @@ export const emailSignupSchema = z.object({
   }),
 });
 
+export const updateManagerProfileSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).optional(),
+    phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'Invalid phone number format').optional().or(z.literal('')),
+  }),
+});
+
 export const verifyEmailOtpSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),

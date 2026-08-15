@@ -5,7 +5,12 @@ import { API_BASE } from './config';
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
 const authHeaders = () => ({ Authorization: `Bearer ${getAuthToken()}` });
 
-const MEDIA_LABEL: Record<string, string> = { IMAGE: '📷 Photo', VIDEO: '🎬 Video', AUDIO: '🎤 Voice note', FILE: '📎 File' };
+const MEDIA_LABEL: Record<string, { icon: string; label: string }> = {
+  IMAGE: { icon: 'photo', label: 'Photo' },
+  VIDEO: { icon: 'video', label: 'Video' },
+  AUDIO: { icon: 'microphone-2', label: 'Voice note' },
+  FILE: { icon: 'paperclip', label: 'File' },
+};
 
 const senderLabel = (sender: any) => {
   const resident = sender?.resident;
@@ -125,8 +130,8 @@ function FeedTab() {
           )}
 
           {m.type !== 'TEXT' && m.type !== 'POLL' && (
-            <a href={m.mediaUrl ?? '#'} target="_blank" rel="noreferrer" className="feed-meta-badge" style={{ display: 'inline-block', marginTop: 10, textDecoration: 'none' }}>
-              {MEDIA_LABEL[m.type] ?? m.type}
+            <a href={m.mediaUrl ?? '#'} target="_blank" rel="noreferrer" className="feed-meta-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, textDecoration: 'none' }}>
+              {MEDIA_LABEL[m.type] ? (<><Icon name={MEDIA_LABEL[m.type].icon} size={12} /> {MEDIA_LABEL[m.type].label}</>) : m.type}
             </a>
           )}
         </div>

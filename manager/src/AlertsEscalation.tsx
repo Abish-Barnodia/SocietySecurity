@@ -366,7 +366,7 @@ const AlertsEscalation = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 24, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Broadcast Alert</h2>
-              <button onClick={() => setIsBroadcastOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><Icon name="x" size={20}/></button>
+              <button onClick={() => setIsBroadcastOpen(false)} className="modal-close"><Icon name="x" size={18}/></button>
             </div>
             
             <p style={{ margin: '0 0 20px 0', fontSize: 14, color: '#4B5563' }}>Send a real-time push notification to both Residents and Guards.</p>

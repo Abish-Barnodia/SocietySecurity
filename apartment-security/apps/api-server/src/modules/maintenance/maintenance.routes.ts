@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import {
   getMyInvoices,
   getAllInvoices,
@@ -20,7 +21,7 @@ router.post('/invoices/:id/verify', requireRole('RESIDENT'), verifyPayment);
 router.post('/invoices/:id/cancel', requireRole('RESIDENT'), cancelPaymentOrder);
 
 // Manager routes
-router.get('/invoices/all', requireRole('MANAGER', 'COMMITTEE'), getAllInvoices);
-router.post('/invoices', requireRole('MANAGER'), createInvoice);
+router.get('/invoices/all', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('maintenance'), getAllInvoices);
+router.post('/invoices', requireRole('MANAGER'), requireManagerPermission('maintenance'), createInvoice);
 
 export { router as maintenanceRouter };

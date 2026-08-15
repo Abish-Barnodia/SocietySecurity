@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   logEntry,
@@ -34,6 +35,6 @@ router.put('/:id/exit',    requireRole('GUARD'), validate(logExitSchema), logExi
 router.get('/',            requireRole('RESIDENT'), getUnitEntries);
 
 // Manager / Committee viewing
-router.get('/all',         requireRole('MANAGER', 'COMMITTEE'), getAllEntries);
+router.get('/all',         requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('timeline'), getAllEntries);
 
 export { router as entryRouter };

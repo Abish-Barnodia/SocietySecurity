@@ -31,6 +31,8 @@ import { escalationRouter } from './modules/escalation/escalation.routes';
 import { eventRouter } from './modules/events/event.routes';
 import { maintenanceRouter } from './modules/maintenance/maintenance.routes';
 import { fundRouter } from './modules/funds/fund.routes';
+import { settingsRouter } from './modules/settings/settings.routes';
+import { managerAccountsRouter } from './modules/managerAccounts/managerAccounts.routes';
 
 const app = express();
 
@@ -103,10 +105,12 @@ app.use(`${API}/timeline`, timelineRouter);
 app.use(`${API}/community`, communityRouter);
 app.use(`${API}/complaints`, complaintRouter);
 app.use(`${API}/domestic-workers`, domesticWorkerRouter);
-app.use(`${API}/escalation`, escalationRouter);
-app.use(`${API}/events`, eventRouter);
-app.use(`${API}/maintenance`, maintenanceRouter);
-app.use(`${API}/funds`, fundRouter);
+app.use('/api/v1/escalation', escalationRouter);
+app.use('/api/v1/events', eventRouter);
+app.use('/api/v1/maintenance', maintenanceRouter);
+app.use('/api/v1/funds', fundRouter);
+app.use('/api/v1/settings', settingsRouter);
+app.use('/api/v1/manager-accounts', managerAccountsRouter);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences } from './auth.controller';
-import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema } from './auth.schema';
+import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences, updateMyManagerProfile } from './auth.controller';
+import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema, updateManagerProfileSchema } from './auth.schema';
 import { alertPreferencesSchema } from '../residents/resident.schema';
 import { validate } from '../../middlewares/validate.middleware';
 import { authenticate } from '../../middlewares/auth.middleware';
@@ -21,5 +21,6 @@ router.post('/logout-all',  authenticate, logoutAllDevices);
 router.post('/fcm-token',   authenticate, validate(registerFcmTokenSchema), registerFcmToken);
 router.get('/me',           authenticate, getMe);
 router.put('/me/alerts',    authenticate, requireRole('MANAGER'), validate(alertPreferencesSchema), updateManagerAlertPreferences);
+router.put('/me/profile',   authenticate, requireRole('MANAGER'), validate(updateManagerProfileSchema), updateMyManagerProfile);
 
 export { router as authRouter };

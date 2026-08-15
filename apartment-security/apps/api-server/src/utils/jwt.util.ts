@@ -7,6 +7,11 @@ export interface TokenPayload {
   guardId?: string;
   propertyId?: string;
   residentId?: string;
+  managerId?: string;
+  // Present only for MANAGER logins — matched against ManagerPortalLock.sessionToken
+  // on every request to enforce the single-active-manager rule.
+  managerSessionToken?: string;
+  managerPermissions?: string[];
 }
 
 export const signAccessToken = (payload: TokenPayload): string => {

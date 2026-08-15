@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import EmptyState from './EmptyState';
 import { API_BASE } from './config';
 
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -101,7 +102,7 @@ const FundManagement: React.FC = () => {
               </thead>
               <tbody>
                 {summary.transactions.length === 0 ? (
-                  <tr><td colSpan={4} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No transactions recorded yet.</td></tr>
+                  <tr><td colSpan={4}><EmptyState icon="wallet" message="No transactions recorded yet." compact /></td></tr>
                 ) : summary.transactions.map((t: any) => {
                   const isIncome = t.type === 'INCOME';
                   return (

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   requestWalkin,
@@ -21,7 +22,7 @@ router.use(authenticate);
 router.post('/request', requireRole('GUARD'), validate(requestWalkinSchema), requestWalkin);
 
 // Get pending walkins (for Dashboard/Guard)
-router.get('/pending', requireRole('MANAGER', 'COMMITTEE', 'GUARD'), getPendingWalkins);
+router.get('/pending', requireRole('MANAGER', 'COMMITTEE', 'GUARD'), requireManagerPermission('expected'), getPendingWalkins);
 
 // Resident responds
 router.post('/:id/respond', requireRole('RESIDENT'), validate(respondWalkinSchema), respondWalkin);

@@ -87,8 +87,8 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
     { title: 'Active Guards', value: stats?.guardsOnDuty || '0', sub: 'Live from DB', icon: <Icon name="shield-check" size={24} />, type: 'positive' },
     { title: 'Residents On Premises', value: stats?.residentsOnPremises || '0', sub: 'Live from DB', icon: <Icon name="building-community" size={24} />, type: 'neutral' },
     { title: 'Visitors Today', value: stats?.activeVisitors || '0', sub: 'Live from DB', icon: <Icon name="users" size={24} />, type: 'positive' },
-    { title: 'Pending Approvals', value: stats?.pendingWalkins || pendingApprovals.length.toString(), sub: pendingApprovals.length > 0 ? `↓ ${pendingApprovals.length} overdue` : 'All cleared', icon: <Icon name="clock" size={24} />, type: pendingApprovals.length > 0 ? 'warning' : 'positive' },
-    { title: 'Open Alerts', value: stats?.openIncidents || alerts.length.toString(), sub: unacknowledgedCount > 0 ? `↓ ${unacknowledgedCount} critical` : 'All acknowledged', icon: <Icon name="alert-triangle" size={24} />, type: unacknowledgedCount > 0 ? 'negative' : 'positive' },
+    { title: 'Pending Approvals', value: stats?.pendingWalkins || pendingApprovals.length.toString(), sub: pendingApprovals.length > 0 ? <><Icon name="arrow-down" size={11} /> {pendingApprovals.length} overdue</> : 'All cleared', icon: <Icon name="clock" size={24} />, type: pendingApprovals.length > 0 ? 'warning' : 'positive' },
+    { title: 'Open Alerts', value: stats?.openIncidents || alerts.length.toString(), sub: unacknowledgedCount > 0 ? <><Icon name="arrow-down" size={11} /> {unacknowledgedCount} critical</> : 'All acknowledged', icon: <Icon name="alert-triangle" size={24} />, type: unacknowledgedCount > 0 ? 'negative' : 'positive' },
     { title: 'Gate Events Today', value: stats?.totalEntriesToday || '0', sub: 'Live from DB', icon: <Icon name="door-enter" size={24} />, type: 'positive' }, 
   ];
 
@@ -137,7 +137,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
             Auto-refresh: 30s
           </span>
           <button onClick={fetchData} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }} disabled={isRefreshing}>
-            <span style={{ transform: isRefreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.5s ease' }}>↻</span> 
+            <span style={{ display: 'flex', transform: isRefreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.5s ease' }}><Icon name="refresh" size={14} /></span>
             {isRefreshing ? 'Refreshing...' : 'Refresh Now'}
           </button>
         </div>
@@ -189,7 +189,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>{guard.entryPoint?.location || ''}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                       <div style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: 'var(--text-muted)' }}>👤</span> {guard.name || guard.id}
+                        <span style={{ display: 'flex', color: 'var(--text-muted)' }}><Icon name="user" size={13} /></span> {guard.name || guard.id}
                       </div>
                     </div>
                   </div>
@@ -229,7 +229,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
                       <div style={{ fontSize: 13, color: 'var(--text-main)', marginBottom: 8 }}>{item.body || item.notes || ''}</div>
                       <div className="feed-meta">
                         <span>{new Date(item.createdAt || item.entryAt).toLocaleTimeString()}</span>
-                        {item.entryPoint && <span>📍 {item.entryPoint.name}</span>}
+                        {item.entryPoint && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="map-pin" size={11} /> {item.entryPoint.name}</span>}
                       </div>
                     </div>
                   </div>
@@ -265,7 +265,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-main)', marginBottom: 8 }}>{app.purpose || app.notes}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div>🏠 Unit {app.unit?.unitNumber || app.unitId}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="home" size={11} /> Unit {app.unit?.unitNumber || app.unitId}</div>
                     </div>
                   </div>
                 ))
@@ -460,19 +460,19 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="alert-triangle" size={16} color="#EF4444" /> Security Alerts</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="alert-triangle" size={16} color="var(--danger)" /> Security Alerts</span>
                 <span style={{ fontWeight: 600 }}>{alertSummary.security}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="lock" size={16} color="#F59E0B" /> Access Violations</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="lock" size={16} color="var(--warning)" /> Access Violations</span>
                 <span style={{ fontWeight: 600 }}>{alertSummary.access}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, borderBottom: '1px solid var(--border-color)', paddingBottom: 12 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="settings" size={16} color="#3B82F6" /> System Alerts</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="settings" size={16} color="var(--info)" /> System Alerts</span>
                 <span style={{ fontWeight: 600 }}>{alertSummary.system}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="shield-check" size={16} color="#10B981" /> Safety Alerts</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-main)' }}><Icon name="shield-check" size={16} color="var(--success)" /> Safety Alerts</span>
                 <span style={{ fontWeight: 600 }}>{alertSummary.safety}</span>
               </div>
             </div>

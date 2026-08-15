@@ -166,7 +166,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Rating</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {guard.stats?.rating || 0} <Icon name="star-filled" size={20} color="#F59E0B" />
+              {guard.stats?.rating || 0} <Icon name="star-filled" size={20} color="var(--warning)" />
             </div>
           </div>
           <div>

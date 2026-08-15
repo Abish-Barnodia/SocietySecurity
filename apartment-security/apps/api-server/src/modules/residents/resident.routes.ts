@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import {
   getMyProfile,
@@ -45,12 +46,12 @@ router.post('/unit/members', requireRole('RESIDENT'), addHouseholdMember);
 router.delete('/unit/members/:memberId', requireRole('RESIDENT'), removeHouseholdMember);
 
 // Manager operations
-router.get('/',                    requireRole('MANAGER', 'COMMITTEE'), getAllResidents);
-router.get('/families/:unitId',    requireRole('MANAGER', 'COMMITTEE'), getFamilyDetails);
-router.post('/',                   requireRole('MANAGER'), validate(onboardResidentSchema), onboardResident);
-router.post('/household',          requireRole('MANAGER'), validate(onboardHouseholdSchema), onboardHousehold);
-router.put('/families/:unitId',    requireRole('MANAGER'), validate(updateHouseholdSchema), updateHousehold);
-router.delete('/:id',              requireRole('MANAGER'), deactivateResident);
-router.get('/:id/summary',         requireRole('MANAGER', 'COMMITTEE'), getUnitSummary);
+router.get('/',                    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getAllResidents);
+router.get('/families/:unitId',    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getFamilyDetails);
+router.post('/',                   requireRole('MANAGER'), requireManagerPermission('residents'), validate(onboardResidentSchema), onboardResident);
+router.post('/household',          requireRole('MANAGER'), requireManagerPermission('residents'), validate(onboardHouseholdSchema), onboardHousehold);
+router.put('/families/:unitId',    requireRole('MANAGER'), requireManagerPermission('residents'), validate(updateHouseholdSchema), updateHousehold);
+router.delete('/:id',              requireRole('MANAGER'), requireManagerPermission('residents'), deactivateResident);
+router.get('/:id/summary',         requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getUnitSummary);
 
 export { router as residentRouter };

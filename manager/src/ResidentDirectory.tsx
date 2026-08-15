@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Icon from './Icon';
+import EmptyState from './EmptyState';
 import { API_BASE } from './config';
 
 interface FamilyMember {
@@ -334,10 +335,7 @@ const ResidentDirectory = () => {
 
               {/* Family Cards */}
               {filteredFamilies.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
-                  <Icon name="users" size={40} style={{ marginBottom: 12, opacity: 0.25 }} />
-                  <p style={{ margin: 0, fontSize: 15 }}>{searchQuery ? 'No families match your search.' : 'No families yet. Click "Add Household" to get started!'}</p>
-                </div>
+                <EmptyState icon="users" message={searchQuery ? 'No families match your search.' : 'No families yet. Click "Add Household" to get started!'} />
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {filteredFamilies.map(family => {
@@ -417,7 +415,7 @@ const ResidentDirectory = () => {
                 </thead>
                 <tbody>
                   {passes.length === 0
-                    ? <tr><td colSpan={6} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No passes found.</td></tr>
+                    ? <tr><td colSpan={6}><EmptyState icon="key" message="No passes found." compact /></td></tr>
                     : passes.map(pass => (
                       <tr key={pass.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                         <td style={{ padding: '14px 20px', fontSize: 13, fontFamily: 'monospace' }}>PASS-{pass.id.slice(-4).toUpperCase()}</td>
@@ -449,7 +447,7 @@ const ResidentDirectory = () => {
                 </button>
               </div>
               {amenities.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No amenities added yet. Residents won't see any until you add one.</p>
+                <EmptyState icon="building-skyscraper" message="No amenities added yet. Residents won't see any until you add one." compact />
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
                   {amenities.map(a => (
@@ -481,7 +479,7 @@ const ResidentDirectory = () => {
           {activeTab === 'complaints' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {complaints.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)' }}>No complaints raised yet.</p>
+                <EmptyState icon="message-exclamation" message="No complaints raised yet." compact />
               ) : complaints.map(c => {
                 const isResolved = c.status === 'RESOLVED' || c.status === 'CLOSED';
                 return (

@@ -3,6 +3,7 @@ import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import { upload } from '../../middlewares/upload.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import {
   listMessages,
   createMessage,
@@ -23,6 +24,7 @@ import { createMessageSchema, reactionSchema, voteSchema, reportSchema, muteSche
 
 const router = Router();
 router.use(authenticate);
+router.use(requireManagerPermission('community'));
 
 // Resident + Manager: participate in the chat
 router.post('/messages', requireRole('RESIDENT', 'MANAGER'), validate(createMessageSchema), createMessage);

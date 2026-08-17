@@ -224,6 +224,10 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const response = await api.post('/community/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       transformRequest: [(data) => data],
+      // File uploads are slower than typical API calls, and the free-tier
+      // backend can take 50s+ to wake from a cold start — the default 15s
+      // instance timeout was reporting that as a generic "Network Error".
+      timeout: 60000,
     });
     return response.data.data as { url: string; mimeType: string; sizeBytes: number; fileName: string };
   };

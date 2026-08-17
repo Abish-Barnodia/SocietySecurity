@@ -127,6 +127,8 @@ export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = 
     const response = await api.post('/domestic-workers/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       transformRequest: [(data) => data],
+      // See CommunityContext's uploadMedia for why this needs a longer timeout.
+      timeout: 60000,
     });
     return response.data.data.url as string;
   }, []);

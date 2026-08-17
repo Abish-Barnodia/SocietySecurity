@@ -41,6 +41,7 @@ export default function WalkInScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    console.log('🛡️ [Guard Component: WalkInScreen] Mounted');
     // Ponytail: load everything at once, minimum boilerplate
     Promise.all([
       api.get('/entries/entry-points'),

@@ -38,6 +38,7 @@ export default function ScanScreen() {
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('🛡️ [Guard Component: ScanScreen] Mounted');
     api.get('/entries/entry-points').then((res) => setEntryPoints(res.data.data ?? [])).catch(() => {});
   }, []);
 

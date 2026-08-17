@@ -34,7 +34,7 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
   const liveRequest = pendingWalkIns.find(r => r.id === requestId);
 
   const load = useCallback(async () => {
-    if (!requestId) { setLoading(false); return; }
+    if (!requestId || liveRequest) { setLoading(false); return; }
     try {
       const res = await api.get(`/walkins/${requestId}`);
       setRemoteEntry(res.data.data);
@@ -43,7 +43,7 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
     } finally {
       setLoading(false);
     }
-  }, [requestId]);
+  }, [requestId, liveRequest]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -75,14 +75,12 @@ export default function WalkInApprovalScreen({ route, navigation }: { route: any
   const handleAction = async (action: 'APPROVED' | 'DENIED') => {
     if (!requestId || submitting || expired || isAlreadyResolved) return;
     setSubmitting(true);
+    navigation.goBack();
     try {
       await respondWalkIn(requestId, action);
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message ?? 'Failed to send your response. Please try again.');
-      setSubmitting(false);
-      return;
     }
-    navigation.goBack();
   };
 
   // Countdown from server deadline

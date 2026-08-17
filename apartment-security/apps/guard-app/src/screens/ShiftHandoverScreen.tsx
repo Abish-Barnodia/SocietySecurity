@@ -43,6 +43,10 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
   const { t } = useLanguage();
   const styles = getStyles(colors);
 
+  useEffect(() => {
+    console.log('🛡️ [Guard Component: ShiftHandoverScreen] Mounted');
+  }, []);
+
   const METHOD_COLOR: Record<EntryMethod, string> = {
     QR_SCAN: colors.primary,
     OTP: colors.success,

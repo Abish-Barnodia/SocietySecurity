@@ -15,6 +15,10 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const [emergencyOpen, setEmergencyOpen] = React.useState(false);
   const [sendingSOS, setSendingSOS] = React.useState(false);
 
+  React.useEffect(() => {
+    console.log('🏠 [Resident Component: HomeScreen] Mounted for resident:', userProfile?.name ?? 'Resident');
+  }, [userProfile]);
+
   const activePassesCount = passes.filter(p => p.status === 'Active').length;
   const unreadAlertsCount = alerts.filter(a => a.unread).length;
   const entriesTodayCount = entries.filter(e => e.date === 'TODAY').length;

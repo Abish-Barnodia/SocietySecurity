@@ -32,6 +32,10 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
   const { t } = useLanguage();
   const styles = getStyles(colors);
 
+  useEffect(() => {
+    console.log('🛡️ [Guard Component: HomeScreen] Mounted for guard:', guardProfile?.name ?? 'Guard');
+  }, [guardProfile]);
+
   const TINTS: Record<Tint, { bg: string; fg: string }> = {
     primary: { bg: colors.primaryLight, fg: colors.primary },
     success: { bg: colors.successLight, fg: colors.success },

@@ -72,7 +72,10 @@ export default function AlertsScreen() {
     }
   }, []);
 
-  useEffect(() => { loadAlerts(); }, [loadAlerts]);
+  useEffect(() => {
+    console.log('🛡️ [Guard Component: AlertsScreen] Mounted');
+    loadAlerts();
+  }, [loadAlerts]);
 
   const handleRefresh = () => {
     setRefreshing(true);

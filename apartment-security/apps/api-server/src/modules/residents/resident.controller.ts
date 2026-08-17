@@ -60,16 +60,16 @@ export const updateAlertPreferences = async (req: Request, res: Response, next: 
 
 export const getUnitResidents = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const currentResident = await prisma.resident.findUnique({
-            where: { userId: req.user!.userId }
-        });
-        if (!currentResident) return next(new AppError('Resident not found', 404));
-        
         const residents = await prisma.resident.findMany({
-            where: { unitId: currentResident.unitId },
+            where: {
+                unit: {
+                    residents: {
+                        some: { userId: req.user!.userId }
+                    }
+                }
+            },
             include: { user: { select: { phone: true } } }
         });
-        
         return sendSuccess(res, 200, 'Unit residents fetched', residents);
     } catch (err) { next(err); }
 };

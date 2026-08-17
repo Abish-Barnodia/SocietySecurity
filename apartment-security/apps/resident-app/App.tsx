@@ -57,7 +57,13 @@ function ThemedApp() {
   };
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer
+      theme={navigationTheme}
+      onStateChange={(state) => {
+        const route = state?.routes[state?.index ?? 0];
+        console.log(`📱 [Resident App Navigation] Opened -> ${route?.name}`);
+      }}
+    >
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
     </NavigationContainer>

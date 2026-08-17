@@ -22,24 +22,33 @@ const api = axios.create({
   },
 });
 
-// Interceptor to add JWT token to every request
+// Interceptor to add JWT token to every request and log API calls
 api.interceptors.request.use(
   async (config) => {
     const token = await tokenStorage.getItemAsync('guardToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`🚀 [Guard API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data ?? '');
     return config;
   },
   (error) => {
+    console.error('❌ [Guard API Request Error]', error);
     return Promise.reject(error);
   }
 );
 
-// Interceptor for handling 401 Unauthorized responses
+// Interceptor for handling responses and errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ [Guard API Response ${response.status}] ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    return response;
+  },
   async (error) => {
+    console.error(
+      `❌ [Guard API Error ${error.response?.status ?? 'NET_ERR'}] ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+      error.response?.data?.message ?? error.message
+    );
     if (error.response?.status === 401) {
       await tokenStorage.deleteItemAsync('guardToken');
     }

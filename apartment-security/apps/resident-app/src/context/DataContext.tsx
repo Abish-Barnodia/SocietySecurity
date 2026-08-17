@@ -399,6 +399,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchMembers = useCallback(async () => {
     try {
       const response = await api.get('/residents/unit');
+      console.log('👨‍👩‍👧‍👦 [Household Members Data] ----->', response.data.data);
       const raw: any[] = response.data.data ?? [];
       setMembers(raw.map(mapMember).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)));
     } catch (error) {
@@ -438,10 +439,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addScanRequest = (request: ScanRequest) => setScanRequests((prev) => [request, ...prev]);
 
   const respondWalkIn = async (id: string, status: 'APPROVED' | 'DENIED') => {
-    await api.post(`/walkins/${id}/respond`, { status });
     setPendingWalkIns((prev) => prev.filter((w) => w.id !== id));
     markAlertRead(id);
-    await fetchEntries();
+    try {
+      await api.post(`/walkins/${id}/respond`, { status });
+      fetchEntries();
+    } catch (err) {
+      console.error('Failed to send walk-in response:', err);
+      fetchAlerts();
+      throw err;
+    }
   };
 
   // The backend only stores a single emergency contact on the Resident record

@@ -19,9 +19,9 @@ export default function HouseholdScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      if (members.length === 0) setLoading(true);
       fetchMembers().finally(() => setLoading(false));
-    }, [fetchMembers])
+    }, [fetchMembers, members.length])
   );
 
   const handleRefresh = async () => {

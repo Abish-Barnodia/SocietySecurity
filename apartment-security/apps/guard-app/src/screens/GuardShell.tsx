@@ -51,7 +51,14 @@ export default function GuardShell() {
         {TAB_CONFIG.map((tabItem) => {
           const active = tabItem.key === tab;
           return (
-            <TouchableOpacity key={tabItem.key} style={styles.tabItem} onPress={() => setTab(tabItem.key)}>
+            <TouchableOpacity
+              key={tabItem.key}
+              style={styles.tabItem}
+              onPress={() => {
+                console.log(`🛡️ [Guard App Navigation] Opened Tab -> ${tabItem.key.toUpperCase()}`);
+                setTab(tabItem.key);
+              }}
+            >
               <Ionicons name={tabItem.icon} size={22} color={active ? colors.primary : colors.textMuted} />
               <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{t(tabItem.labelKey)}</Text>
             </TouchableOpacity>

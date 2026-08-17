@@ -16,9 +16,7 @@ export const getSettings = async (req: Request, res: Response, next: NextFunctio
     }
 
     if (!propertyId) {
-      // fallback to first property for this demo
-      const prop = await prisma.property.findFirst();
-      if (prop) propertyId = prop.id;
+      return next(new AppError('Property context missing for this user', 400));
     }
 
     const settings = await prisma.propertySetting.findMany({
@@ -46,9 +44,12 @@ export const getRoleSummary = async (req: Request, res: Response, next: NextFunc
   try {
     const user = (req as any).user;
     let propertyId = user.propertyId;
+    if (!propertyId && user.role === 'MANAGER') {
+      const manager = await prisma.manager.findUnique({ where: { userId: user.id } });
+      if (manager) propertyId = manager.propertyId;
+    }
     if (!propertyId) {
-      const prop = await prisma.property.findFirst();
-      if (prop) propertyId = prop.id;
+      return next(new AppError('Property context missing for this user', 400));
     }
 
     const [residentCount, guardCount, managerCount, committeeCount] = await Promise.all([
@@ -103,8 +104,7 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
     }
 
     if (!propertyId) {
-      const prop = await prisma.property.findFirst();
-      if (prop) propertyId = prop.id;
+      return next(new AppError('Property context missing for this user', 400));
     }
 
     const updates = req.body; // e.g. { "roles": [...], "hardware_cctv": true }

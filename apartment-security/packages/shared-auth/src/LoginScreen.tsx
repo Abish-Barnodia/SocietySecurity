@@ -4,6 +4,7 @@ import {
   Platform, StatusBar, Alert, ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// @ts-ignore
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './AuthContext';
 

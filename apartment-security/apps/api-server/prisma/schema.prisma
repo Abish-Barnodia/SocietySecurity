@@ -237,9 +237,7 @@ model RecurringRule {
   windowEndTime   String
   createdAt       DateTime    @default(now())
   pass            Pass        @relation(fields: [passId], references: [id])
-}
-
-model PassUsageHistory {
+}model PassUsageHistory {
   id      String   @id @default(cuid())
   passId  String
   entryId String?
@@ -247,6 +245,9 @@ model PassUsageHistory {
   outcome String
   entry   Entry?   @relation(fields: [entryId], references: [id])
   pass    Pass     @relation(fields: [passId], references: [id])
+
+  @@index([passId])
+  @@index([entryId])
 }
 
 model Entry {
@@ -273,6 +274,12 @@ model Entry {
   usageHistory   PassUsageHistory[]
   walkinApproval WalkinApproval?
   parkingSlot    ParkingSlot?
+
+  @@index([unitId])
+  @@index([guardId])
+  @@index([entryPointId])
+  @@index([passId])
+  @@index([status])
 }
 
 model WalkinApproval {
@@ -289,6 +296,8 @@ model WalkinApproval {
   createdAt     DateTime  @default(now())
   entry         Entry     @relation(fields: [entryId], references: [id])
   resident      Resident  @relation(fields: [residentId], references: [id])
+
+  @@index([residentId])
 }
 
 model Alert {
@@ -489,6 +498,8 @@ model AuditLog {
   userAgent String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 model Invoice {

@@ -130,10 +130,6 @@ export const removeHouseholdMember = async (req: Request, res: Response, next: N
             return next(new AppError('Member not found in your unit', 404));
         }
         
-        await prisma.resident.update({
-            where: { id: memberId },
-            data: { isActive: false }
-        });
         await prisma.user.update({
             where: { id: memberToRemove.userId },
             data: { isActive: false }
@@ -556,10 +552,6 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                 if (resident) {
                     await tx.user.update({
                         where: { id: resident.userId },
-                        data: { isActive: false }
-                    });
-                    await tx.resident.update({
-                        where: { id: residentId },
                         data: { isActive: false }
                     });
                 }

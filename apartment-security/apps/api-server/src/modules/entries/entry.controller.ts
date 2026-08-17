@@ -96,28 +96,47 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       status = 'PENDING_APPROVAL';
     }
 
-    const entry = await prisma.entry.create({
-      data: {
-        unitId,
-        guardId: guard.id,
-        entryPointId,
-        method,
-        visitorName,
-        visitorPhone,
-        vehicleNumber,
-        passId: resolvedPassId,
-        status: status as any,
-        notes,
-        gatePhotoUrl
-      }
-    });
-
-    if (resolvedPassId) {
-      const outcome = status === 'PENDING_APPROVAL' ? 'PENDING' : (status === 'APPROVED' ? 'CLEARED' : 'DENIED');
-      await prisma.passUsageHistory.create({
-        data: { passId: resolvedPassId, entryId: entry.id, outcome }
+    const { entry, walkinCreated } = await prisma.$transaction(async (tx) => {
+      const createdEntry = await tx.entry.create({
+        data: {
+          unitId,
+          guardId: guard.id,
+          entryPointId,
+          method,
+          visitorName,
+          visitorPhone,
+          vehicleNumber,
+          passId: resolvedPassId,
+          status: status as any,
+          notes,
+          gatePhotoUrl
+        }
       });
-    }
+
+      if (resolvedPassId) {
+        const outcome = status === 'PENDING_APPROVAL' ? 'PENDING' : (status === 'APPROVED' ? 'CLEARED' : 'DENIED');
+        await tx.passUsageHistory.create({
+          data: { passId: resolvedPassId, entryId: createdEntry.id, outcome }
+        });
+      }
+
+      let walkinTicket = null;
+      if (qrApproval) {
+        const { pass } = qrApproval;
+        const timeoutAt = new Date(Date.now() + 120_000);
+        walkinTicket = await tx.walkinApproval.create({
+          data: {
+            entryId: createdEntry.id,
+            residentId: pass.residentId,
+            visitorName,
+            purpose: pass.purpose ?? '',
+            timeoutAt,
+          }
+        });
+      }
+
+      return { entry: createdEntry, walkinCreated: walkinTicket };
+    });
 
     await assignParkingSlot(entry.id, guard.propertyId, vehicleNumber);
 
@@ -125,17 +144,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
 
     if (qrApproval) {
       const { pass, unit, entryPoint } = qrApproval;
-      const timeoutAt = new Date(Date.now() + 120_000);
-
-      await prisma.walkinApproval.create({
-        data: {
-          entryId: entry.id,
-          residentId: pass.residentId,
-          visitorName,
-          purpose: pass.purpose ?? '',
-          timeoutAt,
-        }
-      });
+      const timeoutAt = walkinCreated!.timeoutAt;
 
       io?.to(`unit_${unitId}`).emit('visitor_approval_request', {
         entryId: entry.id,

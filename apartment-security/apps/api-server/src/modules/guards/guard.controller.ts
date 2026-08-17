@@ -515,8 +515,8 @@ export const createLeave = async (req: Request, res: Response, next: NextFunctio
 
 export const getLeaves = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { guardId } = req.query;
-    const where = guardId ? { guardId: guardId as string } : {};
+    const guardId = typeof req.query.guardId === 'string' ? req.query.guardId : undefined;
+    const where = guardId ? { guardId } : {};
 
     const leaves = await prisma.guardLeave.findMany({
       where,
@@ -530,7 +530,7 @@ export const getLeaves = async (req: Request, res: Response, next: NextFunction)
 
 export const cancelLeave = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const leave = await prisma.guardLeave.findUnique({ where: { id } });
     if (!leave) return next(new AppError('Leave record not found', 404));
     if (leave.status === 'CANCELLED') return next(new AppError('Leave is already cancelled', 400));
@@ -560,8 +560,8 @@ const overlapDays = (leaveStart: Date, leaveEnd: Date, monthStart: Date, monthEn
 
 export const getSalarySlip = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params; // guard id
-    const { month } = req.query; // e.g. "2026-08", defaults to current month
+    const id = req.params.id as string; // guard id
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined; // e.g. "2026-08", defaults to current month
 
     const guard = await prisma.guard.findUnique({
       where: { id },
@@ -569,7 +569,7 @@ export const getSalarySlip = async (req: Request, res: Response, next: NextFunct
     });
     if (!guard) return next(new AppError('Guard not found', 404));
 
-    const monthYear = (month as string) || new Date().toISOString().slice(0, 7);
+    const monthYear = month || new Date().toISOString().slice(0, 7);
     const [year, mon] = monthYear.split('-').map(Number);
     const monthStart = new Date(year, mon - 1, 1);
     const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999); // last ms of month
@@ -608,7 +608,7 @@ export const createSalaryOrder = async (req: Request, res: Response, next: NextF
   try {
     if (!razorpay) return next(new AppError('Payment gateway not configured', 500));
 
-    const { id } = req.params; // guardSalary id
+    const id = req.params.id as string; // guardSalary id
     const salary = await prisma.guardSalary.findUnique({ where: { id }, include: { guard: { select: { name: true } } } });
     if (!salary) return next(new AppError('Salary record not found', 404));
     if (salary.status === 'PAID') return next(new AppError('Salary already paid', 400));
@@ -623,7 +623,7 @@ export const createSalaryOrder = async (req: Request, res: Response, next: NextF
       amount: amountPaise,
       currency: 'INR',
       receipt: salary.id,
-      notes: { guardSalaryId: salary.id, guard: salary.guard.name },
+      notes: { guardSalaryId: salary.id, guard: (salary as any).guard?.name || 'Guard' },
     });
 
     await prisma.guardSalary.update({ where: { id }, data: { razorpayOrderId: order.id } });
@@ -642,7 +642,7 @@ export const verifySalaryPayment = async (req: Request, res: Response, next: Nex
   try {
     if (!env.RAZORPAY_KEY_SECRET) return next(new AppError('Payment gateway not configured', 500));
 
-    const { id } = req.params; // guardSalary id
+    const id = req.params.id as string; // guardSalary id
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return next(new AppError('Missing Razorpay payment fields', 400));

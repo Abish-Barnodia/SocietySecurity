@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+// @ts-ignore
 import * as SecureStore from 'expo-secure-store';
 
 const tokenStorage = Platform.OS === 'web'

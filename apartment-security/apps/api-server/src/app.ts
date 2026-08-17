@@ -81,9 +81,9 @@ app.use(morgan('combined', {
 // Global rate limiter (per IP)
 app.use(globalRateLimiter);
 
-// Health check — no auth required
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check & Root endpoint — no auth required (handles Render health probes)
+app.all(['/', '/health'], (_req, res) => {
+  res.json({ status: 'ok', service: 'Apartment Security API', timestamp: new Date().toISOString() });
 });
 
 // API routes

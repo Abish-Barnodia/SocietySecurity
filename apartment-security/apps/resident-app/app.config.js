@@ -8,6 +8,7 @@ module.exports = {
   expo: {
     name: 'resident-app-temp',
     slug: 'resident-app-temp',
+    newArchEnabled: false,
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',

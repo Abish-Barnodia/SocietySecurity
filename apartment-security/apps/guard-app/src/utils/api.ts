@@ -16,7 +16,9 @@ export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `https
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 8000,
+  // Render's free tier spins down after inactivity and can take 50s+ to wake
+  // back up — 8s was reporting that cold start as a generic "Network Error".
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },

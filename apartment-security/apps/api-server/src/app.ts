@@ -68,8 +68,9 @@ app.use(cors({
   credentials: true,
 }));
 
-// Static uploads directory
+// Static uploads directory (support both /uploads and /api/v1/uploads)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/api/v1/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Body parsing - limited to 50mb to prevent DoS via massive payloads while allowing base64 image uploads
 app.use(express.json({ limit: '50mb' }));

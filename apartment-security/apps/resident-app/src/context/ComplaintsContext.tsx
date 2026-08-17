@@ -137,9 +137,14 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const uploadAttachment = useCallback(async (localUri: string, mimeType: string, fileName: string) => {
     const formData = new FormData();
-    formData.append('file', { uri: localUri, name: fileName, type: mimeType } as any);
+    formData.append('file', {
+      uri: localUri,
+      name: fileName || `photo-${Date.now()}.jpg`,
+      type: mimeType || 'image/jpeg',
+    } as any);
     const response = await api.post('/complaints/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(data) => data],
     });
     return response.data.data.url as string;
   }, []);

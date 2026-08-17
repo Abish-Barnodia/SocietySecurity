@@ -20,8 +20,12 @@ const getLocalIp = () => {
 // Uses Supabase's Storage REST API directly (already have axios + a Supabase
 // project for the DB) rather than pulling in @supabase/supabase-js for one call.
 export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: string): Promise<string> => {
+  const getHostUrl = () => {
+    const rawUrl = env.API_URL || `http://${getLocalIp()}:${env.PORT}`;
+    return rawUrl.replace(/\/api\/v1\/?$/, '');
+  };
+
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Saving image locally.');
     const uploadsDir = path.join(process.cwd(), 'uploads');
     const fullPath = path.join(uploadsDir, filePath);
     const dir = path.dirname(fullPath);
@@ -29,8 +33,7 @@ export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: s
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(fullPath, buffer);
-    const baseUrl = env.API_URL || `http://${getLocalIp()}:${env.PORT}`;
-    return `${baseUrl}/uploads/${filePath}`;
+    return `${getHostUrl()}/uploads/${filePath}`;
   }
 
   try {
@@ -49,9 +52,14 @@ export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: s
 
     return `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_STORAGE_BUCKET}/${filePath}`;
   } catch (err) {
-    // A raw HTTP/SDK error (e.g. the bucket doesn't exist or isn't public)
-    // would otherwise surface to the client as an opaque 500 — every caller
-    // here is a photo upload a human is waiting on, so give them something actionable.
-    throw new AppError('Photo upload failed — storage is not set up correctly on the server', 503);
+    console.warn('Supabase storage upload failed, falling back to local file storage:', err);
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const fullPath = path.join(uploadsDir, filePath);
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(fullPath, buffer);
+    return `${getHostUrl()}/uploads/${filePath}`;
   }
 };

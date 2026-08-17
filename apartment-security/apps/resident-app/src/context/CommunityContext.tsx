@@ -221,9 +221,14 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const uploadMedia = async (localUri: string, mimeType: string, fileName: string) => {
     const formData = new FormData();
-    formData.append('file', { uri: localUri, name: fileName, type: mimeType } as any);
+    formData.append('file', {
+      uri: localUri,
+      name: fileName || `community-${Date.now()}.jpg`,
+      type: mimeType || 'image/jpeg',
+    } as any);
     const response = await api.post('/community/uploads', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(data) => data],
     });
     return response.data.data as { url: string; mimeType: string; sizeBytes: number; fileName: string };
   };

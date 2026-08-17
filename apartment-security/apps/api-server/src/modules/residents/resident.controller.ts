@@ -78,6 +78,7 @@ export const addHouseholdMember = async (req: Request, res: Response, next: Next
     try {
         // Assume resident can add another resident to their unit. The added user might need an OTP to verify phone later.
         const { name, phone, isPrimary } = req.body;
+        const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
         
         const currentResident = await prisma.resident.findUnique({
             where: { userId: req.user!.userId }
@@ -86,11 +87,13 @@ export const addHouseholdMember = async (req: Request, res: Response, next: Next
         if (!currentResident.isPrimary) return next(new AppError('Only primary residents can add members', 403));
         
         // Ensure user doesn't already exist
-        let user = await prisma.user.findUnique({ where: { phone } });
+        let user = await prisma.user.findFirst({
+          where: { OR: [{ phone: formattedPhone }, { phone }] }
+        });
         if (!user) {
             user = await prisma.user.create({
                 data: {
-                    phone,
+                    phone: formattedPhone,
                     role: 'RESIDENT',
                 }
             });
@@ -130,6 +133,7 @@ export const removeHouseholdMember = async (req: Request, res: Response, next: N
             return next(new AppError('Member not found in your unit', 404));
         }
         
+        await prisma.resident.delete({ where: { id: memberId } });
         await prisma.user.update({
             where: { id: memberToRemove.userId },
             data: { isActive: false }

@@ -17,12 +17,31 @@ export const getAmenities = async (req: Request, res: Response, next: NextFuncti
     }
     if (!propertyId) return next(new AppError('No property context found', 400));
 
-    const amenities = await prisma.amenity.findMany({
-      // Residents only ever see bookable amenities; managers need the full
-      // list (including MAINTENANCE ones) to actually manage them.
-      where: { propertyId, ...(req.user!.role === 'RESIDENT' ? { status: 'AVAILABLE' } : {}) },
+    let amenities = await prisma.amenity.findMany({
+      where: { propertyId },
       orderBy: { createdAt: 'desc' },
     });
+
+    if (amenities.length === 0) {
+      await prisma.amenity.createMany({
+        data: [
+          { propertyId, name: 'Fitness Gym', capacity: 15, openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' },
+          { propertyId, name: 'Swimming Pool', capacity: 20, openTime: '07:00', closeTime: '21:00', status: 'AVAILABLE' },
+          { propertyId, name: 'Clubhouse Hall', capacity: 50, openTime: '09:00', closeTime: '23:00', status: 'AVAILABLE' },
+          { propertyId, name: 'Tennis Court', capacity: 4, openTime: '06:00', closeTime: '20:00', status: 'AVAILABLE' },
+          { propertyId, name: 'Badminton Court', capacity: 4, openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' },
+        ],
+      });
+      amenities = await prisma.amenity.findMany({
+        where: { propertyId },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (req.user!.role === 'RESIDENT') {
+      amenities = amenities.filter((a) => a.status === 'AVAILABLE');
+    }
+
     sendSuccess(res, 200, 'Amenities fetched', amenities);
   } catch (err) { next(err); }
 };

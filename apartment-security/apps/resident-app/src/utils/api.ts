@@ -12,7 +12,7 @@ const localhost = Platform.OS === 'web'
       ? debuggerHost.split(':')[0]
       : (Platform.OS === 'android' ? '10.0.2.2' : 'localhost'));
 
-export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `http://${localhost}:5000/api/v1`;
+export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `https://societysecurity.onrender.com/api/v1`;
 
 const api = axios.create({
   baseURL: API_URL,

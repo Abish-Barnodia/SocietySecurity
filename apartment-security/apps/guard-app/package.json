@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "expo start",
+    "start": "npx expo start",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },

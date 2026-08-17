@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,7 +20,7 @@ import { useComplaints, ComplaintCategory, ComplaintPriority } from '../../conte
 import { useTheme } from '../../context/ThemeContext';
 import { CATEGORY_OPTIONS, PRIORITY_OPTIONS } from '../../constants/complaints';
 
-type Attachment = { url: string; isImage: boolean; name: string };
+type Attachment = { url: string; localUri?: string; isImage: boolean; name: string };
 
 export default function CreateComplaintScreen({ navigation }: { navigation: any }) {
   const { createComplaint, uploadAttachment } = useComplaints();
@@ -33,8 +34,9 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [previewItem, setPreviewItem] = useState<Attachment | null>(null);
 
-  const canSubmit = title.trim().length >= 3 && description.trim().length >= 5 && !uploading && !submitting;
+  const canSubmit = !uploading && !submitting;
 
   const handleAddPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -45,12 +47,14 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    const fileName = asset.fileName ?? `photo-${Date.now()}.jpg`;
+
     setUploading(true);
     try {
-      const url = await uploadAttachment(asset.uri, asset.mimeType ?? 'image/jpeg', asset.fileName ?? `photo-${Date.now()}.jpg`);
-      setAttachments((prev) => [...prev, { url, isImage: true, name: asset.fileName ?? 'photo.jpg' }]);
+      const serverUrl = await uploadAttachment(asset.uri, asset.mimeType ?? 'image/jpeg', fileName);
+      setAttachments((prev) => [...prev, { url: serverUrl, localUri: asset.uri, isImage: true, name: fileName }]);
     } catch {
-      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      setAttachments((prev) => [...prev, { url: asset.uri, localUri: asset.uri, isImage: true, name: fileName }]);
     } finally {
       setUploading(false);
     }
@@ -60,12 +64,14 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
     const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    const isImg = asset.mimeType?.startsWith('image/') ?? false;
+
     setUploading(true);
     try {
-      const url = await uploadAttachment(asset.uri, asset.mimeType ?? 'application/octet-stream', asset.name);
-      setAttachments((prev) => [...prev, { url, isImage: false, name: asset.name }]);
+      const serverUrl = await uploadAttachment(asset.uri, asset.mimeType ?? 'application/octet-stream', asset.name);
+      setAttachments((prev) => [...prev, { url: serverUrl, localUri: asset.uri, isImage: isImg, name: asset.name }]);
     } catch {
-      Alert.alert('Error', 'Failed to upload file. Please try again.');
+      setAttachments((prev) => [...prev, { url: asset.uri, localUri: asset.uri, isImage: isImg, name: asset.name }]);
     } finally {
       setUploading(false);
     }
@@ -74,7 +80,15 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
   const removeAttachment = (url: string) => setAttachments((prev) => prev.filter((a) => a.url !== url));
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!title.trim()) {
+      Alert.alert('Title Required', 'Please enter a title for your complaint.');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Description Required', 'Please enter a description for your complaint.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createComplaint({
@@ -85,8 +99,8 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
         attachmentUrls: attachments.map((a) => a.url),
       });
       navigation.goBack();
-    } catch {
-      Alert.alert('Error', 'Failed to submit complaint. Please try again.');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message ?? 'Failed to submit complaint. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -153,14 +167,16 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
         <View style={styles.attachmentGrid}>
           {attachments.map((a) => (
             <View key={a.url} style={styles.attachmentPreview}>
-              {a.isImage ? (
-                <Image source={{ uri: a.url }} style={styles.attachmentImage} />
-              ) : (
-                <View style={styles.fileAttachment}>
-                  <Ionicons name="document-text" size={20} color={colors.primary} />
-                  <Text style={styles.fileAttachmentName} numberOfLines={1}>{a.name}</Text>
-                </View>
-              )}
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewItem(a)}>
+                {a.isImage ? (
+                  <Image source={{ uri: a.localUri ?? a.url }} style={styles.attachmentImage} />
+                ) : (
+                  <View style={styles.fileAttachment}>
+                    <Ionicons name="document-text" size={20} color={colors.primary} />
+                    <Text style={styles.fileAttachmentName} numberOfLines={1}>{a.name}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity style={styles.removeAttachmentButton} onPress={() => removeAttachment(a.url)}>
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
               </TouchableOpacity>
@@ -177,10 +193,27 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={!canSubmit}>
+        <TouchableOpacity style={[styles.submitButton, (!canSubmit || submitting) && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={!canSubmit || submitting}>
           {submitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitButtonText}>Submit complaint</Text>}
         </TouchableOpacity>
       </View>
+
+      {/* Attachment Preview Modal */}
+      <Modal visible={!!previewItem} transparent animationType="fade" onRequestClose={() => setPreviewItem(null)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPreviewItem(null)}>
+            <Ionicons name="close" size={28} color="#ffffff" />
+          </TouchableOpacity>
+          {previewItem?.isImage ? (
+            <Image source={{ uri: previewItem.localUri ?? previewItem.url }} style={styles.fullImagePreview} resizeMode="contain" />
+          ) : (
+            <View style={styles.fullFilePreview}>
+              <Ionicons name="document-text" size={64} color={colors.primary} />
+              <Text style={styles.fullFileName}>{previewItem?.name}</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -262,4 +295,36 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     submitButton: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
     submitButtonDisabled: { opacity: 0.5 },
     submitButtonText: { color: colors.card, fontSize: 16, fontWeight: 'bold' },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.9)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalCloseButton: {
+      position: 'absolute',
+      top: 40,
+      right: 20,
+      zIndex: 10,
+      padding: 8,
+    },
+    fullImagePreview: {
+      width: '100%',
+      height: '80%',
+      borderRadius: 16,
+    },
+    fullFilePreview: {
+      backgroundColor: colors.card,
+      padding: 32,
+      borderRadius: 20,
+      alignItems: 'center',
+    },
+    fullFileName: {
+      marginTop: 16,
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: colors.text,
+      textAlign: 'center',
+    },
   });

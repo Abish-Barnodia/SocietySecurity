@@ -5,9 +5,12 @@ import tokenStorage from './tokenStorage';
 
 // Fallback for Android Emulator is 10.0.2.2, but for physical devices we need the LAN IP
 const debuggerHost = Constants.expoConfig?.hostUri;
+const isTunnel = debuggerHost?.includes('exp.direct') || debuggerHost?.includes('ngrok');
 const localhost = Platform.OS === 'web'
   ? 'localhost'
-  : (debuggerHost ? debuggerHost.split(':')[0] : '10.0.2.2');
+  : (debuggerHost && !isTunnel
+      ? debuggerHost.split(':')[0]
+      : (Platform.OS === 'android' ? '10.0.2.2' : 'localhost'));
 
 export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `http://${localhost}:5000/api/v1`;
 

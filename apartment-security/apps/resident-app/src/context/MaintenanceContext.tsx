@@ -44,7 +44,7 @@ type MaintenanceContextType = {
 const MaintenanceContext = createContext<MaintenanceContextType | undefined>(undefined);
 
 type CheckoutState = {
-  params: { key: string; amount: number; currency: string; order_id: string; name: string; description: string };
+  params: { key: string; amount: number; currency: string; order_id: string; name: string; description: string; callback_url?: string };
   orderId: string;
   invoiceId: string;
   resolve: (result: any) => void;
@@ -123,7 +123,16 @@ export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         // Expo Go: no native module available, fall back to the WebView checkout
         checkoutResult = await new Promise((resolve, reject) => {
           setCheckout({
-            params: { key: keyId, amount, currency, order_id: orderId, name: 'Society Maintenance', description: invoice?.description ?? 'Maintenance charge' },
+            params: {
+              key: keyId,
+              amount,
+              currency,
+              order_id: orderId,
+              name: 'Society Maintenance',
+              description: invoice?.description ?? 'Maintenance charge',
+              // ponytail: redirect callback URL ensures WebView doesn't lose standard callbacks after bank redirects
+              callback_url: `${API_URL}/maintenance/invoices/${invoiceId}/verify-public`
+            },
             orderId,
             invoiceId,
             resolve,

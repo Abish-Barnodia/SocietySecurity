@@ -180,6 +180,95 @@ export const cancelPaymentOrder = async (req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 };
 
+// Resident: public WebView verification callback that handles redirection and redirects back to WebView with postMessage.
+// ponytail: public endpoint with HTML response so WebViews don't get stuck on JSON raw output after payment redirects.
+export const verifyPaymentPublic = async (req: Request, res: Response, next: NextFunction) => {
+  const invoiceId = req.params.id;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+  const htmlResponse = (success: boolean, dataOrError: string) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb; color: #1f2937; }
+        .card { text-align: center; padding: 24px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); max-width: 320px; width: 90%; }
+        .icon { font-size: 48px; margin-bottom: 16px; }
+        .title { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
+        .desc { font-size: 14px; color: #6b7280; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="icon">${success ? '✅' : '❌'}</div>
+        <div class="title">${success ? 'Payment Successful' : 'Payment Failed'}</div>
+        <div class="desc">${success ? 'Redirecting you back...' : dataOrError}</div>
+      </div>
+      <script>
+        setTimeout(function() {
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: success ? 'success' : 'failed',
+              data: success ? {
+                razorpay_order_id: '${razorpay_order_id}',
+                razorpay_payment_id: '${razorpay_payment_id}',
+                razorpay_signature: '${razorpay_signature}'
+              } : undefined,
+              error: success ? undefined : '${dataOrError}'
+            }));
+          }
+        }, 1500);
+      </script>
+    </body>
+    </html>
+  `;
+
+  try {
+    if (!razorpay || !env.RAZORPAY_KEY_SECRET) {
+      return res.status(500).send(htmlResponse(false, 'Payment gateway not configured'));
+    }
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).send(htmlResponse(false, 'Missing payment confirmation parameters'));
+    }
+
+    const payment = await prisma.payment.findUnique({ where: { razorpayOrderId: razorpay_order_id } });
+    if (!payment || payment.invoiceId !== invoiceId) {
+      return res.status(400).send(htmlResponse(false, 'Invalid payment order reference'));
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+      return res.status(400).send(htmlResponse(false, 'Signature verification failed'));
+    }
+
+    const updatedInvoice = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.payment.updateMany({
+        where: { id: payment.id, status: { not: 'SUCCESS' } },
+        data: { transactionId: razorpay_payment_id, status: 'SUCCESS', paidAt: new Date() },
+      });
+      if (claimed.count === 0) return null;
+      return tx.invoice.update({ where: { id: invoiceId }, data: { status: 'PAID', paidAt: new Date() } });
+    });
+
+    const finalInvoice = updatedInvoice ?? (await prisma.invoice.findUnique({ where: { id: invoiceId } }));
+    
+    if (finalInvoice) {
+      const io = req.app.get('io');
+      io?.to(`property:${finalInvoice.propertyId}`).emit('invoice:update', finalInvoice);
+    }
+
+    return res.status(200).send(htmlResponse(true, ''));
+  } catch (err: any) {
+    return res.status(500).send(htmlResponse(false, err.message || 'Internal server error'));
+  }
+};
+
 // Manager: bulk-create maintenance invoices across one or more units in their property.
 export const createInvoice = async (req: Request, res: Response, next: NextFunction) => {
   try {

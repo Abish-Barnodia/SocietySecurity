@@ -9,9 +9,14 @@ import {
   verifyPayment,
   cancelPaymentOrder,
   createInvoice,
+  verifyPaymentPublic,
 } from './maintenance.controller';
 
 const router = Router();
+
+// Webview public redirect verification endpoint (no JWT auth header)
+router.post('/invoices/:id/verify-public', verifyPaymentPublic);
+
 router.use(authenticate);
 
 // Resident routes

@@ -54,13 +54,15 @@ app.use(cors({
     if (process.env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
       return callback(null, true);
     }
-    // In production, allow only configured browser client origins
     const allowed = [
       env.CLIENT_RESIDENT_APP_URL,
       env.CLIENT_GUARD_APP_URL,
       env.CLIENT_MANAGER_URL,
     ];
-    if (allowed.includes(origin)) return callback(null, true);
+    // Allow configured browser client origins or any vercel.app domain
+    if (allowed.includes(origin) || origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,

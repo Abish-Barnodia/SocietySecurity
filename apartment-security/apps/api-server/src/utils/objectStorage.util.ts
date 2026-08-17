@@ -21,8 +21,16 @@ const getLocalIp = () => {
 // project for the DB) rather than pulling in @supabase/supabase-js for one call.
 export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: string): Promise<string> => {
   const getHostUrl = () => {
-    const rawUrl = env.API_URL || `http://${getLocalIp()}:${env.PORT}`;
-    return rawUrl.replace(/\/api\/v1\/?$/, '');
+    if (process.env.RENDER_EXTERNAL_HOSTNAME) {
+      return `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+    }
+    if (env.API_URL && !env.API_URL.includes('localhost') && !env.API_URL.includes('127.0.0.1')) {
+      return env.API_URL.replace(/\/api\/v1\/?$/, '');
+    }
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://societysecurity.onrender.com';
+    }
+    return `http://${getLocalIp()}:${env.PORT}`;
   };
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {

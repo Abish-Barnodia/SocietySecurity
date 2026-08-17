@@ -502,12 +502,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!isAuthenticated) return;
     if (userRole === 'RESIDENT') {
-      fetchPasses();
-      fetchAlerts();
-      fetchProfileSettings();
-      fetchEntries();
-      fetchMembers();
-      fetchAmenities();
+      Promise.allSettled([
+        fetchPasses(),
+        fetchAlerts(),
+        fetchProfileSettings(),
+        fetchEntries(),
+        fetchMembers(),
+        fetchAmenities(),
+      ]);
     }
   }, [isAuthenticated, userRole]);
 

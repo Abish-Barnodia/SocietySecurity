@@ -16,6 +16,7 @@ export const API_URL = (Constants.expoConfig?.extra?.apiUrl as string) ?? `https
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -179,14 +179,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
   };
 
   const logout = async () => {
-    try {
-      const refreshToken = await tokenStorage.getItemAsync(refreshTokenKey);
-      if (refreshToken) {
-        await api.post('/auth/logout', { refreshToken }).catch(() => {});
-      }
-    } finally {
-      await clearSession();
+    const refreshToken = await tokenStorage.getItemAsync(refreshTokenKey).catch(() => null);
+    if (refreshToken) {
+      api.post('/auth/logout', { refreshToken }).catch(() => {});
     }
+    await clearSession();
   };
 
   const logoutAllDevices = async () => {

@@ -8,9 +8,9 @@ export const createComplaintSchema = z.object({
   body: z.object({
     category: z.enum(CATEGORY),
     priority: z.enum(PRIORITY).optional(),
-    title: z.string().min(3).max(150),
-    description: z.string().min(5).max(4000),
-    attachmentUrls: z.array(z.string().url()).optional(),
+    title: z.string().min(1).max(150),
+    description: z.string().min(1).max(4000),
+    attachmentUrls: z.array(z.string()).optional(),
   }),
 });
 

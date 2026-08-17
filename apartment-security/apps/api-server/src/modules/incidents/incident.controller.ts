@@ -9,16 +9,9 @@ import { Role } from '@prisma/client';
 
 export const getIncidents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Scope to the caller's own property — mirrors the same resolution
-    // pattern used by getPendingWalkins/getAlerts in the sibling modules.
-    let propertyId: string | undefined;
-    if (req.user!.role === 'GUARD') {
-      const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-      propertyId = guard?.propertyId;
-    } else if (req.user!.role === 'MANAGER') {
-      const manager = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
-      propertyId = manager?.propertyId;
-    }
+    // Scope to the caller's own property — already resolved by auth middleware
+    // for GUARD/MANAGER; COMMITTEE has no property context, so it sees everything.
+    const propertyId = req.user!.propertyId;
 
     if (!propertyId && req.user!.role !== 'COMMITTEE') {
       return next(new AppError('No property context found', 400));
@@ -33,7 +26,8 @@ export const getIncidents = async (req: Request, res: Response, next: NextFuncti
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
     sendSuccess(res, 200, 'Incidents retrieved', incidents);
   } catch (err) { next(err); }
@@ -42,14 +36,13 @@ export const getIncidents = async (req: Request, res: Response, next: NextFuncti
 export const createIncident = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { type, description, location, photoUrls, vehicleNumber, unitId } = req.body;
-    // Resolve guard via userId (guardId is NOT in the JWT payload)
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard not found', 404));
-    const guardId = guard.id;
+    const guardId = req.user!.guardId;
+    const propertyId = req.user!.propertyId;
+    if (!guardId || !propertyId) return next(new AppError('Guard not found', 404));
 
     const incident = await prisma.incident.create({
       data: {
-        propertyId: guard.propertyId,
+        propertyId,
         guardId,
         unitId,
         type,
@@ -79,10 +72,10 @@ export const createIncident = async (req: Request, res: Response, next: NextFunc
       body: `Logged by guard at ${location}. ${description.slice(0, 80)}`,
       targetRoles: ['MANAGER'],
       incidentId: incident.id,
-      propertyId: guard.propertyId,
+      propertyId,
     });
 
-    io?.to(`property:${guard.propertyId}`).emit('incident:new', {
+    io?.to(`property:${propertyId}`).emit('incident:new', {
       incidentId: incident.id,
       type,
       location,

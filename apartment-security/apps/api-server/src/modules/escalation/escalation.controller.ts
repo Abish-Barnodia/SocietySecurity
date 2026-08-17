@@ -5,11 +5,7 @@ import { AppError } from '../../middlewares/error.middleware';
 
 export const getEscalationChains = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId },
-      include: { manager: true },
-    });
-    const propertyId = user?.manager?.propertyId;
+    const propertyId = req.user!.propertyId;
     if (!propertyId) return next(new AppError('No property context found', 403));
 
     const chains = await prisma.escalationChain.findMany({

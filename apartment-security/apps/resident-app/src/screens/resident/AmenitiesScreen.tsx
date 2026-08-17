@@ -22,7 +22,7 @@ const formatDate = (d: Date) => {
 export default function AmenitiesScreen() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { amenities, fetchAmenities, bookAmenity } = useData();
+  const { amenities, fetchAmenities, bookAmenity, amenitiesLastFetchedAt } = useData();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [booking, setBooking] = useState<Amenity | null>(null);
@@ -34,9 +34,14 @@ export default function AmenitiesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      fetchAmenities().finally(() => setLoading(false));
-    }, [fetchAmenities])
+      // Only blank the screen with a spinner when there's no cached data yet
+      // (mirrors HouseholdScreen) — a re-focus with existing data shouldn't
+      // hide it, and a fresh-enough fetch (<30s old) can be skipped entirely.
+      if (amenities.length === 0) setLoading(true);
+      if (amenities.length === 0 || Date.now() - amenitiesLastFetchedAt.current > 30000) {
+        fetchAmenities().finally(() => setLoading(false));
+      }
+    }, [fetchAmenities, amenities.length, amenitiesLastFetchedAt])
   );
 
   const handleRefresh = async () => {

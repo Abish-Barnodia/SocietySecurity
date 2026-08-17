@@ -1,10 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import api, { API_URL } from '../utils/api';
-import tokenStorage from '../utils/tokenStorage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
-
-const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+import { useSocket } from './SocketContext';
 
 export type ComplaintCategory =
   | 'MAINTENANCE'
@@ -96,6 +93,7 @@ type ComplaintsContextType = {
   fetchComplaintDetail: (id: string) => Promise<Complaint>;
   createComplaint: (input: CreateComplaintInput) => Promise<Complaint>;
   uploadAttachment: (localUri: string, mimeType: string, fileName: string) => Promise<string>;
+  lastFetchedAt: React.MutableRefObject<number>;
 };
 
 const ComplaintsContext = createContext<ComplaintsContextType | undefined>(undefined);
@@ -105,6 +103,7 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedAt = useRef(0);
 
   const fetchComplaints = useCallback(async (filters?: ComplaintFilters) => {
     setLoading(true);
@@ -113,6 +112,7 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const response = await api.get('/complaints', { params: filters });
       const raw: any[] = response.data.data ?? [];
       setComplaints(raw.map(mapComplaint));
+      lastFetchedAt.current = Date.now();
     } catch (err) {
       console.error('Failed to fetch complaints:', err);
       setError('Failed to load complaints. Pull down to try again.');
@@ -160,40 +160,29 @@ export const ComplaintsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // the resident's personal socket room (see complaint.controller.ts) — join
   // it here so status changes (e.g. marked Resolved) show up live instead of
   // only on the next app open.
-  const socketRef = useRef<Socket | null>(null);
+  const socket = useSocket();
   useEffect(() => {
-    if (!isAuthenticated || userRole !== 'RESIDENT') return;
-    let cancelled = false;
+    if (!socket || userRole !== 'RESIDENT') return;
 
-    (async () => {
-      const token = await tokenStorage.getItemAsync('userToken');
-      if (!token || cancelled) return;
+    const handleComplaintUpdate = (raw: any) => {
+      const mapped = mapComplaint(raw);
+      setComplaints((prev) =>
+        prev.some((c) => c.id === mapped.id) ? prev.map((c) => (c.id === mapped.id ? mapped : c)) : [mapped, ...prev]
+      );
+    };
 
-      const socket = io(SOCKET_URL, { auth: { token } });
-      socketRef.current = socket;
-
-      socket.on('complaint:update', (raw: any) => {
-        const mapped = mapComplaint(raw);
-        setComplaints((prev) =>
-          prev.some((c) => c.id === mapped.id) ? prev.map((c) => (c.id === mapped.id ? mapped : c)) : [mapped, ...prev]
-        );
-      });
-    })();
+    socket.on('complaint:update', handleComplaintUpdate);
 
     return () => {
-      cancelled = true;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      socket.off('complaint:update', handleComplaintUpdate);
     };
-  }, [isAuthenticated, userRole]);
+  }, [socket, userRole]);
 
-  return (
-    <ComplaintsContext.Provider
-      value={{ complaints, loading, error, fetchComplaints, fetchComplaintDetail, createComplaint, uploadAttachment }}
-    >
-      {children}
-    </ComplaintsContext.Provider>
-  );
+  const value = useMemo<ComplaintsContextType>(() => ({
+    complaints, loading, error, fetchComplaints, fetchComplaintDetail, createComplaint, uploadAttachment, lastFetchedAt,
+  }), [complaints, loading, error, fetchComplaints, fetchComplaintDetail, createComplaint, uploadAttachment]);
+
+  return <ComplaintsContext.Provider value={value}>{children}</ComplaintsContext.Provider>;
 };
 
 export const useComplaints = () => {

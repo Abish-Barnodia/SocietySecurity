@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
 
@@ -70,6 +70,7 @@ type DomesticWorkersContextType = {
   updateWorker: (id: string, input: WorkerInput) => Promise<DomesticWorker>;
   deleteWorker: (id: string) => Promise<void>;
   uploadWorkerPhoto: (localUri: string, mimeType: string, fileName: string) => Promise<string>;
+  lastFetchedAt: React.MutableRefObject<number>;
 };
 
 const DomesticWorkersContext = createContext<DomesticWorkersContextType | undefined>(undefined);
@@ -79,6 +80,7 @@ export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = 
   const [workers, setWorkers] = useState<DomesticWorker[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedAt = useRef(0);
 
   const fetchWorkers = useCallback(async () => {
     setLoading(true);
@@ -87,6 +89,7 @@ export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = 
       const response = await api.get('/domestic-workers');
       const raw: any[] = response.data.data ?? [];
       setWorkers(raw.map(mapWorker));
+      lastFetchedAt.current = Date.now();
     } catch (err) {
       console.error('Failed to fetch domestic workers:', err);
       setError('Failed to load domestic workers. Pull down to try again.');
@@ -135,13 +138,11 @@ export const DomesticWorkersProvider: React.FC<{ children: React.ReactNode }> = 
     }
   }, [isAuthenticated, userRole, fetchWorkers]);
 
-  return (
-    <DomesticWorkersContext.Provider
-      value={{ workers, loading, error, fetchWorkers, createWorker, updateWorker, deleteWorker, uploadWorkerPhoto }}
-    >
-      {children}
-    </DomesticWorkersContext.Provider>
-  );
+  const value = useMemo<DomesticWorkersContextType>(() => ({
+    workers, loading, error, fetchWorkers, createWorker, updateWorker, deleteWorker, uploadWorkerPhoto, lastFetchedAt,
+  }), [workers, loading, error, fetchWorkers, createWorker, updateWorker, deleteWorker, uploadWorkerPhoto]);
+
+  return <DomesticWorkersContext.Provider value={value}>{children}</DomesticWorkersContext.Provider>;
 };
 
 export const useDomesticWorkers = () => {

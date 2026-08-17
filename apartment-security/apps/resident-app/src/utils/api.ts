@@ -29,11 +29,14 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`🚀 [API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data ?? '');
+    // Request bodies can contain PII (phone numbers, names) — never log in production.
+    if (__DEV__) {
+      console.log(`🚀 [API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data ?? '');
+    }
     return config;
   },
   (error) => {
-    console.error('❌ [API Request Error]', error);
+    if (__DEV__) console.error('❌ [API Request Error]', error);
     return Promise.reject(error);
   }
 );
@@ -41,14 +44,18 @@ api.interceptors.request.use(
 // Interceptor for handling responses and errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ [API Response ${response.status}] ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    if (__DEV__) {
+      console.log(`✅ [API Response ${response.status}] ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    }
     return response;
   },
   async (error) => {
-    console.error(
-      `❌ [API Error ${error.response?.status ?? 'NET_ERR'}] ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
-      error.response?.data?.message ?? error.message
-    );
+    if (__DEV__) {
+      console.error(
+        `❌ [API Error ${error.response?.status ?? 'NET_ERR'}] ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
+        error.response?.data?.message ?? error.message
+      );
+    }
     if (error.response?.status === 401) {
       await tokenStorage.deleteItemAsync('userToken');
     }

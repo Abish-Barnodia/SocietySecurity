@@ -10,103 +10,87 @@ export const getTimelineEvents = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Property ID required' });
     }
 
-    let unitFilter = {};
-    if (unitId && typeof unitId === 'string') {
-      // Find the unit first to get its actual ID based on unitNumber or ID
-      const unit = await prisma.unit.findFirst({
-        where: { 
-          propertyId,
-          OR: [
-            { id: unitId },
-            { unitNumber: unitId }
-          ]
-        }
-      });
-      if (unit) {
-        unitFilter = { unitId: unit.id };
-      }
-    }
+    // Resolve unit/guard filters up front — independent of each other, so run in parallel.
+    const [unitMatch, guardMatch] = await Promise.all([
+      unitId && typeof unitId === 'string'
+        ? prisma.unit.findFirst({
+            where: { propertyId, OR: [{ id: unitId }, { unitNumber: unitId }] },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+      guardId && typeof guardId === 'string'
+        ? prisma.guard.findFirst({
+            where: {
+              propertyId,
+              OR: [{ id: guardId }, { badgeNumber: guardId }, { name: { contains: guardId, mode: 'insensitive' } }],
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
-    let guardFilter = {};
-    if (guardId && typeof guardId === 'string') {
-      const guard = await prisma.guard.findFirst({
-        where: { 
-          propertyId,
-          OR: [
-            { id: guardId },
-            { badgeNumber: guardId },
-            { name: { contains: guardId, mode: 'insensitive' } }
-          ]
-        }
-      });
-      if (guard) {
-        guardFilter = { guardId: guard.id };
-      }
-    }
+    const unitFilter = unitMatch ? { unitId: unitMatch.id } : {};
+    const guardFilter = guardMatch ? { guardId: guardMatch.id } : {};
 
-    // 1. Fetch Entries
-    const entries = await prisma.entry.findMany({
-      where: { 
-        entryPoint: { propertyId },
-        ...unitFilter,
-        ...guardFilter
-      },
-      include: {
-        unit: true,
-        guard: true,
-        entryPoint: true,
-        pass: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20
-    });
-
-    // 2. Fetch Walkin Approvals (if unit filter applied, since guards don't strictly own these in the same way, but let's query via entry relation)
-    // Wait, WalkinApproval has residentId and entryId.
-    const walkins = await prisma.walkinApproval.findMany({
-      where: {
-        entry: {
+    // Entries/walkins/passes are independent of each other — fetch concurrently
+    // instead of one after another. Each also only selects the fields the
+    // mapping below actually reads, instead of pulling full related rows.
+    const [entries, walkins, passes, shifts] = await Promise.all([
+      prisma.entry.findMany({
+        where: {
           entryPoint: { propertyId },
           ...unitFilter,
           ...guardFilter
-        }
-      },
-      include: {
-        entry: { include: { guard: true, entryPoint: true } },
-        resident: { include: { user: true } }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20
-    });
-
-    // 3. Fetch Passes
-    const passes = await prisma.pass.findMany({
-      where: {
-        unit: { propertyId },
-        ...unitFilter
-      },
-      include: {
-        unit: true,
-        resident: { include: { user: true } }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 20
-    });
-
-    // 4. Guard Shifts (for guard view)
-    let shifts: any[] = [];
-    if (guardId && guardFilter) {
-      shifts = await prisma.shift.findMany({
-        where: {
-          ...guardFilter
         },
-        include: {
-          guard: true
+        select: {
+          id: true, method: true, status: true, visitorName: true, createdAt: true, exitAt: true,
+          unit: { select: { unitNumber: true } },
+          guard: { select: { name: true } },
+          entryPoint: { select: { name: true } },
+          pass: { select: { id: true } },
         },
         orderBy: { createdAt: 'desc' },
-        take: 10
-      });
-    }
+        take: 20
+      }),
+      // Wait, WalkinApproval has residentId and entryId.
+      prisma.walkinApproval.findMany({
+        where: {
+          entry: {
+            entryPoint: { propertyId },
+            ...unitFilter,
+            ...guardFilter
+          }
+        },
+        select: {
+          id: true, visitorName: true, requestedAt: true, respondedAt: true, decision: true,
+          entry: { select: { guard: { select: { name: true } }, entryPoint: { select: { name: true } } } },
+          resident: { select: { unitId: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      }),
+      prisma.pass.findMany({
+        where: {
+          unit: { propertyId },
+          ...unitFilter
+        },
+        select: {
+          id: true, visitorName: true, createdAt: true, type: true,
+          unit: { select: { unitNumber: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20
+      }),
+      // Guard Shifts (for guard view) — only relevant when filtering by a specific guard.
+      guardId && guardMatch
+        ? prisma.shift.findMany({
+            where: { ...guardFilter },
+            select: { id: true, startedAt: true, guard: { select: { name: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 10
+          })
+        : Promise.resolve([] as any[]),
+    ]);
 
     // Map into Unified Format
     const events: any[] = [];

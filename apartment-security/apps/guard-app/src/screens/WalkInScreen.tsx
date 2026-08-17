@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import api from '../utils/api';
+import { getCached } from '../utils/cachedFetch';
 import { queueWalkin } from '../services/syncService';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -39,22 +40,30 @@ export default function WalkInScreen({ navigation }: any) {
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
-    console.log('🛡️ [Guard Component: WalkInScreen] Mounted');
+  const loadPrefetch = () => {
+    setLoadError(false);
     // Ponytail: load everything at once, minimum boilerplate
     Promise.all([
-      api.get('/entries/entry-points'),
-      api.get('/entries/units'),
-      api.get('/entries/frequent-visitors')
-    ]).then(([gatesRes, unitsRes, visRes]) => {
-      const gates = gatesRes.data.data ?? [];
+      getCached('entry-points', () => api.get('/entries/entry-points').then((res) => res.data.data ?? [])),
+      getCached('units', () => api.get('/entries/units').then((res) => res.data.data ?? [])),
+      api.get('/entries/frequent-visitors'),
+    ]).then(([gates, unitsData, visRes]) => {
       setEntryPoints(gates);
       if (gates.length > 0) setSelectedGateId(gates[0].id);
 
-      setUnits(unitsRes.data.data ?? []);
+      setUnits(unitsData);
       setRecentVisitors(visRes.data.data ?? []);
-    }).catch(console.error);
+    }).catch((error) => {
+      console.error(error);
+      setLoadError(true);
+    });
+  };
+
+  useEffect(() => {
+    console.log('🛡️ [Guard Component: WalkInScreen] Mounted');
+    loadPrefetch();
   }, []);
 
   const handleSubmit = async () => {
@@ -174,6 +183,15 @@ export default function WalkInScreen({ navigation }: any) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+          {loadError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{t('common_loadFailed')}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadPrefetch}>
+                <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {recentVisitors.length > 0 && (
             <View style={{ marginBottom: 16 }}>
@@ -327,6 +345,13 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: colors.text, letterSpacing: -0.3 },
   content: { padding: 16 },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.dangerLight, borderRadius: 12, padding: 12, marginBottom: 16, gap: 12,
+  },
+  errorBannerText: { flex: 1, fontSize: 13, color: colors.danger, fontWeight: '600' },
+  retryButton: { backgroundColor: colors.danger, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 },
+  retryButtonText: { color: colors.white, fontSize: 13, fontWeight: '700' },
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8, marginTop: 16 },
   input: {
     backgroundColor: colors.card,

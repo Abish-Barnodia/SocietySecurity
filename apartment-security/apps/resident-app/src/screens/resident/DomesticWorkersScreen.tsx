@@ -8,15 +8,15 @@ import { useTheme } from '../../context/ThemeContext';
 import { workerTypeMeta, formatWorkingDays } from '../../constants/domesticWorkers';
 
 export default function DomesticWorkersScreen({ navigation }: { navigation: any }) {
-  const { workers, loading, error, fetchWorkers, deleteWorker } = useDomesticWorkers();
+  const { workers, loading, error, fetchWorkers, deleteWorker, lastFetchedAt } = useDomesticWorkers();
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      fetchWorkers();
-    }, [fetchWorkers])
+      if (Date.now() - lastFetchedAt.current > 30000) fetchWorkers();
+    }, [fetchWorkers, lastFetchedAt])
   );
 
   const handleRefresh = async () => {

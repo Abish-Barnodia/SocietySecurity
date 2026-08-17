@@ -7,6 +7,7 @@ export interface TokenPayload {
   guardId?: string;
   propertyId?: string;
   residentId?: string;
+  unitId?: string;
   managerId?: string;
   // Present only for MANAGER logins — matched against ManagerPortalLock.sessionToken
   // on every request to enforce the single-active-manager rule.

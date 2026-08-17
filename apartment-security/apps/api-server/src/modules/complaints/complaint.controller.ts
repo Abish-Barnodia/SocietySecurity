@@ -22,11 +22,7 @@ export const listComplaints = async (req: Request, res: Response, next: NextFunc
       const { residentId } = await getResidentContext(req.user!.userId);
       where.residentId = residentId;
     } else {
-      const manager = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
-        include: { manager: true, committee: true },
-      });
-      const propertyId = manager?.manager?.propertyId;
+      const propertyId = req.user!.propertyId;
       if (req.user!.role === 'MANAGER' && !propertyId) {
         return next(new AppError('No property context found', 400));
       }
@@ -46,6 +42,7 @@ export const listComplaints = async (req: Request, res: Response, next: NextFunc
       where,
       orderBy: { createdAt: sort === 'oldest' ? 'asc' : 'desc' },
       include: complaintInclude,
+      take: 100,
     });
 
     sendSuccess(res, 200, 'Complaints retrieved', complaints);

@@ -1,12 +1,7 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
-import api, { API_URL } from '../utils/api';
-import tokenStorage from '../utils/tokenStorage';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
-
-// The socket.io server is attached to the same HTTP server as the REST API,
-// listening at the origin root — strip the "/api/v1" API prefix to get it.
-const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+import { useSocket } from './SocketContext';
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'POLL';
 
@@ -155,7 +150,7 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [searching, setSearching] = useState(false);
 
   const cursorRef = useRef<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const socket = useSocket();
   const myUserIdRef = useRef<string | null>(userId);
   const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -309,8 +304,8 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const emitTyping = useCallback(() => {
     // The server resolves the sender's own property room server-side, so no
     // payload is needed here.
-    socketRef.current?.emit('community:typing');
-  }, []);
+    socket?.emit('community:typing');
+  }, [socket]);
 
   // Only hit protected endpoints / open the socket once logged in AND onboarded
   // — and only for residents, since community endpoints are RESIDENT-only and
@@ -322,87 +317,103 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [isAuthenticated, isOnboarded, userRole, fetchMessages, fetchMembers]);
 
   useEffect(() => {
-    if (!isAuthenticated || !isOnboarded || userRole !== 'RESIDENT') return;
-    let cancelled = false;
+    if (!socket || !isOnboarded || userRole !== 'RESIDENT') return;
 
-    (async () => {
-      const token = await tokenStorage.getItemAsync('userToken');
-      if (!token || cancelled) return;
+    const handleMessageNew = (raw: any) => {
+      const mapped = mapMessage(raw, myUserIdRef.current);
+      setMessages((prev) => (prev.some((m) => m.id === mapped.id) ? prev : [mapped, ...prev]));
+    };
 
-      const socket = io(SOCKET_URL, { auth: { token } });
-      socketRef.current = socket;
+    const handleReactionUpdate = ({ messageId, reactions }: { messageId: string; reactions: any[] }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, reactions: reactions.map((r) => ({ emoji: r.emoji, userId: r.userId })) }
+            : m
+        )
+      );
+    };
 
-      socket.on('community:message:new', (raw: any) => {
-        const mapped = mapMessage(raw, myUserIdRef.current);
-        setMessages((prev) => (prev.some((m) => m.id === mapped.id) ? prev : [mapped, ...prev]));
-      });
+    const handleMessageDelete = ({ messageId }: { messageId: string }) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    };
 
-      socket.on('community:reaction:update', ({ messageId, reactions }: { messageId: string; reactions: any[] }) => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? { ...m, reactions: reactions.map((r) => ({ emoji: r.emoji, userId: r.userId })) }
-              : m
-          )
-        );
-      });
+    const handlePollVote = ({ pollId, options }: { pollId: string; options: any[] }) => {
+      const mappedOptions = mapPoll({ id: pollId, options }).options;
+      setMessages((prev) =>
+        prev.map((m) => (m.poll?.id === pollId ? { ...m, poll: { ...m.poll!, options: mappedOptions } } : m))
+      );
+    };
 
-      socket.on('community:message:delete', ({ messageId }: { messageId: string }) => {
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
-      });
+    const handleTyping = ({ userId: typingUserId }: { userId: string }) => {
+      if (typingUserId === myUserIdRef.current) return;
+      setTypingUsers((prev) => (prev.includes(typingUserId) ? prev : [...prev, typingUserId]));
+      clearTimeout(typingTimeoutsRef.current[typingUserId]);
+      typingTimeoutsRef.current[typingUserId] = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((id) => id !== typingUserId));
+      }, 3000);
+    };
 
-      socket.on('community:poll:vote', ({ pollId, options }: { pollId: string; options: any[] }) => {
-        const mappedOptions = mapPoll({ id: pollId, options }).options;
-        setMessages((prev) =>
-          prev.map((m) => (m.poll?.id === pollId ? { ...m, poll: { ...m.poll!, options: mappedOptions } } : m))
-        );
-      });
-
-      socket.on('community:typing', ({ userId: typingUserId }: { userId: string }) => {
-        if (typingUserId === myUserIdRef.current) return;
-        setTypingUsers((prev) => (prev.includes(typingUserId) ? prev : [...prev, typingUserId]));
-        clearTimeout(typingTimeoutsRef.current[typingUserId]);
-        typingTimeoutsRef.current[typingUserId] = setTimeout(() => {
-          setTypingUsers((prev) => prev.filter((id) => id !== typingUserId));
-        }, 3000);
-      });
-    })();
+    socket.on('community:message:new', handleMessageNew);
+    socket.on('community:reaction:update', handleReactionUpdate);
+    socket.on('community:message:delete', handleMessageDelete);
+    socket.on('community:poll:vote', handlePollVote);
+    socket.on('community:typing', handleTyping);
 
     return () => {
-      cancelled = true;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      socket.off('community:message:new', handleMessageNew);
+      socket.off('community:reaction:update', handleReactionUpdate);
+      socket.off('community:message:delete', handleMessageDelete);
+      socket.off('community:poll:vote', handlePollVote);
+      socket.off('community:typing', handleTyping);
     };
-  }, [isAuthenticated, isOnboarded]);
+  }, [socket, isOnboarded, userRole]);
 
-  return (
-    <CommunityContext.Provider
-      value={{
-        messages,
-        members,
-        loadingInitial,
-        loadingOlder,
-        hasMore,
-        typingUsers,
-        searchResults,
-        searching,
-        fetchMessages,
-        fetchOlderMessages,
-        fetchMembers,
-        sendTextMessage,
-        sendMediaMessage,
-        createPoll,
-        toggleReaction,
-        deleteMessage,
-        votePoll,
-        searchMessages,
-        clearSearch,
-        emitTyping,
-      }}
-    >
-      {children}
-    </CommunityContext.Provider>
-  );
+  const value = useMemo<CommunityContextType>(() => ({
+    messages,
+    members,
+    loadingInitial,
+    loadingOlder,
+    hasMore,
+    typingUsers,
+    searchResults,
+    searching,
+    fetchMessages,
+    fetchOlderMessages,
+    fetchMembers,
+    sendTextMessage,
+    sendMediaMessage,
+    createPoll,
+    toggleReaction,
+    deleteMessage,
+    votePoll,
+    searchMessages,
+    clearSearch,
+    emitTyping,
+  }), [
+    messages,
+    members,
+    loadingInitial,
+    loadingOlder,
+    hasMore,
+    typingUsers,
+    searchResults,
+    searching,
+    fetchMessages,
+    fetchOlderMessages,
+    fetchMembers,
+    sendTextMessage,
+    sendMediaMessage,
+    createPoll,
+    toggleReaction,
+    deleteMessage,
+    votePoll,
+    searchMessages,
+    clearSearch,
+    emitTyping,
+  ]);
+
+  return <CommunityContext.Provider value={value}>{children}</CommunityContext.Provider>;
 };
 
 export const useCommunity = () => {

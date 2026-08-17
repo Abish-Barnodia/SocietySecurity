@@ -9,13 +9,13 @@ import { useData } from '../../context/DataContext';
 export default function EntriesScreen() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
-  const { entries, fetchEntries } = useData();
+  const { entries, fetchEntries, entriesLastFetchedAt } = useData();
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      fetchEntries();
-    }, [fetchEntries])
+      if (Date.now() - entriesLastFetchedAt.current > 30000) fetchEntries();
+    }, [fetchEntries, entriesLastFetchedAt])
   );
 
   const handleRefresh = async () => {

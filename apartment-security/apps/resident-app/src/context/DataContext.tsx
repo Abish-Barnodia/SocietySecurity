@@ -1,12 +1,9 @@
-import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import React, { createContext, useState, useContext, useEffect, useRef, useCallback, useMemo } from 'react';
 import { colors } from '../theme/colors';
-import api, { API_URL } from '../utils/api';
-import tokenStorage from '../utils/tokenStorage';
+import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
 import { scheduleLocalNotification } from '../utils/notifications';
-
-const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+import { useSocket } from './SocketContext';
 
 export type Pass = {
   id: string;
@@ -278,12 +275,14 @@ type DataContextType = {
   triggerDuressAlert: () => Promise<void>;
   entries: Entry[];
   fetchEntries: () => Promise<void>;
+  entriesLastFetchedAt: React.MutableRefObject<number>;
   members: Member[];
   fetchMembers: () => Promise<void>;
   addMember: (name: string, phone: string) => Promise<void>;
   deleteMember: (id: string) => Promise<void>;
   amenities: Amenity[];
   fetchAmenities: () => Promise<void>;
+  amenitiesLastFetchedAt: React.MutableRefObject<number>;
   bookAmenity: (amenityId: string, date: Date, startTime: string, endTime: string) => Promise<void>;
   scanRequests: ScanRequest[];
   addScanRequest: (request: ScanRequest) => void;
@@ -314,9 +313,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [showUnitInCommunity, setShowUnitInCommunity] = useState<boolean>(true);
 
   const { isAuthenticated, userRole } = useAuth();
-  const socketRef = useRef<Socket | null>(null);
+  const socket = useSocket();
 
-  const fetchPasses = async () => {
+  // Mirrors `alerts` for read-only use inside callbacks that must stay
+  // referentially stable (empty useCallback deps) — e.g. markAllAlertsRead,
+  // which otherwise would need `alerts` as a dep and get a new identity on
+  // every socket-pushed alert, breaking the DataContext.Provider memoization.
+  const alertsRef = useRef<Alert[]>(alerts);
+  useEffect(() => { alertsRef.current = alerts; }, [alerts]);
+
+  const entriesLastFetchedAt = useRef(0);
+  const amenitiesLastFetchedAt = useRef(0);
+
+  const fetchPasses = useCallback(async () => {
     try {
       const response = await api.get('/passes');
       const raw: any[] = response.data.data ?? [];
@@ -324,9 +333,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to fetch passes:', error);
     }
-  };
+  }, []);
 
-  const createPass = async (data: Partial<Pass>) => {
+  const createPass = useCallback(async (data: Partial<Pass>) => {
     try {
       const response = await api.post('/passes', data);
       const newPass = mapPass(response.data.data.pass);
@@ -335,21 +344,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Failed to create pass:', error);
       throw error;
     }
-  };
+  }, []);
 
-  const suspendPass = async (id: string) => {
+  const suspendPass = useCallback(async (id: string) => {
     const response = await api.put(`/passes/${id}/suspend`);
     const updated = mapPass(response.data.data);
     setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
-  };
+  }, []);
 
-  const revokePass = async (id: string) => {
+  const revokePass = useCallback(async (id: string) => {
     const response = await api.put(`/passes/${id}/revoke`);
     const updated = mapPass(response.data.data);
     setPasses((prev) => prev.map((p) => (p.id === id ? updated : p)));
-  };
+  }, []);
 
-  const fetchAlerts = async () => {
+  const fetchAlerts = useCallback(async () => {
     try {
       const response = await api.get('/alerts');
       const raw: any[] = response.data.data ?? [];
@@ -357,40 +366,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to fetch alerts:', error);
     }
-  };
+  }, []);
 
-  const addAlert = (alert: Alert) => setAlerts((prev) => [alert, ...prev]);
+  const addAlert = useCallback((alert: Alert) => setAlerts((prev) => [alert, ...prev]), []);
 
-  const markAlertRead = async (id: string) => {
+  const markAlertRead = useCallback(async (id: string) => {
     setAlerts((prev) => prev.map(a => a.id === id ? { ...a, unread: false } : a));
     try {
       await api.put(`/alerts/${id}/acknowledge`);
     } catch (e) { console.error('Failed to acknowledge alert:', e); }
-  };
+  }, []);
 
-  const markAllAlertsRead = async () => {
-    const unreadAlerts = alerts.filter(a => a.unread);
+  const markAllAlertsRead = useCallback(async () => {
+    const unreadIds = alertsRef.current.filter(a => a.unread).map(a => a.id);
     setAlerts((prev) => prev.map(a => ({ ...a, unread: false })));
     try {
-      await Promise.all(unreadAlerts.map(a => api.put(`/alerts/${a.id}/acknowledge`)));
+      await Promise.all(unreadIds.map(id => api.put(`/alerts/${id}/acknowledge`)));
     } catch (e) { console.error('Failed to acknowledge all alerts:', e); }
-  };
+  }, []);
 
-  const claimVehicleAlert = async (id: string) => {
+  const claimVehicleAlert = useCallback(async (id: string) => {
     const response = await api.post(`/alerts/${id}/claim`);
     const updated = mapAlert(response.data.data);
     setAlerts((prev) => prev.map((a) => (a.id === id ? updated : a)));
-  };
+  }, []);
 
-  const triggerDuressAlert = async () => {
+  const triggerDuressAlert = useCallback(async () => {
     await api.post('/alerts/duress', {});
-  };
+  }, []);
 
   const fetchEntries = useCallback(async () => {
     try {
       const response = await api.get('/entries');
       const raw: any[] = response.data.data ?? [];
       setEntries(raw.map(mapEntry));
+      entriesLastFetchedAt.current = Date.now();
     } catch (error) {
       console.error('Failed to fetch entries:', error);
     }
@@ -399,7 +409,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchMembers = useCallback(async () => {
     try {
       const response = await api.get('/residents/unit');
-      console.log('👨‍👩‍👧‍👦 [Household Members Data] ----->', response.data.data);
       const raw: any[] = response.data.data ?? [];
       setMembers(raw.map(mapMember).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)));
     } catch (error) {
@@ -407,38 +416,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const addMember = async (name: string, phone: string) => {
+  const addMember = useCallback(async (name: string, phone: string) => {
     await api.post('/residents/unit/members', { name, phone });
     await fetchMembers();
-  };
+  }, [fetchMembers]);
 
-  const deleteMember = async (id: string) => {
+  const deleteMember = useCallback(async (id: string) => {
     await api.delete(`/residents/unit/members/${id}`);
     setMembers((prev) => prev.filter(m => m.id !== id));
-  };
+  }, []);
 
   const fetchAmenities = useCallback(async () => {
     try {
       const response = await api.get('/amenities');
       const raw: any[] = response.data.data ?? [];
       setAmenities(raw.map(mapAmenity));
+      amenitiesLastFetchedAt.current = Date.now();
     } catch (error) {
       console.error('Failed to fetch amenities:', error);
     }
   }, []);
 
-  const bookAmenity = async (amenityId: string, date: Date, startTime: string, endTime: string) => {
+  const bookAmenity = useCallback(async (amenityId: string, date: Date, startTime: string, endTime: string) => {
     await api.post('/amenities/book', {
       amenityId,
       date: date.toISOString(),
       startTime,
       endTime,
     });
-  };
+  }, []);
 
-  const addScanRequest = (request: ScanRequest) => setScanRequests((prev) => [request, ...prev]);
+  const addScanRequest = useCallback((request: ScanRequest) => setScanRequests((prev) => [request, ...prev]), []);
 
-  const respondWalkIn = async (id: string, status: 'APPROVED' | 'DENIED') => {
+  const respondWalkIn = useCallback(async (id: string, status: 'APPROVED' | 'DENIED') => {
     setPendingWalkIns((prev) => prev.filter((w) => w.id !== id));
     markAlertRead(id);
     try {
@@ -449,13 +459,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchAlerts();
       throw err;
     }
-  };
+  }, [markAlertRead, fetchEntries, fetchAlerts]);
 
   // The backend only stores a single emergency contact on the Resident record
   // (emergencyContact/emergencyContactName) — exposed here as a 0-or-1-item
   // array so existing read-only consumers (e.g. HomeScreen's SOS summary)
   // keep working unchanged.
-  const fetchProfileSettings = async () => {
+  const fetchProfileSettings = useCallback(async () => {
     try {
       const response = await api.get('/residents/me');
       const resident = response.data.data;
@@ -469,20 +479,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to fetch profile settings:', error);
     }
-  };
+  }, []);
 
-  const updateEmergencyContact = async (name: string, phone: string) => {
+  const updateEmergencyContact = useCallback(async (name: string, phone: string) => {
     const response = await api.put('/residents/me', { emergencyContactName: name, emergencyContact: phone });
     const resident = response.data.data;
     setEmergencyContacts([{ id: resident.id, name: resident.emergencyContactName, phone: resident.emergencyContact, relation: '' }]);
-  };
+  }, []);
 
-  const clearEmergencyContact = async () => {
+  const clearEmergencyContact = useCallback(async () => {
     await api.put('/residents/me', { emergencyContactName: '', emergencyContact: '' });
     setEmergencyContacts([]);
-  };
+  }, []);
 
-  const updateAlertPreferences = async (prefs: Partial<AlertPreferences>) => {
+  const updateAlertPreferences = useCallback(async (prefs: Partial<AlertPreferences>) => {
     const merged = { ...alertPreferences, ...prefs };
     setAlertPreferences(merged);
     try {
@@ -492,9 +502,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAlertPreferences(alertPreferences);
       throw error;
     }
-  };
+  }, [alertPreferences]);
 
-  const updateShowUnitInCommunity = async (value: boolean) => {
+  const updateShowUnitInCommunity = useCallback(async (value: boolean) => {
     const previous = showUnitInCommunity;
     setShowUnitInCommunity(value);
     try {
@@ -504,7 +514,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setShowUnitInCommunity(previous);
       throw error;
     }
-  };
+  }, [showUnitInCommunity]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -518,133 +528,142 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchAmenities(),
       ]);
     }
-  }, [isAuthenticated, userRole]);
+  }, [isAuthenticated, userRole, fetchPasses, fetchAlerts, fetchProfileSettings, fetchEntries, fetchMembers, fetchAmenities]);
 
   // Guard-initiated walk-in requests arrive over the resident's `unit_{id}`
   // socket room (see api-server socket.handler.ts) — surface them as a real
   // Alert + local notification so AlertsScreen's existing tap-through to
   // WalkInApproval works with a real backend entry id, not a client-faked one.
   useEffect(() => {
-    if (!isAuthenticated || userRole !== 'RESIDENT') return;
-    let cancelled = false;
+    if (!socket) return;
 
-    (async () => {
-      const token = await tokenStorage.getItemAsync('userToken');
-      if (!token || cancelled) return;
+    // Re-fetch persisted alerts on (re)connect so nothing is missed if the
+    // socket was briefly disconnected while a walk-in was submitted.
+    const handleConnect = () => {
+      fetchAlerts();
+    };
 
-      const socket = io(SOCKET_URL, { auth: { token } });
-      socketRef.current = socket;
-
-      // Re-fetch persisted alerts on (re)connect so nothing is missed if the
-      // socket was briefly disconnected while a walk-in was submitted.
-      socket.on('connect', () => {
-        fetchAlerts();
+    // Walk-in request emitted directly to the unit room by walkin.controller.ts.
+    const handleWalkinRequest = (payload: { entryId: string; visitorName: string; purpose?: string; vehicleNumber?: string | null; gatePhotoUrl?: string }) => {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, vehicleNumber: payload.vehicleNumber, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
+      addAlert({
+        id: payload.entryId,
+        entryId: payload.entryId,
+        title: 'Walk-in approval requested',
+        subtitle: payload.purpose ? `Guard requested entry for ${payload.visitorName} — ${payload.purpose}` : `Guard requested entry for ${payload.visitorName}`,
+        time,
+        icon: '🔔',
+        unread: true,
+        imageUrl: payload.gatePhotoUrl,
       });
+      scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
+    };
 
-      // Walk-in request emitted directly to the unit room by walkin.controller.ts.
-      socket.on('walkin_request', (payload: { entryId: string; visitorName: string; purpose?: string; vehicleNumber?: string | null; gatePhotoUrl?: string }) => {
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setPendingWalkIns((prev) => [{ id: payload.entryId, visitorName: payload.visitorName, purpose: payload.purpose, vehicleNumber: payload.vehicleNumber, gatePhotoUrl: payload.gatePhotoUrl, time }, ...prev]);
-        addAlert({
-          id: payload.entryId,
-          entryId: payload.entryId,
-          title: 'Walk-in approval requested',
-          subtitle: payload.purpose ? `Guard requested entry for ${payload.visitorName} — ${payload.purpose}` : `Guard requested entry for ${payload.visitorName}`,
-          time,
-          icon: '🔔',
-          unread: true,
-          imageUrl: payload.gatePhotoUrl,
+    // DB-persisted alerts emitted by triggerAlert() to the user's personal room.
+    // This is the reliable path for walk-ins, vehicle alerts, and any other
+    // server-side triggered alert — independent of whether the unit room event fired.
+    const handleNewAlert = (raw: any) => {
+      const alert = mapAlert(raw);
+      // Avoid duplicates if walkin_request already added it by the same entryId
+      setAlerts((prev) => {
+        const exists = prev.some((a) => a.id === alert.id);
+        return exists ? prev : [alert, ...prev];
+      });
+      // Also surface as a pending walk-in if it has an entryId and isn't already pending
+      if (raw.entryId) {
+        setPendingWalkIns((prev) => {
+          const exists = prev.some((w) => w.id === raw.entryId);
+          if (exists) return prev;
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return [{ id: raw.entryId, visitorName: raw.title, purpose: raw.body, gatePhotoUrl: raw.imageUrl, time }, ...prev];
         });
-        scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
-      });
+      }
+      scheduleLocalNotification(raw.title, raw.body);
+    };
 
-      // DB-persisted alerts emitted by triggerAlert() to the user's personal room.
-      // This is the reliable path for walk-ins, vehicle alerts, and any other
-      // server-side triggered alert — independent of whether the unit room event fired.
-      socket.on('new_alert', (raw: any) => {
-        const alert = mapAlert(raw);
-        // Avoid duplicates if walkin_request already added it by the same entryId
-        setAlerts((prev) => {
-          const exists = prev.some((a) => a.id === alert.id);
-          return exists ? prev : [alert, ...prev];
-        });
-        // Also surface as a pending walk-in if it has an entryId and isn't already pending
-        if (raw.entryId) {
-          setPendingWalkIns((prev) => {
-            const exists = prev.some((w) => w.id === raw.entryId);
-            if (exists) return prev;
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            return [{ id: raw.entryId, visitorName: raw.title, purpose: raw.body, gatePhotoUrl: raw.imageUrl, time }, ...prev];
-          });
-        }
-        scheduleLocalNotification(raw.title, raw.body);
+    // QR-scan arrivals — same shape/handling as a manual walk-in request,
+    // plus the extra pass-derived fields and a real server timeoutAt.
+    const handleVisitorApprovalRequest = (payload: {
+      entryId: string; visitorName: string; purpose?: string; visitorPhoto?: string | null;
+      vehicleNumber?: string | null; expectedTime?: string | null; apartment?: string | null;
+      tower?: string | null; gateName?: string | null; timeoutAt: string;
+    }) => {
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setPendingWalkIns((prev) => [{
+        id: payload.entryId,
+        visitorName: payload.visitorName,
+        purpose: payload.purpose,
+        gatePhotoUrl: payload.visitorPhoto ?? undefined,
+        time,
+        timeoutAt: payload.timeoutAt,
+        visitorPhoto: payload.visitorPhoto,
+        vehicleNumber: payload.vehicleNumber,
+        expectedTime: payload.expectedTime,
+        apartment: payload.apartment,
+        tower: payload.tower,
+        gateName: payload.gateName,
+      }, ...prev]);
+      addAlert({
+        id: payload.entryId,
+        entryId: payload.entryId,
+        title: 'Visitor scanned in at the gate',
+        subtitle: `${payload.visitorName} is waiting — respond within 2 minutes`,
+        time,
+        icon: '🔔',
+        unread: true,
+        imageUrl: payload.visitorPhoto ?? undefined,
       });
+      scheduleLocalNotification('Visitor scanned in at the gate', `${payload.visitorName} is waiting — respond within 2 minutes`);
+    };
 
-      // QR-scan arrivals — same shape/handling as a manual walk-in request,
-      // plus the extra pass-derived fields and a real server timeoutAt.
-      socket.on('visitor_approval_request', (payload: {
-        entryId: string; visitorName: string; purpose?: string; visitorPhoto?: string | null;
-        vehicleNumber?: string | null; expectedTime?: string | null; apartment?: string | null;
-        tower?: string | null; gateName?: string | null; timeoutAt: string;
-      }) => {
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setPendingWalkIns((prev) => [{
-          id: payload.entryId,
-          visitorName: payload.visitorName,
-          purpose: payload.purpose,
-          gatePhotoUrl: payload.visitorPhoto ?? undefined,
-          time,
-          timeoutAt: payload.timeoutAt,
-          visitorPhoto: payload.visitorPhoto,
-          vehicleNumber: payload.vehicleNumber,
-          expectedTime: payload.expectedTime,
-          apartment: payload.apartment,
-          tower: payload.tower,
-          gateName: payload.gateName,
-        }, ...prev]);
-        addAlert({
-          id: payload.entryId,
-          entryId: payload.entryId,
-          title: 'Visitor scanned in at the gate',
-          subtitle: `${payload.visitorName} is waiting — respond within 2 minutes`,
-          time,
-          icon: '🔔',
-          unread: true,
-          imageUrl: payload.visitorPhoto ?? undefined,
-        });
-        scheduleLocalNotification('Visitor scanned in at the gate', `${payload.visitorName} is waiting — respond within 2 minutes`);
-      });
+    const handleVisitorApprovalTimeout = (payload: { entryId: string }) => {
+      setPendingWalkIns((prev) => prev.filter((w) => w.id !== payload.entryId));
+      markAlertRead(payload.entryId);
+    };
 
-      socket.on('visitor_approval_timeout', (payload: { entryId: string }) => {
-        setPendingWalkIns((prev) => prev.filter((w) => w.id !== payload.entryId));
-        markAlertRead(payload.entryId);
-      });
-    })();
+    socket.on('connect', handleConnect);
+    socket.on('walkin_request', handleWalkinRequest);
+    socket.on('new_alert', handleNewAlert);
+    socket.on('visitor_approval_request', handleVisitorApprovalRequest);
+    socket.on('visitor_approval_timeout', handleVisitorApprovalTimeout);
 
     return () => {
-      cancelled = true;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      socket.off('connect', handleConnect);
+      socket.off('walkin_request', handleWalkinRequest);
+      socket.off('new_alert', handleNewAlert);
+      socket.off('visitor_approval_request', handleVisitorApprovalRequest);
+      socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
     };
-  }, [isAuthenticated, userRole]);
+  }, [socket, fetchAlerts, addAlert, markAlertRead]);
 
-  return (
-    <DataContext.Provider value={{
-      passes, fetchPasses, createPass, suspendPass, revokePass,
-      alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
-      entries, fetchEntries,
-      members, fetchMembers, addMember, deleteMember,
-      amenities, fetchAmenities, bookAmenity,
-      scanRequests, addScanRequest,
-      pendingWalkIns, respondWalkIn,
-      emergencyContacts, updateEmergencyContact, clearEmergencyContact,
-      alertPreferences, updateAlertPreferences,
-      showUnitInCommunity, updateShowUnitInCommunity,
-      fetchProfileSettings,
-    }}>
-      {children}
-    </DataContext.Provider>
-  );
+  const value = useMemo<DataContextType>(() => ({
+    passes, fetchPasses, createPass, suspendPass, revokePass,
+    alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
+    entries, fetchEntries, entriesLastFetchedAt,
+    members, fetchMembers, addMember, deleteMember,
+    amenities, fetchAmenities, amenitiesLastFetchedAt, bookAmenity,
+    scanRequests, addScanRequest,
+    pendingWalkIns, respondWalkIn,
+    emergencyContacts, updateEmergencyContact, clearEmergencyContact,
+    alertPreferences, updateAlertPreferences,
+    showUnitInCommunity, updateShowUnitInCommunity,
+    fetchProfileSettings,
+  }), [
+    passes, fetchPasses, createPass, suspendPass, revokePass,
+    alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
+    entries, fetchEntries,
+    members, fetchMembers, addMember, deleteMember,
+    amenities, fetchAmenities, bookAmenity,
+    scanRequests, addScanRequest,
+    pendingWalkIns, respondWalkIn,
+    emergencyContacts, updateEmergencyContact, clearEmergencyContact,
+    alertPreferences, updateAlertPreferences,
+    showUnitInCommunity, updateShowUnitInCommunity,
+    fetchProfileSettings,
+  ]);
+
+  return <DataContext.Provider value={value}>{children}  </DataContext.Provider>;
 };
 
 export const useData = () => {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth, configureApi, LoginScreen } from '@apartment-security/shared-auth';
@@ -8,6 +8,11 @@ import GuardDetailsScreen from './src/screens/GuardDetailsScreen';
 import GuardShell from './src/screens/GuardShell';
 import { API_URL } from './src/utils/api';
 import tokenStorage from './src/utils/tokenStorage';
+import { connectSocket, disconnectSocket } from './src/utils/socket';
+
+// Set by Root once AuthProvider is mounted, so a 401 can force the app back
+// to LoginScreen instead of leaving stale "authenticated" UI making doomed requests.
+let handleUnauthorized: (() => void) | null = null;
 
 // Configure shared API
 configureApi(
@@ -16,11 +21,31 @@ configureApi(
   async () => {
     await tokenStorage.deleteItemAsync('guardToken');
     await tokenStorage.deleteItemAsync('guardRefreshToken');
+    handleUnauthorized?.();
   }
 );
 
 function Root() {
-  const { isAuthenticated, isLoading, guardProfile } = useAuth();
+  const { isAuthenticated, isLoading, guardProfile, logout } = useAuth();
+
+  // Force UI back to LoginScreen on a 401 from anywhere in the app.
+  useEffect(() => {
+    handleUnauthorized = () => { logout(); };
+    return () => { handleUnauthorized = null; };
+  }, [logout]);
+
+  // Realtime socket lifecycle: connect once authenticated, disconnect on logout/401.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      disconnectSocket();
+      return;
+    }
+    let cancelled = false;
+    tokenStorage.getItemAsync('guardToken').then((token) => {
+      if (!cancelled && token) connectSocket(token);
+    });
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
 
   if (isLoading) {
     return (

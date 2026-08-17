@@ -54,6 +54,7 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
     endOfDay.setHours(23, 59, 59, 999);
 
     const guards = await prisma.guard.findMany({
+      where: { propertyId: req.user!.propertyId },
       include: {
         user: { select: { phone: true } },
         shifts: {
@@ -98,7 +99,7 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
 export const getActiveGuards = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const guards = await prisma.guard.findMany({
-      where: { isOnDuty: true },
+      where: { isOnDuty: true, propertyId: req.user!.propertyId },
       include: {
         user: { select: { phone: true } },
         postCheckIns: {
@@ -190,27 +191,28 @@ const buildShiftStats = async (guardId: string, since: Date) => {
 
 export const getShiftSummary = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const guardId = req.user!.guardId;
+    if (!guardId) return next(new AppError('Guard profile not found', 404));
 
     const activeShift = await prisma.shift.findFirst({
-      where: { guardId: guard.id, endedAt: null },
+      where: { guardId, endedAt: null },
       orderBy: { startedAt: 'desc' },
     });
     if (!activeShift) return next(new AppError('You are not on an active shift', 400));
 
-    const stats = await buildShiftStats(guard.id, activeShift.startedAt);
+    const stats = await buildShiftStats(guardId, activeShift.startedAt);
     return sendSuccess(res, 200, 'Shift summary', { startedAt: activeShift.startedAt, ...stats });
   } catch (err) { next(err); }
 };
 
 export const getRoster = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const guardId = req.user!.guardId;
+    const propertyId = req.user!.propertyId;
+    if (!guardId || !propertyId) return next(new AppError('Guard profile not found', 404));
 
     const guards = await prisma.guard.findMany({
-      where: { propertyId: guard.propertyId, id: { not: guard.id } },
+      where: { propertyId, id: { not: guardId } },
       select: { id: true, name: true, badgeNumber: true, isOnDuty: true },
       orderBy: { name: 'asc' },
     });

@@ -22,7 +22,7 @@ const RSVP_OPTIONS: { value: RsvpStatus; label: string; icon: keyof typeof Ionic
 ];
 
 export default function EventsScreen() {
-  const { events, loading, fetchEvents, rsvp } = useEvents();
+  const { events, loading, fetchEvents, rsvp, lastFetchedAt } = useEvents();
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const [refreshing, setRefreshing] = useState(false);
@@ -30,8 +30,8 @@ export default function EventsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchEvents();
-    }, [fetchEvents])
+      if (Date.now() - lastFetchedAt.current > 30000) fetchEvents();
+    }, [fetchEvents, lastFetchedAt])
   );
 
   const handleRefresh = async () => {

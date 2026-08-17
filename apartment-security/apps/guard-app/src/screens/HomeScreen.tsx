@@ -63,6 +63,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
   const [selectedEntry, setSelectedEntry] = useState<RecentEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const loadEntries = useCallback(async () => {
     try {
@@ -82,6 +83,10 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
         unackedAlerts: alerts.filter((a) => a.status === 'SENT').length,
       });
       setGuardMe(meRes.data.data ?? null);
+      setLoadError(false);
+    } catch (error) {
+      console.error(error);
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -130,7 +135,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
         <Text style={styles.property}>{guardProfile?.propertyName}</Text>
       </View>
 
-      <GuardProfileModal visible={profileOpen} onClose={() => setProfileOpen(false)} profile={guardMe} />
+      <GuardProfileModal visible={profileOpen} onClose={() => setProfileOpen(false)} />
 
       {stats && (
         <View style={styles.statsRow}>
@@ -173,6 +178,13 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={styles.loadingSpinner} />
+      ) : loadError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{t('common_loadFailed')}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadEntries}>
+            <Text style={styles.retryButtonText}>{t('common_retry')}</Text>
+          </TouchableOpacity>
+        </View>
       ) : entries.length === 0 ? (
         <Text style={styles.emptyText}>{t('home_noClearances')}</Text>
       ) : (
@@ -249,6 +261,13 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
 
   loadingSpinner: { marginTop: 12 },
   emptyText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 16, paddingHorizontal: 20 },
+  errorBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.dangerLight, borderRadius: 12, padding: 12, marginHorizontal: 20, gap: 12,
+  },
+  errorBannerText: { flex: 1, fontSize: 13, color: colors.danger, fontWeight: '600' },
+  retryButton: { backgroundColor: colors.danger, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 14 },
+  retryButtonText: { color: colors.white, fontSize: 13, fontWeight: '700' },
 
   entryRow: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,

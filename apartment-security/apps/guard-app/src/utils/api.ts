@@ -22,14 +22,25 @@ const api = axios.create({
   },
 });
 
-// Interceptor to add JWT token to every request and log API calls
+// Multi-KB base64 photo payloads (gatePhotoBase64, photoBase64, ...) are huge and
+// unreadable in a log line — never print them, even in dev.
+function loggableData(data: unknown) {
+  if (data && typeof data === 'object' && Object.keys(data).some((k) => k.toLowerCase().includes('base64'))) {
+    return '[base64 payload omitted]';
+  }
+  return data ?? '';
+}
+
+// Interceptor to add JWT token to every request and log API calls (dev only)
 api.interceptors.request.use(
   async (config) => {
     const token = await tokenStorage.getItemAsync('guardToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log(`🚀 [Guard API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data ?? '');
+    if (__DEV__) {
+      console.log(`🚀 [Guard API Request] ${config.method?.toUpperCase()} ${config.url}`, loggableData(config.data));
+    }
     return config;
   },
   (error) => {
@@ -41,7 +52,9 @@ api.interceptors.request.use(
 // Interceptor for handling responses and errors
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ [Guard API Response ${response.status}] ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    if (__DEV__) {
+      console.log(`✅ [Guard API Response ${response.status}] ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    }
     return response;
   },
   async (error) => {
@@ -57,3 +70,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+

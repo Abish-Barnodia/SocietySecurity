@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, configureApi, useAuth } from '@apartment-security/shared-auth';
+import { SocketProvider } from './src/context/SocketContext';
 import { DataProvider } from './src/context/DataContext';
 import { CommunityProvider } from './src/context/CommunityContext';
 import { ComplaintsProvider } from './src/context/ComplaintsContext';
@@ -76,19 +77,21 @@ export default function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider allowedRoles={['RESIDENT', 'GUARD', 'MANAGER', 'ADMIN']} tokenKey="userToken" refreshTokenKey="userRefreshToken">
-            <DataProvider>
-              <CommunityProvider>
-                <ComplaintsProvider>
-                  <DomesticWorkersProvider>
-                    <EventsProvider>
-                      <MaintenanceProvider>
-                        <ThemedApp />
-                      </MaintenanceProvider>
-                    </EventsProvider>
-                  </DomesticWorkersProvider>
-                </ComplaintsProvider>
-              </CommunityProvider>
-            </DataProvider>
+            <SocketProvider>
+              <DataProvider>
+                <CommunityProvider>
+                  <ComplaintsProvider>
+                    <DomesticWorkersProvider>
+                      <EventsProvider>
+                        <MaintenanceProvider>
+                          <ThemedApp />
+                        </MaintenanceProvider>
+                      </EventsProvider>
+                    </DomesticWorkersProvider>
+                  </ComplaintsProvider>
+                </CommunityProvider>
+              </DataProvider>
+            </SocketProvider>
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>

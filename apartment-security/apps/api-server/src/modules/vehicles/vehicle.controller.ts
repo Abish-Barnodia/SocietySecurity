@@ -196,14 +196,13 @@ export const checkVehicle = async (req: Request, res: Response, next: NextFuncti
   try {
     // Called by guard on ANPR match or manual plate lookup
     const registrationNo = req.params.registrationNo as string;
-    // Resolve guard via userId (guardId is NOT in the JWT payload)
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard not found', 404));
+    const propertyId = req.user!.propertyId;
+    if (!propertyId) return next(new AppError('Guard not found', 404));
 
     const vehicle = await prisma.vehicle.findFirst({
       where: {
         registrationNo: registrationNo.toUpperCase(),
-        unit: { propertyId: guard.propertyId },
+        unit: { propertyId },
         isActive: true,
       },
       include: { unit: { include: { residents: { where: { isPrimary: true } } } } },
@@ -216,7 +215,7 @@ export const checkVehicle = async (req: Request, res: Response, next: NextFuncti
         title: 'Unregistered vehicle',
         body: `Vehicle ${registrationNo.toUpperCase()} is not in the registry`,
         targetRoles: ['MANAGER'],
-        propertyId: guard.propertyId,
+        propertyId,
       });
       return sendSuccess(res, 200, 'Unregistered', { registered: false, registrationNo });
     }

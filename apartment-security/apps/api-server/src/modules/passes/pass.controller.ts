@@ -88,15 +88,14 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
 
 export const getMyPasses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const currentResident = await prisma.resident.findUnique({
-        where: { userId: req.user!.userId }
-    });
-    if (!currentResident) return next(new AppError('Resident context not found', 404));
+    const unitId = req.user!.unitId;
+    if (!unitId) return next(new AppError('Resident context not found', 404));
 
     const passes = await prisma.pass.findMany({
-      where: { unitId: currentResident.unitId },
+      where: { unitId },
       include: { recurringRule: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100
     });
 
     return sendSuccess(res, 200, 'Passes fetched', passes);

@@ -21,10 +21,17 @@ export default function ComplaintDetailScreen() {
   const [loading, setLoading] = useState(!complaint);
 
   useEffect(() => {
+    // Skip the refetch when the cached list item already has its update
+    // timeline populated — nothing new to fetch, no need to hit the network.
+    if (complaint && complaint.updates.length > 0) return;
+
+    let cancelled = false;
     fetchComplaintDetail(complaintId)
-      .then(setComplaint)
+      .then((result) => { if (!cancelled) setComplaint(result); })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, [complaintId, fetchComplaintDetail]);
 
   if (loading && !complaint) {

@@ -171,12 +171,12 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
 export const callResident = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const guardId = req.user!.guardId;
+    if (!guardId) return next(new AppError('Guard profile not found', 404));
 
     const entry = await prisma.entry.findUnique({ where: { id }, include: { walkinApproval: true } });
     if (!entry) return next(new AppError('Entry not found', 404));
-    if (entry.guardId !== guard.id) return next(new AppError('Unauthorized: not your entry', 403));
+    if (entry.guardId !== guardId) return next(new AppError('Unauthorized: not your entry', 403));
     if (!entry.walkinApproval || entry.walkinApproval.decision !== 'TIMEOUT') {
       return next(new AppError('Call Resident is only available after the approval window times out', 400));
     }
@@ -191,18 +191,7 @@ export const callResident = async (req: Request, res: Response, next: NextFuncti
 
 export const getPendingWalkins = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    let propertyId: string | undefined;
-
-    if (req.user!.role === 'GUARD') {
-      const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-      if (guard) propertyId = guard.propertyId;
-    } else {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
-        include: { manager: true, committee: true }
-      });
-      propertyId = user?.manager?.propertyId;
-    }
+    const propertyId = req.user!.propertyId;
 
     if (!propertyId && req.user!.role !== 'COMMITTEE') {
       return next(new AppError('No property context found', 400));

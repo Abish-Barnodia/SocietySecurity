@@ -7,17 +7,16 @@ import { redis } from '../../config/redis';
 export const syncOfflineEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { entries } = req.body;  // Array of locally queued entry records
-    // Resolve guard via userId (guardId is NOT in the JWT payload)
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard record not found', 404));
-    const guardId = guard.id;
+    const guardId = req.user!.guardId;
+    const guardPropertyId = req.user!.propertyId;
+    if (!guardId || !guardPropertyId) return next(new AppError('Guard record not found', 404));
 
     const results: any[] = [];
-    
+
     // Bulk fetch validation data
     const unitIds = [...new Set(entries.map((e: any) => e.unitId))];
     const units = await prisma.unit.findMany({ where: { id: { in: unitIds as string[] } } });
-    const validUnitIds = new Set(units.filter(u => u.propertyId === guard.propertyId).map(u => u.id));
+    const validUnitIds = new Set(units.filter(u => u.propertyId === guardPropertyId).map(u => u.id));
 
     const entryTimestamps = entries.map((e: any) => new Date(e.entryAt));
     const existingEntries = await prisma.entry.findMany({
@@ -75,10 +74,8 @@ export const syncOfflineEntries = async (req: Request, res: Response, next: Next
 export const getPassCache = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Returns the active pass set for this property — used to seed guard's offline cache
-    // Resolve guard via userId (guardId is NOT in the JWT payload)
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    const propertyId = guard?.propertyId;
-    
+    const propertyId = req.user!.propertyId;
+
     if (!propertyId) return sendSuccess(res, 400, 'Property not found', []);
 
     const cacheKey = `pass_cache:property:${propertyId}`;

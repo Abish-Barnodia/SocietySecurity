@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@apartment-security/shared-auth';
@@ -5,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
 import { LANGUAGES } from '../i18n/translations';
+import api from '../utils/api';
 
 export type GuardMe = {
   name: string;
@@ -17,15 +19,22 @@ export type GuardMe = {
   currentPostName: string | null;
 };
 
-export default function GuardProfileModal({ visible, onClose, profile }: {
+// Fetches its own /guards/me on open instead of depending on HomeScreen's
+// dashboard-load prop — opening the profile shouldn't wait on 4 unrelated endpoints.
+export default function GuardProfileModal({ visible, onClose }: {
   visible: boolean;
   onClose: () => void;
-  profile: GuardMe | null;
 }) {
   const { logout } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const { t, language, setLanguage } = useLanguage();
   const styles = getStyles(colors);
+  const [profile, setProfile] = useState<GuardMe | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    api.get('/guards/me').then((res) => setProfile(res.data.data ?? null)).catch(() => {});
+  }, [visible]);
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.row}>

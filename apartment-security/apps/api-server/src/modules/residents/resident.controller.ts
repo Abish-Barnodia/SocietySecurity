@@ -245,7 +245,12 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
 
 export const getAllResidents = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        // Scope to the caller's own property. req.user!.propertyId is undefined
+        // for COMMITTEE (no property link in the schema today), which leaves
+        // committee access unscoped exactly as before — this only tightens the
+        // MANAGER path, which previously leaked residents across all properties.
         const residents = await prisma.resident.findMany({
+            where: req.user!.propertyId ? { unit: { propertyId: req.user!.propertyId } } : undefined,
             include: {
                 unit: true,
                 user: { select: { phone: true, email: true, isActive: true } }

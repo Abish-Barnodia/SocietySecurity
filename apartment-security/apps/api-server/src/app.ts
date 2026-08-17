@@ -1,6 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import compression from 'compression';
 import morgan from 'morgan';
 import path from 'path';
 import { env } from './config/env';
@@ -39,6 +40,10 @@ const app = express();
 // Security headers
 app.use(helmet());
 
+// Gzip/br compress JSON responses — mobile clients are on cellular networks,
+// so shrinking payloads matters more than the CPU cost of compressing them.
+app.use(compression());
+
 // CORS — allow mobile apps (no Origin header) + known browser client origins
 app.use(cors({
   origin: (origin, callback) => {
@@ -72,17 +77,19 @@ app.use(cors({
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use('/api/v1/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// Body parsing - limited to 50mb to prevent DoS via massive payloads while allowing base64 image uploads
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Global rate limiter (per IP) — runs before body parsing so oversized/high-volume
+// request floods are rejected before we spend CPU/memory parsing their bodies.
+app.use(globalRateLimiter);
+
+// Body parsing - limited to 10mb (comfortably covers base64 gate/vehicle-alert
+// photos, down from 50mb) to reduce memory exposure from oversized payloads.
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // HTTP request logging
 app.use(morgan('combined', {
   stream: { write: (msg) => logger.http(msg.trim()) },
 }));
-
-// Global rate limiter (per IP)
-app.use(globalRateLimiter);
 
 // Health check & Root endpoint — no auth required (handles Render health probes)
 app.all(['/', '/health'], (_req, res) => {

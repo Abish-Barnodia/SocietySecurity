@@ -45,6 +45,10 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     return sendError(res, err.statusCode, err.message);
   }
 
-  // Programming or other unknown error: don't leak error details in prod, but we're debugging
+  // Programming or other unknown error: never leak internals (stack traces, file
+  // paths, Prisma query fragments) to the client in production.
+  if (process.env.NODE_ENV === 'production') {
+    return sendError(res, 500, 'Internal Server Error');
+  }
   return sendError(res, 500, `Internal Server Error: ${err.message}`, { stack: err.stack, name: err.name });
 };

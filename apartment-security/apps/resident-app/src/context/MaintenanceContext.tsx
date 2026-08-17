@@ -1,18 +1,15 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../utils/api';
-import tokenStorage from '../utils/tokenStorage';
 import { useAuth } from '@apartment-security/shared-auth';
 import { RazorpayWebCheckout } from '../components/RazorpayWebCheckout';
+import { useSocket } from './SocketContext';
 
 // react-native-razorpay's native module isn't present in Expo Go (only in a
 // custom dev-client/production build), so Expo Go falls back to the WebView
 // checkout instead of crashing on a missing native module.
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-const SOCKET_URL = API_URL.replace(/\/api\/v1\/?$/, '');
 
 export type InvoiceStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 
@@ -39,6 +36,7 @@ type MaintenanceContextType = {
   loading: boolean;
   fetchInvoices: () => Promise<void>;
   payInvoice: (invoiceId: string) => Promise<void>;
+  lastFetchedAt: React.MutableRefObject<number>;
 };
 
 const MaintenanceContext = createContext<MaintenanceContextType | undefined>(undefined);
@@ -57,6 +55,7 @@ export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [loading, setLoading] = useState(false);
   // ponytail: one state drives the checkout modal; Promise ref bridges async payInvoice
   const [checkout, setCheckout] = useState<CheckoutState>(null);
+  const lastFetchedAt = useRef(0);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -64,6 +63,7 @@ export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const response = await api.get('/maintenance/invoices');
       const raw: any[] = response.data.data ?? [];
       setInvoices(raw.map(mapInvoice));
+      lastFetchedAt.current = Date.now();
     } catch (err) {
       console.error('Failed to fetch invoices:', err);
     } finally {
@@ -162,34 +162,24 @@ export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, [isAuthenticated, userRole, fetchInvoices]);
 
   // New/updated invoices (manager raises a bill, payment confirmed) show up live.
-  const socketRef = useRef<Socket | null>(null);
+  const socket = useSocket();
   useEffect(() => {
-    if (!isAuthenticated || userRole !== 'RESIDENT') return;
-    let cancelled = false;
+    if (!socket || userRole !== 'RESIDENT') return;
 
-    (async () => {
-      const token = await tokenStorage.getItemAsync('userToken');
-      if (!token || cancelled) return;
-
-      const socket = io(SOCKET_URL, { auth: { token } });
-      socketRef.current = socket;
-
-      const upsert = (raw: any) => {
-        const mapped = mapInvoice(raw);
-        setInvoices((prev) =>
-          prev.some((i) => i.id === mapped.id) ? prev.map((i) => (i.id === mapped.id ? mapped : i)) : [mapped, ...prev]
-        );
-      };
-      socket.on('invoice:new', upsert);
-      socket.on('invoice:update', upsert);
-    })();
+    const upsert = (raw: any) => {
+      const mapped = mapInvoice(raw);
+      setInvoices((prev) =>
+        prev.some((i) => i.id === mapped.id) ? prev.map((i) => (i.id === mapped.id ? mapped : i)) : [mapped, ...prev]
+      );
+    };
+    socket.on('invoice:new', upsert);
+    socket.on('invoice:update', upsert);
 
     return () => {
-      cancelled = true;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      socket.off('invoice:new', upsert);
+      socket.off('invoice:update', upsert);
     };
-  }, [isAuthenticated, userRole]);
+  }, [socket, userRole]);
 
   const handleCheckoutSuccess = (result: any) => {
     checkout?.resolve(result);
@@ -201,8 +191,12 @@ export const MaintenanceProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setCheckout(null);
   };
 
+  const value = useMemo<MaintenanceContextType>(() => ({
+    invoices, loading, fetchInvoices, payInvoice, lastFetchedAt,
+  }), [invoices, loading, fetchInvoices, payInvoice]);
+
   return (
-    <MaintenanceContext.Provider value={{ invoices, loading, fetchInvoices, payInvoice }}>
+    <MaintenanceContext.Provider value={value}>
       {children}
       {/* Native Razorpay checkout modal — rendered here so it always has a host view */}
       {checkout && Platform.OS !== 'web' && (

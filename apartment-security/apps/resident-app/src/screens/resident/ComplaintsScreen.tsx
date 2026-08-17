@@ -19,7 +19,7 @@ import { categoryMeta, statusLabel, priorityLabel, STATUS_COLOR_KEY, PRIORITY_CO
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
 export default function ComplaintsScreen({ navigation }: { navigation: any }) {
-  const { complaints, loading, error, fetchComplaints } = useComplaints();
+  const { complaints, loading, error, fetchComplaints, lastFetchedAt } = useComplaints();
   const { colors } = useTheme();
   const styles = getStyles(colors);
 
@@ -29,8 +29,8 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchComplaints();
-    }, [fetchComplaints])
+      if (Date.now() - lastFetchedAt.current > 30000) fetchComplaints();
+    }, [fetchComplaints, lastFetchedAt])
   );
 
   const handleRefresh = async () => {

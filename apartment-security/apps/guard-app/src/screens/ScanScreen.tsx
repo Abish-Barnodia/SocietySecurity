@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
+import { getCached } from '../utils/cachedFetch';
 import { getSocket } from '../utils/socket';
 import { submitScan, callResident, ScanResult } from '../services/scannerService';
 import PassSummary from '../components/PassSummary';
@@ -39,7 +40,9 @@ export default function ScanScreen() {
 
   useEffect(() => {
     console.log('🛡️ [Guard Component: ScanScreen] Mounted');
-    api.get('/entries/entry-points').then((res) => setEntryPoints(res.data.data ?? [])).catch(() => {});
+    getCached('entry-points', () => api.get('/entries/entry-points').then((res) => res.data.data ?? []))
+      .then(setEntryPoints)
+      .catch(() => {});
   }, []);
 
   // Live updates for the currently-displayed scan only.

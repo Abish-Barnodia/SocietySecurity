@@ -17,7 +17,7 @@ const STATUS_STYLE: Record<InvoiceStatus, { key: 'success' | 'warning' | 'danger
 };
 
 export default function MaintenanceScreen() {
-  const { invoices, loading, fetchInvoices, payInvoice } = useMaintenance();
+  const { invoices, loading, fetchInvoices, payInvoice, lastFetchedAt } = useMaintenance();
   const { colors } = useTheme();
   const styles = getStyles(colors);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,8 +25,8 @@ export default function MaintenanceScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchInvoices();
-    }, [fetchInvoices])
+      if (Date.now() - lastFetchedAt.current > 30000) fetchInvoices();
+    }, [fetchInvoices, lastFetchedAt])
   );
 
   const handleRefresh = async () => {

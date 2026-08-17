@@ -12,6 +12,8 @@ const en = {
   common_cancel: 'Cancel',
   common_error: 'Error',
   common_ok: 'OK',
+  common_retry: 'Retry',
+  common_loadFailed: 'Something went wrong loading this. Please retry.',
   sync_pendingOne: '1 walk-in waiting to sync',
   sync_pendingMany: '{count} walk-ins waiting to sync',
 
@@ -218,6 +220,8 @@ const hi: typeof en = {
   common_cancel: 'रद्द करें',
   common_error: 'त्रुटि',
   common_ok: 'ठीक है',
+  common_retry: 'पुनः प्रयास करें',
+  common_loadFailed: 'लोड करने में समस्या हुई। कृपया पुनः प्रयास करें।',
   sync_pendingOne: '1 वॉक-इन सिंक होने की प्रतीक्षा में',
   sync_pendingMany: '{count} वॉक-इन सिंक होने की प्रतीक्षा में',
 

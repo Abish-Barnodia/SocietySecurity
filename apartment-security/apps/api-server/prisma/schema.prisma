@@ -324,6 +324,8 @@ model Alert {
   escalationStep  Int           @default(0)
   entry           Entry?        @relation(fields: [entryId], references: [id])
   incident        Incident?     @relation(fields: [incidentId], references: [id])
+
+  @@index([propertyId, createdAt])
 }
 
 model EscalationChain {
@@ -378,6 +380,9 @@ model Incident {
   property       Property         @relation(fields: [propertyId], references: [id])
   unit           Unit?            @relation(fields: [unitId], references: [id])
   actions        IncidentAction[]
+
+  @@index([propertyId, createdAt])
+  @@index([guardId, createdAt])
 }
 
 model IncidentAction {
@@ -460,6 +465,8 @@ model Shift {
   handedOverToName String?
   postCheckIns     GuardPost[]
   guard            Guard       @relation(fields: [guardId], references: [id])
+
+  @@index([guardId, endedAt])
 }
 
 model GuardPost {
@@ -473,6 +480,9 @@ model GuardPost {
   entryPoint   EntryPoint @relation(fields: [entryPointId], references: [id])
   guard        Guard      @relation(fields: [guardId], references: [id])
   shift        Shift      @relation(fields: [shiftId], references: [id])
+
+  @@index([shiftId, checkedInAt])
+  @@index([guardId, checkedInAt])
 }
 
 model Broadcast {

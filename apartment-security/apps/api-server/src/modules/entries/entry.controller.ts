@@ -207,18 +207,7 @@ export const logExit = async (req: Request, res: Response, next: NextFunction) =
 
 export const getEntryPoints = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    let propertyId: string | undefined;
-
-    if (req.user!.role === 'GUARD') {
-      const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-      propertyId = guard?.propertyId;
-    } else {
-      const resident = await prisma.resident.findUnique({
-        where: { userId: req.user!.userId },
-        select: { unit: { select: { propertyId: true } } },
-      });
-      propertyId = resident?.unit.propertyId;
-    }
+    const propertyId = req.user!.propertyId;
 
     if (!propertyId) return next(new AppError('Property context not found', 404));
 
@@ -233,11 +222,11 @@ export const getEntryPoints = async (req: Request, res: Response, next: NextFunc
 
 export const getRecentEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const propertyId = req.user!.propertyId;
+    if (!propertyId) return next(new AppError('Property context not found', 404));
 
     const entries = await prisma.entry.findMany({
-      where: { unit: { propertyId: guard.propertyId }, status: 'APPROVED' },
+      where: { unit: { propertyId }, status: 'APPROVED' },
       include: {
         unit: { select: { unitNumber: true, tower: true } },
         entryPoint: { select: { name: true } },
@@ -252,13 +241,13 @@ export const getRecentEntries = async (req: Request, res: Response, next: NextFu
 
 export const getFrequentVisitors = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const propertyId = req.user!.propertyId;
+    if (!propertyId) return next(new AppError('Property context not found', 404));
 
     // Get recent distinct visitors (using group by or distinct on entry table)
     // Prisma distinct is applied after where.
     const entries = await prisma.entry.findMany({
-      where: { unit: { propertyId: guard.propertyId }, method: 'MANUAL_GUARD' },
+      where: { unit: { propertyId }, method: 'MANUAL_GUARD' },
       select: { visitorName: true, vehicleNumber: true, entryAt: true },
       distinct: ['visitorName'],
       orderBy: { entryAt: 'desc' },
@@ -271,12 +260,12 @@ export const getFrequentVisitors = async (req: Request, res: Response, next: Nex
 
 export const getUnitsForGuard = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const guard = await prisma.guard.findUnique({ where: { userId: req.user!.userId } });
-    if (!guard) return next(new AppError('Guard profile not found', 404));
+    const propertyId = req.user!.propertyId;
+    if (!propertyId) return next(new AppError('Property context not found', 404));
 
     const units = await prisma.unit.findMany({
-      where: { 
-        propertyId: guard.propertyId,
+      where: {
+        propertyId,
         residents: { some: {} }
       },
       select: { id: true, unitNumber: true, tower: true, _count: { select: { residents: true } } },
@@ -289,17 +278,14 @@ export const getUnitsForGuard = async (req: Request, res: Response, next: NextFu
 
 export const getUnitEntries = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // For Resident
-    const currentResident = await prisma.resident.findUnique({
-        where: { userId: req.user!.userId }
-    });
-    if (!currentResident) return next(new AppError('Resident context not found', 404));
+    const unitId = req.user!.unitId;
+    if (!unitId) return next(new AppError('Resident context not found', 404));
 
     const entries = await prisma.entry.findMany({
-      where: { unitId: currentResident.unitId },
+      where: { unitId },
       include: { entryPoint: { select: { name: true } } },
       orderBy: { entryAt: 'desc' },
-      take: 100
+      take: 30
     });
     
     return sendSuccess(res, 200, 'Entries fetched', entries);

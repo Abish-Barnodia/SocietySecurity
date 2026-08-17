@@ -118,7 +118,13 @@ const MainTabs = () => {
 };
 
 export default function AppNavigator() {
-  const { isAuthenticated, userRole, isOnboarded } = useAuth();
+  const { isAuthenticated, isLoading, userRole, isOnboarded } = useAuth();
+
+  // While bootstrapAsync() is still validating a stored token against
+  // /auth/me, isAuthenticated is momentarily false — rendering nothing here
+  // (instead of falling into the !isAuthenticated branch below) avoids a
+  // flash of the Login screen on every cold start with a valid session.
+  if (isLoading) return null;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

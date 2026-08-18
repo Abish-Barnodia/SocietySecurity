@@ -142,12 +142,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
     bootstrapAsync();
   }, [tokenKey, hydrateFromMe, clearSession]);
 
+  // Deliberately does NOT touch isLoading — that flag gates AppNavigator's
+  // `if (isLoading) return null`, meant only for the cold-start bootstrap
+  // check. Toggling it here used to unmount the entire navigator (including
+  // the login screen itself) for the duration of the login request, showing
+  // a blank/black screen until it resolved. LoginScreen already tracks its
+  // own `loading` state for the button spinner.
   const login = async (email: string, password: string): Promise<void> => {
-    setIsLoading(true);
     try {
       const response = await api.post('/auth/login', { email, password });
       const { data } = response.data;
-      
+
       if (!allowedRoles.includes(data.user.role)) {
         throw new Error(`This account is not authorized to access this application.`);
       }
@@ -158,19 +163,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
     } catch (error) {
       await clearSession();
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const signup = async (email: string, password: string): Promise<void> => {
-    setIsLoading(true);
-    try {
-      await api.post('/auth/signup', { email, password, role: 'RESIDENT' });
-      await login(email, password);
-    } finally {
-      setIsLoading(false);
-    }
+    await api.post('/auth/signup', { email, password, role: 'RESIDENT' });
+    await login(email, password);
   };
 
   const updateProfile = (profile: UserProfile) => {

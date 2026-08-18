@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_URL } from '../utils/api';
 import tokenStorage from '../utils/tokenStorage';
@@ -41,6 +42,20 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setSocket(null);
     };
   }, [isAuthenticated, userRole]);
+
+  // A locked/backgrounded phone can silently drop the socket at the OS level
+  // (RN pauses JS timers) — socket.io's own reconnect only notices once a
+  // ping times out (tens of seconds by default), which reads as "the guard's
+  // walk-in alert took forever to arrive." Forcing a reconnect check the
+  // instant the app comes back to the foreground closes that gap.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && socketRef.current && !socketRef.current.connected) {
+        socketRef.current.connect();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
 };

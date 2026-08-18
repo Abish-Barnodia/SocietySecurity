@@ -49,10 +49,6 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       }
     });
 
-    await assignParkingSlot(entry.id, targetUnit.propertyId, vehicleNumber);
-
-    await auditLog(req.user!.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
-
     // Broadcast to unit room via Socket.io
     const io = req.app.get('io');
     io?.to(`unit_${unitId}`).emit('walkin_request', {
@@ -62,6 +58,11 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       vehicleNumber,
       gatePhotoUrl: finalPhotoUrl
     });
+
+    // Both run after the resident-facing notification (above), not before —
+    // neither is needed for it, and auditLog already swallows its own errors.
+    await assignParkingSlot(entry.id, targetUnit.propertyId, vehicleNumber);
+    auditLog(req.user!.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
 
     // Notify all residents in the unit via push using the shared alert utility
     await prisma.walkinApproval.create({
@@ -114,15 +115,12 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
     const id = req.params.id as string;
     const { status, notes } = req.body;
 
-    const currentResident = await prisma.resident.findUnique({
-        where: { userId: req.user!.userId }
-    });
-    if (!currentResident) return next(new AppError('Resident context not found', 404));
+    if (!req.user!.unitId) return next(new AppError('Resident context not found', 404));
 
     const entry = await prisma.entry.findUnique({ where: { id }, include: { walkinApproval: true } });
     if (!entry) return next(new AppError('Entry not found', 404));
 
-    if (entry.unitId !== currentResident.unitId) {
+    if (entry.unitId !== req.user!.unitId) {
         return next(new AppError('Unauthorized to respond to this request', 403));
     }
     if (entry.status !== 'PENDING_APPROVAL') {
@@ -154,8 +152,6 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    await auditLog(req.user!.userId, 'RESPOND_WALKIN', 'Entry', id);
-
     // Notify Guard App — room is `guard:${id}` (colon), matching what
     // socket.handler.ts actually joins guards to on connect.
     const io = req.app.get('io');
@@ -163,6 +159,10 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
       entry.walkinApproval ? 'visitor_approval_response' : 'walkin_response',
       { entryId: entry.id, status }
     );
+
+    // auditLog swallows its own errors and never affects the outcome — no
+    // reason to make the guard/resident wait on it after the decision is in.
+    auditLog(req.user!.userId, 'RESPOND_WALKIN', 'Entry', id);
 
     return sendSuccess(res, 200, `Walk-in ${status.toLowerCase()}`, updatedEntry);
   } catch (err) { next(err); }

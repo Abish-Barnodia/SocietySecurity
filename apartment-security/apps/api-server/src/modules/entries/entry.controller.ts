@@ -138,8 +138,6 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       return { entry: createdEntry, walkinCreated: walkinTicket };
     });
 
-    await assignParkingSlot(entry.id, guard.propertyId, vehicleNumber);
-
     let enriched: Record<string, unknown> = denialReason ? { reason: denialReason } : {};
 
     if (qrApproval) {
@@ -180,6 +178,10 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       };
     }
 
+    // Runs after the resident-facing notification (above) rather than before —
+    // parking assignment is a bonus on top of entry logging, never a reason
+    // to delay telling the resident someone's waiting at the gate.
+    await assignParkingSlot(entry.id, guard.propertyId, vehicleNumber);
     await auditLog(req.user!.userId, 'LOG_ENTRY', 'Entry', entry.id);
     return sendSuccess(res, 201, `Entry logged as ${status}`, { ...entry, ...enriched });
   } catch (err) { next(err); }

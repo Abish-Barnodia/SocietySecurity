@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth, configureApi, LoginScreen } from '@apartment-security/shared-auth';
 import { ThemeProvider } from './src/context/ThemeContext';
@@ -8,7 +8,7 @@ import GuardDetailsScreen from './src/screens/GuardDetailsScreen';
 import GuardShell from './src/screens/GuardShell';
 import { API_URL } from './src/utils/api';
 import tokenStorage from './src/utils/tokenStorage';
-import { connectSocket, disconnectSocket } from './src/utils/socket';
+import { connectSocket, disconnectSocket, getSocket } from './src/utils/socket';
 
 // Set by Root once AuthProvider is mounted, so a 401 can force the app back
 // to LoginScreen instead of leaving stale "authenticated" UI making doomed requests.
@@ -46,6 +46,17 @@ function Root() {
     });
     return () => { cancelled = true; };
   }, [isAuthenticated]);
+
+  // See resident-app's SocketContext for why: a backgrounded/locked phone can
+  // silently drop the socket, and the default reconnect only notices after a
+  // ping timeout — force a check the moment the app comes back to foreground.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      const s = getSocket();
+      if (state === 'active' && s && !s.connected) s.connect();
+    });
+    return () => sub.remove();
+  }, []);
 
   if (isLoading) {
     return (

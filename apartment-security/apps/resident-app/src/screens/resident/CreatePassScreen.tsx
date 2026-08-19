@@ -32,7 +32,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   const [shareWhatsApp, setShareWhatsApp] = useState(true);
   
   // Date/Time specific states
-  const [showPicker, setShowPicker] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState<{ field: keyof typeof dates; mode: 'date' | 'time' } | null>(null);
   const [dates, setDates] = useState({
     entryStart: new Date(new Date().setHours(8, 0, 0, 0)),
     entryEnd: new Date(new Date().setHours(13, 0, 0, 0)),
@@ -45,18 +45,25 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     validUntil: new Date(Date.now() + 4 * 60 * 60 * 1000),
   });
 
-  const onChangeDate = (event: any, selectedDate?: Date) => {
-    const currentShow = showPicker;
+  const onChangeDate = (event: any, selectedValue?: Date) => {
+    const current = showPicker;
     setShowPicker(null);
-    if (selectedDate && currentShow) {
-      // "Pass expires on" (Recurring) is still day-only — validFrom/validUntil
-      // now keep whatever time the datetime picker returned instead of being
-      // forced to start/end of day, so residents can set an actual time window.
-      if (currentShow === 'expiresOn') {
-        selectedDate.setHours(23, 59, 59, 999);
+    if (!selectedValue || !current) return;
+
+    setDates(prev => {
+      // Merge just the picked component (day, or hour/minute) onto the
+      // field's existing value, so picking a date doesn't reset the time
+      // that was already set, and vice versa.
+      const merged = new Date(prev[current.field]);
+      if (current.mode === 'date') {
+        merged.setFullYear(selectedValue.getFullYear(), selectedValue.getMonth(), selectedValue.getDate());
+      } else {
+        merged.setHours(selectedValue.getHours(), selectedValue.getMinutes(), 0, 0);
       }
-      setDates(prev => ({ ...prev, [currentShow]: selectedDate }));
-    }
+      // "Pass expires on" (Recurring) is day-only — always end of day.
+      if (current.field === 'expiresOn') merged.setHours(23, 59, 59, 999);
+      return { ...prev, [current.field]: merged };
+    });
   };
 
   const formatTime = (d: Date) => {
@@ -201,31 +208,41 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
 
             <Text style={styles.label}>Entry window</Text>
             <View style={styles.timeRow}>
-              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker('entryStart')}>
+              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'entryStart', mode: 'time' })}>
                 <Text style={{ color: colors.text }}>{formatTime(dates.entryStart)}</Text>
               </TouchableOpacity>
               <Text style={styles.toText}>to</Text>
-              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker('entryEnd')}>
+              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'entryEnd', mode: 'time' })}>
                 <Text style={{ color: colors.text }}>{formatTime(dates.entryEnd)}</Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.label}>Pass expires on</Text>
-            <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker('expiresOn')}>
+            <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'expiresOn', mode: 'date' })}>
               <Text style={{ color: colors.text }}>{formatDate(dates.expiresOn)}</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <Text style={styles.label}>Valid from</Text>
-            <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker('validFrom')}>
-              <Text style={{ color: colors.text }}>{formatDate(dates.validFrom)}, {formatTime(dates.validFrom)}</Text>
-            </TouchableOpacity>
+            <View style={styles.timeRow}>
+              <TouchableOpacity style={[styles.input, { flex: 1.4, marginBottom: 0, marginRight: 10, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'validFrom', mode: 'date' })}>
+                <Text style={{ color: colors.text }}>{formatDate(dates.validFrom)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'validFrom', mode: 'time' })}>
+                <Text style={{ color: colors.text }}>{formatTime(dates.validFrom)}</Text>
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.label}>Valid until</Text>
-            <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker('validUntil')}>
-              <Text style={{ color: colors.text }}>{formatDate(dates.validUntil)}, {formatTime(dates.validUntil)}</Text>
-            </TouchableOpacity>
+            <View style={styles.timeRow}>
+              <TouchableOpacity style={[styles.input, { flex: 1.4, marginBottom: 0, marginRight: 10, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'validUntil', mode: 'date' })}>
+                <Text style={{ color: colors.text }}>{formatDate(dates.validUntil)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.input, { flex: 1, marginBottom: 0, justifyContent: 'center' }]} onPress={() => setShowPicker({ field: 'validUntil', mode: 'time' })}>
+                <Text style={{ color: colors.text }}>{formatTime(dates.validUntil)}</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.switchRow}>
               <View style={styles.switchLabelContainer}>
@@ -246,14 +263,8 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
 
       {showPicker && (
         <DateTimePicker
-          value={dates[showPicker as keyof typeof dates]}
-          mode={
-            showPicker === 'entryStart' || showPicker === 'entryEnd'
-              ? 'time'
-              : showPicker === 'validFrom' || showPicker === 'validUntil'
-                ? 'datetime'
-                : 'date'
-          }
+          value={dates[showPicker.field]}
+          mode={showPicker.mode}
           display="default"
           is24Hour={false}
           onChange={onChangeDate}

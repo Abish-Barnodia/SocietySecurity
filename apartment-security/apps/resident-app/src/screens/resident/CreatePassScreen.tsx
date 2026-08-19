@@ -49,12 +49,11 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     const currentShow = showPicker;
     setShowPicker(null);
     if (selectedDate && currentShow) {
-      if (currentShow === 'validUntil' || currentShow === 'expiresOn') {
-        // Make it valid until the very end of the selected day
+      // "Pass expires on" (Recurring) is still day-only — validFrom/validUntil
+      // now keep whatever time the datetime picker returned instead of being
+      // forced to start/end of day, so residents can set an actual time window.
+      if (currentShow === 'expiresOn') {
         selectedDate.setHours(23, 59, 59, 999);
-      } else if (currentShow === 'validFrom') {
-        // Make it valid from the start of the selected day
-        selectedDate.setHours(0, 0, 0, 0);
       }
       setDates(prev => ({ ...prev, [currentShow]: selectedDate }));
     }
@@ -220,12 +219,12 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           <>
             <Text style={styles.label}>Valid from</Text>
             <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker('validFrom')}>
-              <Text style={{ color: colors.text }}>{formatDate(dates.validFrom)}</Text>
+              <Text style={{ color: colors.text }}>{formatDate(dates.validFrom)}, {formatTime(dates.validFrom)}</Text>
             </TouchableOpacity>
 
             <Text style={styles.label}>Valid until</Text>
             <TouchableOpacity style={[styles.input, { justifyContent: 'center' }]} onPress={() => setShowPicker('validUntil')}>
-              <Text style={{ color: colors.text }}>{formatDate(dates.validUntil)}</Text>
+              <Text style={{ color: colors.text }}>{formatDate(dates.validUntil)}, {formatTime(dates.validUntil)}</Text>
             </TouchableOpacity>
 
             <View style={styles.switchRow}>
@@ -251,7 +250,9 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           mode={
             showPicker === 'entryStart' || showPicker === 'entryEnd'
               ? 'time'
-              : 'date'
+              : showPicker === 'validFrom' || showPicker === 'validUntil'
+                ? 'datetime'
+                : 'date'
           }
           display="default"
           is24Hour={false}

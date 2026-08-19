@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image, Modal, FlatList
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import api from '../../utils/api';
@@ -19,6 +19,7 @@ export default function WalkInScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [units, setUnits] = useState<Unit[]>([]);
   const [entryPoints, setEntryPoints] = useState<{ id: string; name: string }[]>([]);
@@ -255,7 +256,7 @@ export default function WalkInScreen({ navigation }: any) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[styles.submitButton, submitting && { opacity: 0.7 }]}
           onPress={handleSubmit}

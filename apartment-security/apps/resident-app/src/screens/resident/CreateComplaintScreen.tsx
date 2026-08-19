@@ -13,6 +13,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -26,6 +27,7 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
   const { createComplaint, uploadAttachment } = useComplaints();
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [category, setCategory] = useState<ComplaintCategory>('MAINTENANCE');
   const [priority, setPriority] = useState<ComplaintPriority>('MEDIUM');
@@ -192,7 +194,7 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity style={[styles.submitButton, (!canSubmit || submitting) && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={!canSubmit || submitting}>
           {submitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitButtonText}>Submit complaint</Text>}
         </TouchableOpacity>

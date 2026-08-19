@@ -47,11 +47,20 @@ const PASS_STATUS_LABEL: Record<string, Pass['status']> = {
   REVOKED: 'Expired',
 };
 
+// hour12 forced true regardless of the phone's system clock format — a 24h
+// device would otherwise silently flip this back to "13:00" style output.
+// Also folds in the date on each side once validFrom/validUntil land on
+// different calendar days (a multi-day pass), instead of showing only the
+// time-of-day and making a 2-day pass look like it silently drops day two.
 const formatTimeRange = (validFrom: string, validUntil: string) => {
-  const opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
-  const from = new Date(validFrom).toLocaleTimeString([], opts);
-  const until = new Date(validUntil).toLocaleTimeString([], opts);
-  return `${from} - ${until}`;
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+  const from = new Date(validFrom);
+  const until = new Date(validUntil);
+  const fromTime = from.toLocaleTimeString([], timeOpts);
+  const untilTime = until.toLocaleTimeString([], timeOpts);
+  if (from.toDateString() === until.toDateString()) return `${fromTime} - ${untilTime}`;
+  const dateOpts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return `${from.toLocaleDateString([], dateOpts)} ${fromTime} – ${until.toLocaleDateString([], dateOpts)} ${untilTime}`;
 };
 
 // Maps the backend Pass record (visitorName/validFrom/validUntil/status enum, etc.)

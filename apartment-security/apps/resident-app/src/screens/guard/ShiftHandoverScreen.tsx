@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
   RefreshControl, Modal, FlatList, TextInput, Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -42,6 +43,7 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const METHOD_COLOR: Record<EntryMethod, string> = {
     QR_SCAN: colors.primary,
@@ -201,7 +203,7 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
         />
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
           style={[styles.confirmButton, !selectedGuard && { opacity: 0.5 }]}
           onPress={handleConfirm}

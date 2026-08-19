@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
@@ -22,6 +23,7 @@ const DAY_TO_API: Record<string, string> = {
 export default function CreatePassScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
+  const insets = useSafeAreaInsets();
   const { createPass } = useData();
   const [selectedType, setSelectedType] = useState('One-time visitor');
   const [name, setName] = useState('');
@@ -252,11 +254,12 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
               : 'date'
           }
           display="default"
+          is24Hour={false}
           onChange={onChangeDate}
         />
       )}
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity style={[styles.button, isSubmitting && { opacity: 0.6 }]} onPress={handleCreate} disabled={isSubmitting}>
           <Text style={styles.buttonText}>
             {isSubmitting ? 'Creating…' : selectedType === 'Recurring' ? 'Create recurring pass' : 'Create pass'}

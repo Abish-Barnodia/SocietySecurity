@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -43,6 +44,7 @@ export default function WorkerFormScreen({ navigation }: { navigation: any }) {
   const { workers, createWorker, updateWorker, deleteWorker, uploadWorkerPhoto } = useDomesticWorkers();
   const { colors } = useTheme();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const existing = useMemo(() => workers.find((w) => w.id === workerId), [workers, workerId]);
   const isEdit = !!existing;
@@ -266,7 +268,7 @@ export default function WorkerFormScreen({ navigation }: { navigation: any }) {
         />
       )}
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={!canSubmit}>
           {submitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitButtonText}>{isEdit ? 'Save changes' : 'Register worker'}</Text>}
         </TouchableOpacity>

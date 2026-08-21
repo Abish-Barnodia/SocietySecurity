@@ -251,35 +251,38 @@ model RecurringRule {
 }
 
 model Entry {
-  id             String             @id @default(cuid())
-  unitId         String
-  passId         String?
-  guardId        String
-  entryPointId   String
-  visitorName    String
-  visitorPhone   String?
-  vehicleNumber  String?
-  method         EntryMethod
-  status         EntryStatus
-  gatePhotoUrl   String?
-  notes          String?
-  entryAt        DateTime           @default(now())
-  exitAt         DateTime?
-  createdAt      DateTime           @default(now())
-  alerts         Alert[]
-  entryPoint     EntryPoint         @relation(fields: [entryPointId], references: [id])
-  guard          Guard              @relation(fields: [guardId], references: [id])
-  pass           Pass?              @relation(fields: [passId], references: [id])
-  unit           Unit               @relation(fields: [unitId], references: [id])
-  usageHistory   PassUsageHistory[]
-  walkinApproval WalkinApproval?
-  parkingSlot    ParkingSlot?
+  id               String             @id @default(cuid())
+  unitId           String
+  passId           String?
+  guardId          String
+  entryPointId     String
+  domesticWorkerId String?
+  visitorName      String
+  visitorPhone     String?
+  vehicleNumber    String?
+  method           EntryMethod
+  status           EntryStatus
+  gatePhotoUrl     String?
+  notes            String?
+  entryAt          DateTime           @default(now())
+  exitAt           DateTime?
+  createdAt        DateTime           @default(now())
+  alerts           Alert[]
+  entryPoint       EntryPoint         @relation(fields: [entryPointId], references: [id])
+  guard            Guard              @relation(fields: [guardId], references: [id])
+  pass             Pass?              @relation(fields: [passId], references: [id])
+  unit             Unit               @relation(fields: [unitId], references: [id])
+  domesticWorker   DomesticWorker?    @relation(fields: [domesticWorkerId], references: [id])
+  usageHistory     PassUsageHistory[]
+  walkinApproval   WalkinApproval?
+  parkingSlot      ParkingSlot?
 
   @@index([unitId])
   @@index([guardId])
   @@index([entryPointId])
   @@index([passId])
   @@index([status])
+  @@index([domesticWorkerId])
 }
 
 model WalkinApproval {
@@ -685,6 +688,7 @@ model DomesticWorker {
   updatedAt      DateTime    @updatedAt
   registeredBy   Resident    @relation(fields: [registeredById], references: [id])
   unit           Unit        @relation(fields: [unitId], references: [id])
+  entries        Entry[]
 }
 
 enum EscalationChannel {
@@ -736,6 +740,7 @@ enum EntryMethod {
   OTP
   MANUAL_GUARD
   VEHICLE_ANPR
+  DOMESTIC_WORKER
 }
 
 enum EntryStatus {

@@ -76,7 +76,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <AuthProvider allowedRoles={['RESIDENT', 'GUARD', 'MANAGER', 'ADMIN']} tokenKey="userToken" refreshTokenKey="userRefreshToken">
+          <AuthProvider allowedRoles={['RESIDENT', 'GUARD']} tokenKey="userToken" refreshTokenKey="userRefreshToken">
             <SocketProvider>
               <DataProvider>
                 <CommunityProvider>

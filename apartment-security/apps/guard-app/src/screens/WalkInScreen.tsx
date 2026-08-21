@@ -15,6 +15,7 @@ import { ThemeColors } from '../theme/colors';
 
 type Unit = { id: string; unitNumber: string; tower: string | null; residents: { name: string }[] };
 type RecentVisitor = { visitorName: string; vehicleNumber: string | null };
+type DomesticWorker = { id: string; name: string; type: string; entryTime: string; exitTime: string };
 
 export default function WalkInScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -43,6 +44,9 @@ export default function WalkInScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
+  const [domesticWorkers, setDomesticWorkers] = useState<DomesticWorker[]>([]);
+  const [clearingWorkerId, setClearingWorkerId] = useState<string | null>(null);
+
   const loadPrefetch = () => {
     setLoadError(false);
     // Ponytail: load everything at once, minimum boilerplate
@@ -66,6 +70,32 @@ export default function WalkInScreen({ navigation }: any) {
     console.log('🛡️ [Guard Component: WalkInScreen] Mounted');
     loadPrefetch();
   }, []);
+
+  // Once the guard has picked a specific flat, show that unit's registered
+  // staff so a routine daily arrival doesn't need the full walk-in form.
+  useEffect(() => {
+    const unit = units.find(u => (u.tower || '') === blockInput && u.unitNumber === flatInput);
+    if (!unit) { setDomesticWorkers([]); return; }
+    api.get(`/domestic-workers/unit/${unit.id}`)
+      .then((res) => setDomesticWorkers(res.data.data ?? []))
+      .catch(() => setDomesticWorkers([]));
+  }, [blockInput, flatInput, units]);
+
+  const handleClearWorker = async (worker: DomesticWorker) => {
+    if (!selectedGateId) {
+      Alert.alert(t('walkin_systemErrorTitle'), t('walkin_systemErrorMsg'));
+      return;
+    }
+    setClearingWorkerId(worker.id);
+    try {
+      await api.post('/domestic-workers/entries', { domesticWorkerId: worker.id, entryPointId: selectedGateId });
+      Alert.alert(t('walkin_staffCleared'), `${worker.name} ${t('walkin_staffClearedMsg')}`);
+    } catch (error: any) {
+      Alert.alert(t('common_error'), error.response?.data?.message ?? t('walkin_errorMsg'));
+    } finally {
+      setClearingWorkerId(null);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!visitorName.trim() || !flatInput.trim()) {
@@ -249,6 +279,31 @@ export default function WalkInScreen({ navigation }: any) {
           </View>
           {units.length === 0 && <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>{t('walkin_loadingFlats')}</Text>}
 
+          {domesticWorkers.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.label}>{t('walkin_registeredStaff')}</Text>
+              {domesticWorkers.map((worker) => (
+                <View key={worker.id} style={styles.workerRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.workerName}>{worker.name}</Text>
+                    <Text style={styles.workerMeta}>{worker.type} · {worker.entryTime}–{worker.exitTime}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.clearInButton, clearingWorkerId === worker.id && { opacity: 0.6 }]}
+                    onPress={() => handleClearWorker(worker)}
+                    disabled={clearingWorkerId === worker.id}
+                  >
+                    {clearingWorkerId === worker.id ? (
+                      <ActivityIndicator color={colors.card} size="small" />
+                    ) : (
+                      <Text style={styles.clearInButtonText}>{t('walkin_clearIn')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
           <Text style={styles.label}>{t('walkin_purposeOfVisit')}</Text>
           <TextInput
             style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
@@ -384,6 +439,27 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonText: { color: colors.card, fontSize: 18, fontWeight: 'bold' },
+  workerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  workerName: { fontSize: 15, fontWeight: '700', color: colors.text },
+  workerMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  clearInButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    minWidth: 76,
+    alignItems: 'center',
+  },
+  clearInButtonText: { color: colors.card, fontSize: 13, fontWeight: '700' },
   chip: {
     backgroundColor: colors.card,
     borderWidth: 1,

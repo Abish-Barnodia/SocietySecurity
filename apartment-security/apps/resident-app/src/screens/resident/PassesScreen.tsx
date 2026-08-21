@@ -103,7 +103,7 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
               </View>
               <View style={styles.detailItem}>
                 <Ionicons name="location-outline" size={14} color={colors.textMuted} style={{ marginRight: 4 }} />
-                <Text style={styles.detailText}>{item.gate || 'Main Gate'}</Text>
+                <Text style={styles.detailText}>{item.gate || 'Any gate'}</Text>
               </View>
             </View>
 

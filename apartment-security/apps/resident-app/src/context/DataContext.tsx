@@ -117,6 +117,7 @@ const ENTRY_METHOD_LABEL: Record<string, string> = {
   OTP: 'OTP',
   MANUAL_GUARD: 'Walk-in',
   VEHICLE_ANPR: 'Vehicle',
+  DOMESTIC_WORKER: 'Domestic worker',
 };
 
 const ENTRY_STATUS: Record<string, { label: Entry['status']; color: string }> = {

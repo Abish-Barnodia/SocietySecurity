@@ -10,13 +10,20 @@ import {
   updateWorker,
   deleteWorker,
   uploadWorkerPhoto,
+  listWorkersForGuard,
+  logWorkerEntry,
 } from './domesticWorker.controller';
-import { createWorkerSchema, updateWorkerSchema } from './domesticWorker.schema';
+import { createWorkerSchema, updateWorkerSchema, logWorkerEntrySchema } from './domesticWorker.schema';
 
 const router = Router();
 router.use(authenticate);
-router.use(requireRole('RESIDENT'));
 
+// Guard-facing: look up a unit's registered staff and clear one in directly.
+router.get('/unit/:unitId', requireRole('GUARD'), listWorkersForGuard);
+router.post('/entries', requireRole('GUARD'), validate(logWorkerEntrySchema), logWorkerEntry);
+
+// Resident-facing CRUD for registering staff.
+router.use(requireRole('RESIDENT'));
 router.get('/', listWorkers);
 router.post('/', validate(createWorkerSchema), createWorker);
 router.post('/uploads', upload.single('file'), uploadWorkerPhoto);

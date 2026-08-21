@@ -103,6 +103,80 @@ export const deleteWorker = async (req: Request, res: Response, next: NextFuncti
   } catch (err) { next(err); }
 };
 
+// Guard-facing: look up a unit's registered staff so the guard can clear one
+// in directly instead of typing a walk-in request the resident has to approve.
+export const listWorkersForGuard = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const unitId = req.params.unitId as string;
+    const unit = await prisma.unit.findUnique({ where: { id: unitId } });
+    if (!unit || unit.propertyId !== req.user!.propertyId) {
+      return next(new AppError('Unit not found', 404));
+    }
+
+    const workers = await prisma.domesticWorker.findMany({
+      where: { unitId, isActive: true },
+      orderBy: { name: 'asc' },
+    });
+
+    sendSuccess(res, 200, 'Domestic workers retrieved', workers);
+  } catch (err) { next(err); }
+};
+
+// Registered staff are already vetted by the resident at registration time —
+// this is their daily routine, not a one-off visitor, so it clears straight
+// to APPROVED with no resident approval round-trip (same pattern OTP entries
+// already use in entry.controller.ts).
+export const logWorkerEntry = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const guardId = req.user!.guardId;
+    if (!guardId) return next(new AppError('Guard profile not found', 404));
+
+    const { domesticWorkerId, entryPointId } = req.body;
+    const worker = await prisma.domesticWorker.findUnique({
+      where: { id: domesticWorkerId },
+      include: { unit: { include: { residents: true } } },
+    });
+    if (!worker || !worker.isActive) return next(new AppError('Domestic worker not found', 404));
+    if (worker.unit.propertyId !== req.user!.propertyId) {
+      return next(new AppError('Forbidden: worker does not belong to your assigned property', 403));
+    }
+
+    const entry = await prisma.entry.create({
+      data: {
+        unitId: worker.unitId,
+        guardId,
+        entryPointId,
+        domesticWorkerId: worker.id,
+        method: 'DOMESTIC_WORKER',
+        status: 'APPROVED',
+        visitorName: worker.name,
+        visitorPhone: worker.phone,
+      },
+    });
+
+    // Respects the resident's "Domestic Worker Entries" notification toggle
+    // (Resident.alertPreferences.staffEnabled) — unset defaults to on.
+    const notifyUserIds = worker.unit.residents
+      .filter((r) => (r.alertPreferences as any)?.staffEnabled !== false)
+      .map((r) => r.userId);
+    if (notifyUserIds.length > 0) {
+      const { triggerAlert } = await import('../../utils/alert.util');
+      await triggerAlert({
+        priority: 'P3',
+        title: `${worker.name} has arrived`,
+        body: `Your registered ${worker.type.toLowerCase()} checked in at the gate.`,
+        targetUserIds: notifyUserIds,
+        propertyId: req.user!.propertyId!,
+        entryId: entry.id,
+      });
+    }
+
+    auditLog(req.user!.userId, 'LOG_DOMESTIC_WORKER_ENTRY', 'Entry', entry.id);
+
+    sendSuccess(res, 201, 'Domestic worker cleared in', entry);
+  } catch (err) { next(err); }
+};
+
 const ALLOWED_PHOTO_MIME = /^image\//;
 
 export const uploadWorkerPhoto = async (req: Request, res: Response, next: NextFunction) => {

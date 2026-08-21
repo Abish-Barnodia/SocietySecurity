@@ -47,7 +47,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
               </div>
               
               <h2 style="color: #16a34a; margin-bottom: 5px;">Valid: ${pass.time}</h2>
-              <p style="color: #64748b; font-size: 16px;">Gate: ${pass.gate || 'Main Gate'} &nbsp;&bull;&nbsp; Phone: ${pass.phone || 'N/A'}</p>
+              <p style="color: #64748b; font-size: 16px;">Gate: ${pass.gate || 'Any gate'} &nbsp;&bull;&nbsp; Phone: ${pass.phone || 'N/A'}</p>
               
               <div style="margin-top: 30px; font-size: 12px; color: #94a3b8;">
                 Apartment Security App &nbsp;&bull;&nbsp; Pass ID: ${pass.id}
@@ -179,7 +179,10 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
             </View>
             <View style={styles.gridItem}>
               <Text style={styles.gridLabel}>Gate</Text>
-              <Text style={styles.gridValue}>{pass.gate || 'Main Gate'}</Text>
+              {/* Passes aren't restricted to a specific gate (no gate picker on
+                  creation, backend never returns one) — any guard at any gate
+                  can clear it, so a hardcoded gate name here would be a lie. */}
+              <Text style={styles.gridValue}>{pass.gate || 'Any gate'}</Text>
             </View>
           </View>
         </View>

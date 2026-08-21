@@ -28,3 +28,10 @@ export const updateWorkerSchema = z.object({
     Object.fromEntries(Object.entries(workerBody).map(([key, schema]) => [key, schema.optional()]))
   ),
 });
+
+export const logWorkerEntrySchema = z.object({
+  body: z.object({
+    domesticWorkerId: z.string().min(1),
+    entryPointId: z.string().min(1),
+  }),
+});

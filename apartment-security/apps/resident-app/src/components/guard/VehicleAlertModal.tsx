@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import api from '../../utils/api';
+import { getCached } from '../../utils/cachedFetch';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ThemeColors } from '../../theme/colors';
@@ -33,9 +34,8 @@ export default function VehicleAlertModal({ visible, onClose, onSent }: {
 
   useEffect(() => {
     if (!visible) return;
-    api.get('/entries/units')
-      .then((res) => {
-        const units: { _count?: { residents: number } }[] = res.data.data ?? [];
+    getCached('units', () => api.get('/entries/units').then((res) => res.data.data ?? []))
+      .then((units: { _count?: { residents: number } }[]) => {
         setResidentCount(units.reduce((sum, u) => sum + (u._count?.residents ?? 0), 0));
       })
       .catch(() => setResidentCount(null));

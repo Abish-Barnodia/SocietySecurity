@@ -23,7 +23,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || userRole !== 'RESIDENT') return;
+    // Covers both roles this app serves — RESIDENT screens and the embedded
+    // GUARD flow (src/screens/guard/*) both listen on this same connection.
+    if (!isAuthenticated || (userRole !== 'RESIDENT' && userRole !== 'GUARD')) return;
     let cancelled = false;
 
     (async () => {

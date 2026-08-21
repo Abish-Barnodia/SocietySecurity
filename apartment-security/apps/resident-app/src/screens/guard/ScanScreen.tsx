@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../utils/api';
-import { getSocket } from '../../utils/socket';
+import { getCached } from '../../utils/cachedFetch';
+import { useSocket } from '../../context/SocketContext';
 import { submitScan, callResident, ScanResult } from '../../services/scannerService';
 import PassSummary from '../../components/guard/PassSummary';
 import ClearanceCard, { ClearanceState } from '../../components/guard/ClearanceCard';
@@ -36,16 +37,17 @@ export default function ScanScreen() {
   const [clearance, setClearance] = useState<ClearanceState>('PENDING');
   const [calling, setCalling] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const socket = useSocket();
 
   useEffect(() => {
-    api.get('/entries/entry-points').then((res) => setEntryPoints(res.data.data ?? [])).catch(() => {});
+    getCached('entry-points', () => api.get('/entries/entry-points').then((res) => res.data.data ?? []))
+      .then(setEntryPoints)
+      .catch(() => {});
   }, []);
 
   // Live updates for the currently-displayed scan only.
   useEffect(() => {
-    if (!result?.id || result.status !== 'PENDING_APPROVAL') return;
-    const socket = getSocket();
-    if (!socket) return;
+    if (!result?.id || result.status !== 'PENDING_APPROVAL' || !socket) return;
 
     const onResponse = (payload: { entryId: string; status: 'APPROVED' | 'DENIED' }) => {
       if (payload.entryId === result.id) setClearance(payload.status);
@@ -60,7 +62,7 @@ export default function ScanScreen() {
       socket.off('visitor_approval_response', onResponse);
       socket.off('visitor_approval_timeout', onTimeout);
     };
-  }, [result?.id, result?.status]);
+  }, [result?.id, result?.status, socket]);
 
   const handleScan = async (data: string) => {
     if (!gate) return;

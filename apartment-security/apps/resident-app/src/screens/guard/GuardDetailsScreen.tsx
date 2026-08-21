@@ -9,6 +9,7 @@ import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import api from '../../utils/api';
+import { getCached } from '../../utils/cachedFetch';
 import { ThemeColors } from '../../theme/colors';
 
 type EntryPoint = { id: string; name: string };
@@ -42,8 +43,9 @@ export default function GuardDetailsScreen() {
   useEffect(() => {
     const loadPosts = async () => {
       try {
-        const response = await api.get('/entries/entry-points');
-        const fetched: EntryPoint[] = response.data.data ?? [];
+        const fetched = await getCached('entry-points', () =>
+          api.get('/entries/entry-points').then((res) => res.data.data ?? [])
+        );
         setEntryPoints(fetched);
       } catch {
         Alert.alert(t('details_loadPostsErrorTitle'), t('details_loadPostsErrorMsg'));

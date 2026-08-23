@@ -45,11 +45,14 @@ export default function EntryDetailModal({ entry, onClose, onExited }: {
     if (!entry) return;
     setMarkingExit(true);
     try {
-      await api.put(`/entries/${entry.id}/exit`);
+      // The backend's Zod schema requires a body object even though every
+      // field in it is optional — a bodyless PUT can fail validation before
+      // it ever reaches the optional-field check, so send an explicit {}.
+      await api.put(`/entries/${entry.id}/exit`, {});
       onExited?.();
       onClose();
-    } catch {
-      Alert.alert(t('common_error'), t('entry_markExitError'));
+    } catch (error: any) {
+      Alert.alert(t('common_error'), error.response?.data?.message ?? t('entry_markExitError'));
     } finally {
       setMarkingExit(false);
     }

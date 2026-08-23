@@ -189,6 +189,7 @@ const en = {
   entry_stillInside: 'Still inside',
   entry_markExit: 'Mark as Exited',
   entry_markExitError: 'Failed to record exit. Please try again.',
+  entry_exitedLabel: 'Exited',
   entry_method: 'Entry method',
 
   details_appName: 'Sentinel Guard',
@@ -403,6 +404,7 @@ const hi: typeof en = {
   entry_stillInside: 'अभी भी अंदर है',
   entry_markExit: 'निकास दर्ज करें',
   entry_markExitError: 'निकास दर्ज नहीं हो सका। कृपया पुनः प्रयास करें।',
+  entry_exitedLabel: 'निकल गया',
   entry_method: 'प्रवेश का तरीका',
 
   details_appName: 'सेंटिनल गार्ड',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -40,6 +40,15 @@ export default function EntryDetailModal({ entry, onClose, onExited }: {
   const { t } = useLanguage();
   const styles = getStyles(colors);
   const [markingExit, setMarkingExit] = useState(false);
+  // Overrides entry.exitAt once marked, so the modal shows the result in
+  // place instead of closing and leaving the guard to guess whether it
+  // worked (the underlying `entry` prop is a stale snapshot until the
+  // parent's list refetch resolves, which onExited() only kicks off).
+  const [localExitAt, setLocalExitAt] = useState<string | null>(null);
+
+  useEffect(() => { setLocalExitAt(null); }, [entry?.id]);
+
+  const effectiveExitAt = localExitAt ?? entry?.exitAt ?? null;
 
   const handleMarkExit = async () => {
     if (!entry) return;
@@ -48,9 +57,9 @@ export default function EntryDetailModal({ entry, onClose, onExited }: {
       // The backend's Zod schema requires a body object even though every
       // field in it is optional — a bodyless PUT can fail validation before
       // it ever reaches the optional-field check, so send an explicit {}.
-      await api.put(`/entries/${entry.id}/exit`, {});
+      const response = await api.put(`/entries/${entry.id}/exit`, {});
+      setLocalExitAt(response.data.data?.exitAt ?? new Date().toISOString());
       onExited?.();
-      onClose();
     } catch (error: any) {
       Alert.alert(t('common_error'), error.response?.data?.message ?? t('entry_markExitError'));
     } finally {
@@ -86,17 +95,17 @@ export default function EntryDetailModal({ entry, onClose, onExited }: {
                 <Text style={styles.metaLabel}>{t('entry_method')}</Text>
                 <Text style={styles.metaValue}>{t(METHOD_LABEL_KEY[entry.method])}</Text>
               </View>
-              <View style={[styles.metaRow, { borderBottomWidth: entry.exitAt ? 1 : 0 }]}>
+              <View style={[styles.metaRow, { borderBottomWidth: effectiveExitAt ? 1 : 0 }]}>
                 <Text style={styles.metaLabel}>{t('entry_enteredAt')}</Text>
                 <Text style={styles.metaValue}>
                   {new Date(entry.entryAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                 </Text>
               </View>
-              {entry.exitAt ? (
+              {effectiveExitAt ? (
                 <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
                   <Text style={styles.metaLabel}>{t('entry_exitedAt')}</Text>
                   <Text style={styles.metaValue}>
-                    {new Date(entry.exitAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    {new Date(effectiveExitAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                   </Text>
                 </View>
               ) : (
@@ -106,19 +115,19 @@ export default function EntryDetailModal({ entry, onClose, onExited }: {
               )}
             </View>
 
-            {!entry.exitAt && (
-              <TouchableOpacity
-                style={[styles.exitButton, markingExit && { opacity: 0.6 }]}
-                onPress={handleMarkExit}
-                disabled={markingExit}
-              >
-                {markingExit ? (
-                  <ActivityIndicator color={colors.card} />
-                ) : (
-                  <Text style={styles.exitButtonText}>{t('entry_markExit')}</Text>
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.exitButton, (markingExit || !!effectiveExitAt) && { opacity: 0.5 }]}
+              onPress={handleMarkExit}
+              disabled={markingExit || !!effectiveExitAt}
+            >
+              {markingExit ? (
+                <ActivityIndicator color={colors.card} />
+              ) : (
+                <Text style={styles.exitButtonText}>
+                  {effectiveExitAt ? t('entry_exitedLabel') : t('entry_markExit')}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
       </View>

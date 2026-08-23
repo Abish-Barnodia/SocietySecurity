@@ -69,7 +69,13 @@ const GuardManagement: React.FC = () => {
         fetchData(); // refresh the directory
       } else {
         const errorData = await response.json();
-        alert(`Failed to create guard: ${errorData.message}`);
+        // Zod validation failures come back as errorData.errors (an array of
+        // { path, message }) — errorData.message alone is just "Validation
+        // Error" with no indication of which field, so surface both.
+        const detail = Array.isArray(errorData.errors)
+          ? errorData.errors.map((e: any) => `${e.path?.slice(1).join('.') || 'field'}: ${e.message}`).join('\n')
+          : '';
+        alert(`Failed to create guard: ${errorData.message}${detail ? `\n${detail}` : ''}`);
       }
     } catch (err) {
       console.error(err);

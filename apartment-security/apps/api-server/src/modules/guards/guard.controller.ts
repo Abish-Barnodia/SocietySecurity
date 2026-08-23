@@ -247,8 +247,16 @@ export const endShift = async (req: Request, res: Response, next: NextFunction) 
 
     const { totalEntries, totalIncidents } = await buildShiftStats(guard.id, activeShift.startedAt);
 
-    await prisma.$transaction([
-      prisma.shift.update({
+    // The outgoing guard's current post, carried over to the incoming guard
+    // below — a handover means the post stays continuously covered, not
+    // "guard A stops, and separately at some point guard B may start."
+    const outgoingPost = await prisma.guardPost.findFirst({
+      where: { shiftId: activeShift.id },
+      orderBy: { checkedInAt: 'desc' },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.shift.update({
         where: { id: activeShift.id },
         data: {
           endedAt: new Date(),
@@ -259,12 +267,31 @@ export const endShift = async (req: Request, res: Response, next: NextFunction) 
           totalEntries,
           totalIncidents,
         }
-      }),
-      prisma.guard.update({
+      });
+      await tx.guard.update({
         where: { id: guard.id },
         data: { isOnDuty: false }
-      })
-    ]);
+      });
+
+      // Skip if the incoming guard is already on another active shift —
+      // don't stomp on whatever post they're already covering.
+      if (!handoverTarget.isOnDuty) {
+        const newShift = await tx.shift.create({ data: { guardId: handoverTarget.id } });
+        if (outgoingPost) {
+          await tx.guardPost.create({
+            data: {
+              guardId: handoverTarget.id,
+              shiftId: newShift.id,
+              entryPointId: outgoingPost.entryPointId,
+            }
+          });
+        }
+        await tx.guard.update({
+          where: { id: handoverTarget.id },
+          data: { isOnDuty: true }
+        });
+      }
+    });
 
     await auditLog(req.user!.userId, 'END_SHIFT', 'Shift', activeShift.id);
     return sendSuccess(res, 200, 'Shift ended successfully');

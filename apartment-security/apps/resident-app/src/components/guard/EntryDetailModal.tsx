@@ -1,9 +1,11 @@
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ThemeColors } from '../../theme/colors';
 import { TranslationKey } from '../../i18n/translations';
+import api from '../../utils/api';
 import PassSummary from './PassSummary';
 
 export type EntryDetail = {
@@ -27,10 +29,31 @@ const METHOD_LABEL_KEY: Record<EntryDetail['method'], TranslationKey> = {
   VEHICLE_ANPR: 'handover_methodVehicle',
 };
 
-export default function EntryDetailModal({ entry, onClose }: { entry: EntryDetail | null; onClose: () => void }) {
+export default function EntryDetailModal({ entry, onClose, onExited }: {
+  entry: EntryDetail | null;
+  onClose: () => void;
+  // Lets the caller (e.g. HomeScreen's Recent Clearances) refresh its list
+  // after a successful exit instead of showing stale "Still inside" data.
+  onExited?: () => void;
+}) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = getStyles(colors);
+  const [markingExit, setMarkingExit] = useState(false);
+
+  const handleMarkExit = async () => {
+    if (!entry) return;
+    setMarkingExit(true);
+    try {
+      await api.put(`/entries/${entry.id}/exit`);
+      onExited?.();
+      onClose();
+    } catch {
+      Alert.alert(t('common_error'), t('entry_markExitError'));
+    } finally {
+      setMarkingExit(false);
+    }
+  };
 
   return (
     <Modal visible={!!entry} animationType="slide" onRequestClose={onClose}>
@@ -79,6 +102,20 @@ export default function EntryDetailModal({ entry, onClose }: { entry: EntryDetai
                 </View>
               )}
             </View>
+
+            {!entry.exitAt && (
+              <TouchableOpacity
+                style={[styles.exitButton, markingExit && { opacity: 0.6 }]}
+                onPress={handleMarkExit}
+                disabled={markingExit}
+              >
+                {markingExit ? (
+                  <ActivityIndicator color={colors.card} />
+                ) : (
+                  <Text style={styles.exitButtonText}>{t('entry_markExit')}</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -105,4 +142,9 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   metaLabel: { fontSize: 14, color: colors.textMuted },
   metaValue: { fontSize: 14, fontWeight: '700', color: colors.text },
+  exitButton: {
+    backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 16,
+    alignItems: 'center', marginTop: 16,
+  },
+  exitButtonText: { color: colors.card, fontSize: 16, fontWeight: '700' },
 });

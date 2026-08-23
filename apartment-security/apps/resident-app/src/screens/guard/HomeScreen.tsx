@@ -202,7 +202,7 @@ export default function HomeScreen({ onNavigate }: { onNavigate: (tab: Tab) => v
         ))
       )}
 
-      <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+      <EntryDetailModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} onExited={loadEntries} />
     </ScrollView>
   );
 }

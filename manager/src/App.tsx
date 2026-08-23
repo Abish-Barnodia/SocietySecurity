@@ -27,11 +27,40 @@ import { API_BASE } from './config';
 const cachedTheme = localStorage.getItem('managerTheme');
 if (cachedTheme) applyManagerTheme(cachedTheme);
 
+// Every screen calls the API directly with its own fetch() rather than a
+// shared client, so a session dying mid-use (idle timeout, or another
+// manager's login taking over the single-active-session lock) previously
+// went undetected everywhere except the one check on initial page load —
+// every subsequent action just silently 401'd while the UI looked normal.
+// Patching fetch once here, rather than every call site, catches it
+// everywhere without touching the ~15 files that call the API directly.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args: Parameters<typeof fetch>) => {
+  const response = await nativeFetch(...args);
+  const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request).url;
+  if (response.status === 401 && url.startsWith(API_BASE) && !url.endsWith('/auth/login')) {
+    window.dispatchEvent(new Event('manager-session-expired'));
+  }
+  return response;
+};
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      setIsAuthenticated(false);
+      alert('Your session has ended. Please log in again.');
+    };
+    window.addEventListener('manager-session-expired', onSessionExpired);
+    return () => window.removeEventListener('manager-session-expired', onSessionExpired);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');

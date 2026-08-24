@@ -39,6 +39,12 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
     setRefreshing(false);
   };
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of complaints) counts[c.status] = (counts[c.status] ?? 0) + 1;
+    return counts;
+  }, [complaints]);
+
   const filtered = useMemo(() => {
     return complaints.filter((c) => {
       if (statusFilter && c.status !== statusFilter) return false;
@@ -105,12 +111,16 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
         contentContainerStyle={styles.filterRow}
         renderItem={({ item }) => {
           const active = statusFilter === item.value;
+          const count = statusCounts[item.value] ?? 0;
           return (
             <TouchableOpacity
               style={[styles.filterChip, active && styles.filterChipActive]}
               onPress={() => setStatusFilter(active ? null : item.value)}
             >
               <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{item.label}</Text>
+              <View style={[styles.filterChipCount, active && styles.filterChipCountActive]}>
+                <Text style={[styles.filterChipCountText, active && styles.filterChipCountTextActive]}>{count}</Text>
+              </View>
             </TouchableOpacity>
           );
         }}
@@ -178,19 +188,34 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderColor: colors.border,
     },
     searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: colors.text },
-    filterRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+    filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
     filterChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 7,
-      borderRadius: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
       backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border,
       marginRight: 8,
     },
     filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    filterChipText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+    filterChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
     filterChipTextActive: { color: colors.card },
+    filterChipCount: {
+      backgroundColor: colors.background,
+      borderRadius: 8,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 4,
+      marginLeft: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterChipCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
+    filterChipCountText: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+    filterChipCountTextActive: { color: colors.card },
     listContent: { paddingHorizontal: 16, paddingBottom: 40 },
     loader: { marginTop: 60 },
     card: {

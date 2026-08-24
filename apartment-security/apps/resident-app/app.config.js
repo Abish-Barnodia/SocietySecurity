@@ -34,6 +34,17 @@ module.exports = {
       'expo-secure-store',
       'expo-audio',
       'expo-video',
+      [
+        'expo-splash-screen',
+        {
+          image: './assets/splash-icon.png',
+          imageWidth: 200,
+          resizeMode: 'contain',
+          // Matches the light theme's background (src/theme/colors.ts) —
+          // userInterfaceStyle is fixed to 'light', so no dark variant needed.
+          backgroundColor: '#FFFDF9',
+        },
+      ],
     ],
     extra: {
       eas: {

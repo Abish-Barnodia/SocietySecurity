@@ -37,8 +37,13 @@ import { managerAccountsRouter } from './modules/managerAccounts/managerAccounts
 
 const app = express();
 
-// Security headers
-app.use(helmet());
+// Security headers. Default CORP is 'same-origin', which silently blocks
+// <img>/<video>/<audio> tags on other origins (e.g. the manager web
+// dashboard) from loading files served from /uploads — relax it since
+// those uploads are public URLs anyway (no auth check on the static route).
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // Gzip/br compress JSON responses — mobile clients are on cellular networks,
 // so shrinking payloads matters more than the CPU cost of compressing them.

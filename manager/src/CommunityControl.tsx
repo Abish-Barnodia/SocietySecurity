@@ -37,6 +37,10 @@ function FeedTab() {
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  const [stagedItems, setStagedItems] = useState<{ file: File; url: string }[]>([]);
+  const [stagedIndex, setStagedIndex] = useState(0);
+  const [stagedCaption, setStagedCaption] = useState('');
+  const [sendingStaged, setSendingStaged] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -105,12 +109,22 @@ function FeedTab() {
     const input = fileInputRef.current;
     if (!input) return;
     input.accept = ('accept' in opt && opt.accept) || '*/*';
+    input.multiple = key !== 'camera';
     if ('capture' in opt && opt.capture) input.setAttribute('capture', opt.capture);
     else input.removeAttribute('capture');
     input.click();
   };
 
-  const uploadAndSend = async (file: File, durationSec?: number) => {
+  const addMoreStaged = () => {
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.accept = 'image/*,video/*,.pdf,.doc,.docx,.txt,application/*';
+    input.multiple = true;
+    input.removeAttribute('capture');
+    input.click();
+  };
+
+  const uploadAndSend = async (file: File, durationSec?: number, caption?: string) => {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -123,7 +137,7 @@ function FeedTab() {
       const msgRes = await fetch(`${API_BASE}/community/messages`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes, mediaDurationSec: durationSec }),
+        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes, mediaDurationSec: durationSec, body: caption }),
       });
       if (!msgRes.ok) { const d = await msgRes.json(); alert(`Failed to send: ${d.message || 'Unknown error'}`); return; }
       await load();
@@ -134,11 +148,59 @@ function FeedTab() {
     }
   };
 
-  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!file) return;
-    await uploadAndSend(file);
+    if (files.length === 0) return;
+    setStagedItems((prev) => [...prev, ...files.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+  };
+
+  const removeStaged = (idx: number) => {
+    setStagedItems((prev) => {
+      const removed = prev[idx];
+      if (removed) URL.revokeObjectURL(removed.url);
+      return prev.filter((_, i) => i !== idx);
+    });
+    setStagedIndex((i) => Math.max(0, i - 1));
+  };
+
+  const discardStaged = () => {
+    stagedItems.forEach((item) => URL.revokeObjectURL(item.url));
+    setStagedItems([]);
+    setStagedCaption('');
+    setStagedIndex(0);
+  };
+
+  const sendStaged = async () => {
+    if (stagedItems.length === 0 || sendingStaged) return;
+    setSendingStaged(true);
+    try {
+      for (let i = 0; i < stagedItems.length; i++) {
+        const isLast = i === stagedItems.length - 1;
+        await uploadAndSend(stagedItems[i].file, undefined, isLast ? (stagedCaption.trim() || undefined) : undefined);
+      }
+    } finally {
+      stagedItems.forEach((item) => URL.revokeObjectURL(item.url));
+      setStagedItems([]);
+      setStagedCaption('');
+      setStagedIndex(0);
+      setSendingStaged(false);
+    }
+  };
+
+  const renderStagedPreview = (item: { file: File; url: string }) => {
+    if (item.file.type.startsWith('image/')) {
+      return <img src={item.url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }} />;
+    }
+    if (item.file.type.startsWith('video/')) {
+      return <video src={item.url} controls style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8 }} />;
+    }
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, color: 'var(--text-muted)' }}>
+        <Icon name="file-text" size={48} />
+        <span style={{ fontSize: 13 }}>{item.file.name}</span>
+      </div>
+    );
   };
 
   const startRecording = async () => {
@@ -296,7 +358,58 @@ function FeedTab() {
   );
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }} onClick={() => attachOpen && setAttachOpen(false)}>
+    <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative' }} onClick={() => attachOpen && setAttachOpen(false)}>
+      {stagedItems.length > 0 && (
+        <div style={{ position: 'absolute', inset: 0, background: '#ffffff', zIndex: 20, display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-color)' }}>
+            <button onClick={discardStaged} title="Discard" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              <Icon name="x" size={22} />
+            </button>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{stagedItems.length} selected</span>
+            <button onClick={() => removeStaged(stagedIndex)} title="Remove this file" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              <Icon name="trash" size={18} />
+            </button>
+          </div>
+
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 16, minHeight: 0 }}>
+            {stagedItems[stagedIndex] && renderStagedPreview(stagedItems[stagedIndex])}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px', overflowX: 'auto' }}>
+            {stagedItems.map((item, idx) => (
+              <button key={idx} onClick={() => setStagedIndex(idx)}
+                style={{ width: 52, height: 52, borderRadius: 8, border: idx === stagedIndex ? '2px solid #00a884' : '1px solid var(--border-color)', padding: 0, overflow: 'hidden', flexShrink: 0, cursor: 'pointer', background: '#f0f2f5' }}>
+                {item.file.type.startsWith('image/') ? (
+                  <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name={item.file.type.startsWith('video/') ? 'video' : 'file-text'} size={20} color="#54656f" />
+                  </div>
+                )}
+              </button>
+            ))}
+            <button onClick={addMoreStaged} title="Add more"
+              style={{ width: 52, height: 52, borderRadius: 8, border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'none', flexShrink: 0 }}>
+              <Icon name="plus" size={20} color="#54656f" />
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, padding: '10px 16px', borderTop: '1px solid var(--border-color)', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="Add a caption…"
+              value={stagedCaption}
+              onChange={(e) => setStagedCaption(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') sendStaged(); }}
+              style={{ flex: 1, border: '1px solid #d1d7db', borderRadius: 20, padding: '10px 16px', fontSize: 14, outline: 'none' }}
+            />
+            <button onClick={sendStaged} disabled={sendingStaged}
+              style={{ width: 42, height: 42, borderRadius: '50%', border: 'none', background: '#00a884', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+              {sendingStaged ? <Icon name="loader-2" className="spin" size={18} /> : <Icon name="send" size={18} />}
+            </button>
+          </div>
+        </div>
+      )}
       <div ref={scrollRef} style={{ background: '#ffffff', height: 560, overflowY: 'auto', padding: '16px 0' }}>
         {loading ? (
           <div style={{ color: '#667781', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>

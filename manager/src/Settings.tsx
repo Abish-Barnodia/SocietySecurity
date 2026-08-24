@@ -19,8 +19,6 @@ interface ApiKey {
 const DEFAULT_HARDWARE = { cctvIntegration: false, rfidScanners: false, boomBarrierAutoMode: false };
 const DEFAULT_PLATFORM = { theme: 'light', timezone: 'Asia/Kolkata' };
 
-const TIMEZONES = ['Asia/Kolkata', 'UTC', 'Asia/Dubai', 'Asia/Singapore', 'Europe/London', 'America/New_York', 'America/Los_Angeles'];
-
 const ROLE_ICON: Record<string, string> = { MANAGER: 'user-star', COMMITTEE: 'users-group', GUARD: 'shield-check', RESIDENT: 'home' };
 
 // Mirrors the real manager-portal nav sections (App.tsx) and the backend's
@@ -479,7 +477,6 @@ const Settings: React.FC = () => {
   const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [hardware, setHardware] = useState(DEFAULT_HARDWARE);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [platform, setPlatform] = useState(DEFAULT_PLATFORM);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -509,7 +506,6 @@ const Settings: React.FC = () => {
       setHardware({ ...DEFAULT_HARDWARE, ...(settingsData.data.hardware || {}) });
       setApiKeys(settingsData.data.apiKeys || []);
       const loadedPlatform = { ...DEFAULT_PLATFORM, ...(settingsData.data.platform || {}) };
-      setPlatform(loadedPlatform);
       applyManagerTheme(loadedPlatform.theme);
       setRoles(rolesData.data);
     } catch (e: any) {
@@ -548,13 +544,6 @@ const Settings: React.FC = () => {
     saveSetting('hardware', updated, () => setHardware(updated));
   };
 
-  const updatePlatform = (patch: Partial<typeof platform>) => {
-    const updated = { ...platform, ...patch };
-    saveSetting('platform', updated, () => {
-      setPlatform(updated);
-      if (patch.theme) applyManagerTheme(patch.theme);
-    });
-  };
 
   const generateKey = () => {
     if (!newKeyName.trim()) return;
@@ -598,7 +587,7 @@ const Settings: React.FC = () => {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--text-main)' }}>Settings</h1>
         <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
-          Manager accounts, role access overview, hardware integration status, API keys, and platform configuration
+          Manager accounts, role access overview, hardware integration status, and API keys
         </p>
       </div>
 
@@ -608,7 +597,6 @@ const Settings: React.FC = () => {
           { id: 'roles', label: 'Roles & Permissions', icon: 'shield' },
           { id: 'hardware', label: 'Hardware', icon: 'cpu' },
           { id: 'apiKeys', label: 'API Keys', icon: 'key' },
-          { id: 'platform', label: 'Platform Config', icon: 'settings' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -696,28 +684,6 @@ const Settings: React.FC = () => {
               </tbody>
             </table>
           )}
-        </div>
-      )}
-
-      {activeTab === 'platform' && (
-        <div className="card">
-          <h3 className="card-title" style={{ marginBottom: 16 }}>Platform Configuration</h3>
-          <div style={{ display: 'grid', gap: 20, maxWidth: 400 }}>
-            <div>
-              <label className="form-label">Theme</label>
-              <select className="form-input" value={platform.theme} disabled={savingKey === 'platform'} onChange={(e) => updatePlatform({ theme: e.target.value })}>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="system">System Default</option>
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Timezone</label>
-              <select className="form-input" value={platform.timezone} disabled={savingKey === 'platform'} onChange={(e) => updatePlatform({ timezone: e.target.value })}>
-                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
-            </div>
-          </div>
         </div>
       )}
 

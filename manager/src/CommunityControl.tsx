@@ -35,7 +35,6 @@ const groupReactions = (reactions: any[]) => {
 function FeedTab() {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -49,7 +48,7 @@ function FeedTab() {
   const [stagedIndex, setStagedIndex] = useState(0);
   const [stagedCaption, setStagedCaption] = useState('');
   const [sendingStaged, setSendingStaged] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ message: any; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ message: any; x: number; y: number; openUpward: boolean } | null>(null);
   const [replyTo, setReplyTo] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,8 +73,20 @@ function FeedTab() {
     return () => clearInterval(interval);
   }, []);
 
+  // Only auto-scroll to the bottom if the manager was already reading the
+  // latest messages - otherwise deleting an older message (or a background
+  // poll picking up someone else's new post) yanks their view away from
+  // wherever they'd scrolled to, e.g. mid-delete on a message further up.
+  const nearBottomRef = useRef(true);
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    if (nearBottomRef.current) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }
   }, [messages.length]);
 
   useEffect(() => {
@@ -117,13 +128,10 @@ function FeedTab() {
 
   const handleDelete = async (id: string) => {
     setContextMenu(null);
-    setDeletingId(id);
     try {
       await fetch(`${API_BASE}/community/messages/${id}`, { method: 'DELETE', headers: authHeaders() });
       setMessages((prev) => prev.filter((m) => m.id !== id));
-    } finally {
-      setDeletingId(null);
-    }
+    } catch (e) {}
   };
 
   const openAttachPicker = (key: string) => {
@@ -450,7 +458,7 @@ function FeedTab() {
           </div>
         </div>
       )}
-      <div ref={scrollRef} style={{ background: '#ffffff', height: 560, overflowY: 'auto', padding: '16px 0' }}>
+      <div ref={scrollRef} onScroll={handleScroll} style={{ background: '#ffffff', height: 560, overflowY: 'auto', padding: '16px 0' }}>
         {loading ? (
           <div style={{ color: '#667781', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>
         ) : messages.length === 0 ? (
@@ -462,7 +470,12 @@ function FeedTab() {
               <div key={m.id} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10, padding: '0 16px' }}>
                 <div style={{ maxWidth: '65%' }}>
                   <div
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ message: m, x: e.clientX, y: e.clientY }); }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      const x = Math.min(Math.max(e.clientX, 100), window.innerWidth - 100);
+                      const openUpward = e.clientY > window.innerHeight - 220;
+                      setContextMenu({ message: m, x, y: e.clientY, openUpward });
+                    }}
                     style={{
                     background: isOwn ? '#d9fdd3' : '#f0f2f5',
                     color: '#111b21',
@@ -533,14 +546,6 @@ function FeedTab() {
                       <span style={{ fontSize: 10.5, color: 'rgba(0,0,0,0.45)' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                      <button
-                        onClick={() => handleDelete(m.id)}
-                        disabled={deletingId === m.id}
-                        title="Remove message"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(0,0,0,0.4)', padding: 0, display: 'flex' }}
-                      >
-                        <Icon name="trash" size={11} />
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -554,8 +559,12 @@ function FeedTab() {
       {contextMenu && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
-          <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 30, transform: 'translate(-50%, 8px)' }}>
-            <div style={{ display: 'flex', gap: 6, background: '#ffffff', borderRadius: 24, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.22)', marginBottom: 6 }}>
+          <div style={{
+            position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 30,
+            display: 'flex', flexDirection: contextMenu.openUpward ? 'column-reverse' : 'column', gap: 6,
+            transform: contextMenu.openUpward ? 'translate(-50%, calc(-100% - 8px))' : 'translate(-50%, 8px)',
+          }}>
+            <div style={{ display: 'flex', gap: 6, background: '#ffffff', borderRadius: 24, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.22)' }}>
               {REACTION_EMOJIS.map((emoji) => (
                 <button key={emoji} onClick={() => toggleReactionOn(contextMenu.message.id, emoji)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: 2, lineHeight: 1 }}>

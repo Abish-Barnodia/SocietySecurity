@@ -54,7 +54,7 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
     endOfDay.setHours(23, 59, 59, 999);
 
     const guards = await prisma.guard.findMany({
-      where: { propertyId: req.user!.propertyId },
+      where: { propertyId: req.user!.propertyId, user: { isActive: true } },
       include: {
         user: { select: { phone: true } },
         shifts: {
@@ -373,6 +373,29 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
 
     await auditLog(req.user!.userId, 'CREATE_GUARD', 'Guard', guard.id);
     return sendSuccess(res, 201, 'Guard created successfully', guard);
+  } catch (err) { next(err); }
+};
+
+export const deleteGuard = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const guard = await prisma.guard.findUnique({ where: { id } });
+    if (!guard || guard.propertyId !== req.user!.propertyId) {
+      return next(new AppError('Guard not found', 404));
+    }
+
+    const activeShift = await prisma.shift.findFirst({ where: { guardId: guard.id, endedAt: null } });
+    if (activeShift) {
+      await prisma.shift.update({ where: { id: activeShift.id }, data: { endedAt: new Date(), signedOffAt: new Date() } });
+    }
+
+    await prisma.$transaction([
+      prisma.guard.update({ where: { id: guard.id }, data: { isOnDuty: false } }),
+      prisma.user.update({ where: { id: guard.userId }, data: { isActive: false } }),
+    ]);
+
+    await auditLog(req.user!.userId, 'DELETE_GUARD', 'Guard', guard.id);
+    return sendSuccess(res, 200, 'Guard removed');
   } catch (err) { next(err); }
 };
 

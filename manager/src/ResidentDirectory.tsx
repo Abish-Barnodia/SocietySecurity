@@ -39,16 +39,33 @@ const ResidentDirectory = () => {
 
   const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
   const [editFamilyUnitId, setEditFamilyUnitId] = useState<string | null>(null);
+  const blankResidentForm = () => ({
+    familyName: '', unit: '', tower: 'Tower A', floor: '1',
+    members: [{ name: '', phone: '', email: '', password: '', relationship: 'Primary', isPrimary: true }]
+  });
   const [newResidentForm, setNewResidentForm] = useState<{
     familyName: string;
     unit: string;
     tower: string;
     floor: string;
     members: Array<{ id?: string; name: string; phone: string; email: string; password: string; relationship: string; isPrimary: boolean }>;
-  }>({
-    familyName: '', unit: '', tower: 'Tower A', floor: '1',
-    members: [{ name: '', phone: '', email: '', password: '', relationship: 'Primary', isPrimary: true }]
-  });
+  }>(blankResidentForm());
+
+  // Closing the modal via X/overlay/Cancel used to only clear editFamilyUnitId,
+  // not the form fields themselves — so the next "Add Household" click (which
+  // only sets isAddResidentOpen(true)) would reopen with the last-edited
+  // family's data still sitting in the fields. Route every close and the
+  // "Add" open through here so the form is always reset first.
+  const closeResidentModal = () => {
+    setIsAddResidentOpen(false);
+    setEditFamilyUnitId(null);
+    setNewResidentForm(blankResidentForm());
+  };
+  const openAddResidentModal = () => {
+    setEditFamilyUnitId(null);
+    setNewResidentForm(blankResidentForm());
+    setIsAddResidentOpen(true);
+  };
 
   const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
   const [isFamilyDetailsOpen, setIsFamilyDetailsOpen] = useState(false);
@@ -189,9 +206,7 @@ const ResidentDirectory = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setIsAddResidentOpen(false);
-        setEditFamilyUnitId(null);
-        setNewResidentForm({ familyName: '', unit: '', tower: 'Tower A', floor: '1', members: [{ name: '', phone: '', email: '', password: '', relationship: 'Primary', isPrimary: true }] });
+        closeResidentModal();
         showToast(editFamilyUnitId ? 'Household updated successfully!' : 'Household added successfully!', 'success');
         if (isFamilyDetailsOpen && editFamilyUnitId) {
           setIsFamilyDetailsOpen(false); // Close details modal to refresh
@@ -293,7 +308,7 @@ const ResidentDirectory = () => {
           <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'white' }} onClick={handleExportCSV}>
             <Icon name="download" size={16} /> Export CSV
           </button>
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => setIsAddResidentOpen(true)}>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={openAddResidentModal}>
             <Icon name="plus" size={16} /> Add Household
           </button>
         </div>
@@ -663,14 +678,14 @@ const ResidentDirectory = () => {
 
       {/* ===== ADD/EDIT HOUSEHOLD MODAL ===== */}
       {isAddResidentOpen && (
-        <div className="modal-overlay" onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>
+        <div className="modal-overlay" onClick={closeResidentModal}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h3 className="modal-title">{editFamilyUnitId ? 'Edit Household' : 'Add New Household'}</h3>
                 <p className="modal-subtitle">{editFamilyUnitId ? 'Update family details and members' : 'Create a family account and assign a unit'}</p>
               </div>
-              <button className="modal-close" onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>&times;</button>
+              <button className="modal-close" onClick={closeResidentModal}>&times;</button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '72vh', overflowY: 'auto', paddingRight: 8 }}>
               <div>
@@ -749,7 +764,7 @@ const ResidentDirectory = () => {
               </div>
 
               <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => { setIsAddResidentOpen(false); setEditFamilyUnitId(null); }}>Cancel</button>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={closeResidentModal}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddResident}>{editFamilyUnitId ? 'Save Changes' : 'Create Household'}</button>
               </div>
             </div>

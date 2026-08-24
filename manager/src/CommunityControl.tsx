@@ -710,82 +710,12 @@ function MembersTab() {
   );
 }
 
-function FlaggedTab() {
-  const [reports, setReports] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  const load = async () => {
-    const res = await fetch(`${API_BASE}/community/reports`, { headers: authHeaders() });
-    const data = await res.json();
-    setReports(data.data || []);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const dismiss = async (r: any) => {
-    setBusyId(r.id);
-    try {
-      await fetch(`${API_BASE}/community/reports/${r.id}/dismiss`, { method: 'POST', headers: authHeaders() });
-      setReports((prev) => prev.filter((x) => x.id !== r.id));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const removeMessage = async (r: any) => {
-    setBusyId(r.id);
-    try {
-      await fetch(`${API_BASE}/community/messages/${r.message.id}`, { method: 'DELETE', headers: authHeaders() }).catch(() => {});
-      await fetch(`${API_BASE}/community/reports/${r.id}/resolve`, { method: 'POST', headers: authHeaders() });
-      setReports((prev) => prev.filter((x) => x.id !== r.id));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  if (loading) return <div className="card">Loading flagged content…</div>;
-  if (reports.length === 0) {
-    return <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No pending reports. The community feed is clean.</div>;
-  }
-
-  return (
-    <div>
-      {reports.map((r: any) => (
-        <div key={r.id} className="card" style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 13.5 }}>{senderLabel(r.message?.sender)}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                Flagged by {r.reporter?.resident?.name ?? 'a resident'} on {new Date(r.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-              </div>
-            </div>
-            <span className="status-badge status-overdue">pending</span>
-          </div>
-
-          <p style={{ fontSize: 13.5, margin: '12px 0 6px' }}><strong>Reason:</strong> {r.reason}</p>
-          {r.message?.body && <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: '0 0 12px' }}>"{r.message.body}"</p>}
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-outline" onClick={() => dismiss(r)} disabled={busyId === r.id}>Dismiss</button>
-            <button className="btn" style={{ background: 'var(--danger)', color: 'white' }} onClick={() => removeMessage(r)} disabled={busyId === r.id}>
-              Delete Message
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const CommunityControl: React.FC = () => {
-  const [tab, setTab] = useState<'feed' | 'members' | 'flagged'>('feed');
+  const [tab, setTab] = useState<'feed' | 'members'>('feed');
 
   const tabs: { key: typeof tab; label: string; icon: React.ReactNode }[] = [
     { key: 'feed', label: 'Community Feed', icon: <Icon name="message" size={15} /> },
     { key: 'members', label: 'Members', icon: <Icon name="users" size={15} /> },
-    { key: 'flagged', label: 'Flagged Content', icon: <Icon name="flag" size={15} /> },
   ];
 
   return (
@@ -805,7 +735,6 @@ const CommunityControl: React.FC = () => {
 
       {tab === 'feed' && <FeedTab />}
       {tab === 'members' && <MembersTab />}
-      {tab === 'flagged' && <FlaggedTab />}
     </div>
   );
 };

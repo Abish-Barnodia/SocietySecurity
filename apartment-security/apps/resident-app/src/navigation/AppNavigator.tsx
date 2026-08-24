@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -120,10 +120,17 @@ const MainTabs = () => {
 
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, userRole, isOnboarded, guardProfile } = useAuth();
-  // Session-only — resets on next login. GuardDetailsScreen's "Start Duty"
-  // flips guardProfile.isOnDuty via refreshProfile(), which re-evaluates this
-  // check on its own; Skip is the only other way out of the prompt.
+  // Meant to be session-only, but AppNavigator itself never unmounts across
+  // logout/login (it's mounted once at the app root), so this useState would
+  // otherwise keep whatever value the previous guard's session left it at —
+  // reset it explicitly on every fresh login instead of relying on mount
+  // lifecycle. GuardDetailsScreen's "Start Duty" flips guardProfile.isOnDuty
+  // via refreshProfile(), which re-evaluates this check on its own; Skip is
+  // the only other way out of the prompt.
   const [guardOnboardingSkipped, setGuardOnboardingSkipped] = useState(false);
+  useEffect(() => {
+    if (isAuthenticated) setGuardOnboardingSkipped(false);
+  }, [isAuthenticated]);
 
   // While bootstrapAsync() is still validating a stored token against
   // /auth/me, isAuthenticated is momentarily false — rendering nothing here

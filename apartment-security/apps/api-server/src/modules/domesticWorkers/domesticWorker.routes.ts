@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
+import { requireManagerPermission } from '../../middlewares/managerPermission.middleware';
 import { validate } from '../../middlewares/validate.middleware';
 import { upload } from '../../middlewares/upload.middleware';
 import {
@@ -19,7 +20,7 @@ const router = Router();
 router.use(authenticate);
 
 // Guard-facing: look up a unit's registered staff and clear one in directly.
-router.get('/unit/:unitId', requireRole('GUARD'), listWorkersForGuard);
+router.get('/unit/:unitId', requireRole('GUARD', 'MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), listWorkersForGuard);
 router.post('/entries', requireRole('GUARD'), validate(logWorkerEntrySchema), logWorkerEntry);
 
 // Resident-facing CRUD for registering staff.

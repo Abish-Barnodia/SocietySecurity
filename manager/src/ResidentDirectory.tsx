@@ -60,6 +60,11 @@ const ResidentDirectory = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
 
+  const [workersFamily, setWorkersFamily] = useState<Family | null>(null);
+  const [workers, setWorkers] = useState<any[]>([]);
+  const [workersLoading, setWorkersLoading] = useState(false);
+  const [selectedWorker, setSelectedWorker] = useState<any | null>(null);
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
@@ -212,6 +217,21 @@ const ResidentDirectory = () => {
       setSuspendConfirmUnitId(null);
       fetchData();
     } catch (e) { showToast('An unexpected error occurred', 'error'); }
+  };
+
+  const openWorkers = async (family: Family) => {
+    setWorkersFamily(family);
+    setSelectedWorker(null);
+    setWorkersLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/domestic-workers/unit/${family.unitId}`, { headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
+      const data = await res.json();
+      setWorkers(res.ok ? (data.data || []) : []);
+    } catch (e) {
+      setWorkers([]);
+    } finally {
+      setWorkersLoading(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -382,11 +402,19 @@ const ResidentDirectory = () => {
                         </div>
 
                         <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid var(--border-color)', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <button
-                            onClick={e => { e.stopPropagation(); setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                            View Family <Icon name="chevron-right" size={14} />
-                          </button>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              onClick={e => { e.stopPropagation(); setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                              View Family <Icon name="chevron-right" size={14} />
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); openWorkers(family); }}
+                              title="Domestic workers registered by this household"
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: 6, cursor: 'pointer' }}>
+                              <Icon name="users-group" size={14} /> Workers
+                            </button>
+                          </div>
                           {active ? (
                             <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
                               style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
@@ -746,6 +774,66 @@ const ResidentDirectory = () => {
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmUnitId(null)}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmSuspendFamily}>Yes, Suspend</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== DOMESTIC WORKERS MODAL ===== */}
+      {workersFamily && (
+        <div className="modal-overlay" onClick={() => setWorkersFamily(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <div>
+                {selectedWorker ? (
+                  <button onClick={() => setSelectedWorker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: 0, marginBottom: 6 }}>
+                    <Icon name="arrow-left" size={14} /> Back
+                  </button>
+                ) : null}
+                <h3 className="modal-title">{selectedWorker ? selectedWorker.name : 'Domestic Workers'}</h3>
+                <p className="modal-subtitle">
+                  {selectedWorker ? selectedWorker.type : `Registered by ${displayName(workersFamily)} · Unit ${workersFamily.apartmentNumber}`}
+                </p>
+              </div>
+              <button className="modal-close" onClick={() => setWorkersFamily(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              {workersLoading ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '20px 0' }}>Loading…</p>
+              ) : selectedWorker ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {[
+                    { label: 'Type', value: selectedWorker.type },
+                    { label: 'Phone', value: selectedWorker.phone || '—' },
+                    { label: 'Address', value: selectedWorker.address || '—' },
+                    { label: 'Working Days', value: (selectedWorker.workingDays || []).join(', ') || '—' },
+                    { label: 'Timing', value: selectedWorker.entryTime && selectedWorker.exitTime ? `${selectedWorker.entryTime} – ${selectedWorker.exitTime}` : '—' },
+                    { label: 'Govt ID', value: selectedWorker.govtIdType ? `${selectedWorker.govtIdType} · ${selectedWorker.govtIdNumber || '—'}` : '—' },
+                    { label: 'Notes', value: selectedWorker.notes || '—' },
+                    { label: 'Registered On', value: new Date(selectedWorker.createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) },
+                  ].map(row => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, paddingBottom: 10, borderBottom: '1px solid var(--border-color)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>{row.label}</span>
+                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : workers.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', margin: '20px 0' }}>No domestic workers registered by this household yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {workers.map((w: any) => (
+                    <button key={w.id} onClick={() => setSelectedWorker(w)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border-color)', background: '#F8FAFC', cursor: 'pointer' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{w.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{w.type} · {w.phone || 'No phone'}</div>
+                      </div>
+                      <Icon name="chevron-right" size={16} color="var(--text-muted)" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

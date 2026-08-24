@@ -94,7 +94,12 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
         await signup(trimmedEmail, password);
       }
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : (error as any)?.response?.data?.message ?? `Failed to ${mode}. Please check your credentials or server connection.`;
+      // Axios errors are `instanceof Error` too, so checking that first would
+      // always win with a generic "Request failed with status code 401"
+      // instead of the backend's actual "Invalid email or password" message.
+      const message = (error as any)?.response?.data?.message
+        ?? (error instanceof Error ? error.message : undefined)
+        ?? `Failed to ${mode}. Please check your credentials or server connection.`;
       Alert.alert(mode === 'login' ? 'Login Failed' : 'Sign Up Failed', message);
       rattle();
     } finally {

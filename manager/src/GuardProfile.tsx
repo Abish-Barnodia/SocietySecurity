@@ -153,10 +153,10 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
               ) : (
                 <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(guard.name)}&background=0D2B24&color=00C896&size=128`} alt={guard.name} style={{ width: 80, height: 80, borderRadius: 16 }} />
               )}
-              <span style={{ 
-                position: 'absolute', bottom: -4, right: -4, 
-                width: 18, height: 18, borderRadius: '50%', 
-                backgroundColor: guard.isOnDuty ? '#00C896' : '#94A3B8',
+              <span style={{
+                position: 'absolute', bottom: -4, right: -4,
+                width: 18, height: 18, borderRadius: '50%',
+                backgroundColor: guard.onLeave ? '#F59E0B' : guard.isOnDuty ? '#00C896' : '#94A3B8',
                 border: '3px solid white'
               }}></span>
             </div>
@@ -164,9 +164,13 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
                 <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>{guard.name}</h2>
-                <span className={`status-badge-modern ${guard.isOnDuty ? 'status-on-post-modern' : 'status-offline-modern'}`}>
-                  {guard.isOnDuty ? 'On Post' : 'Offline'}
-                </span>
+                {guard.onLeave ? (
+                  <span className="status-badge-modern" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>On Leave</span>
+                ) : (
+                  <span className={`status-badge-modern ${guard.isOnDuty ? 'status-on-post-modern' : 'status-offline-modern'}`}>
+                    {guard.isOnDuty ? 'On Post' : 'Offline'}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 12 }}>
                 {guard.badgeNumber || 'N/A'}

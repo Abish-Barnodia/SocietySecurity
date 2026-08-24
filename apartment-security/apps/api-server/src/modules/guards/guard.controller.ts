@@ -66,6 +66,13 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
           take: 1,
           include: { entryPoint: true }
         },
+        // Overlaps the same date window as the entries count below, so
+        // "on leave" reflects whichever date the roster is currently
+        // viewing, not always literally today.
+        leaves: {
+          where: { status: 'APPROVED', startDate: { lte: endOfDay }, endDate: { gte: startOfDay } },
+          take: 1,
+        },
         _count: {
           select: {
             entries: {
@@ -87,6 +94,7 @@ export const getDirectory = async (req: Request, res: Response, next: NextFuncti
       phone: g.user.phone,
       badgeNumber: g.badgeNumber,
       isOnDuty: g.isOnDuty,
+      onLeave: g.leaves.length > 0,
       lastShift: g.shifts[0] || null,
       lastPost: g.postCheckIns[0] || null,
       entriesCount: g._count?.entries || 0
@@ -508,6 +516,11 @@ export const getGuardProfile = async (req: Request, res: Response, next: NextFun
 
     if (!guard) return next(new AppError('Guard not found', 404));
 
+    const now = new Date();
+    const activeLeave = await prisma.guardLeave.findFirst({
+      where: { guardId: id, status: 'APPROVED', startDate: { lte: now }, endDate: { gte: now } },
+    });
+
     // Compute basic timeline from post check-ins and entries
     const timeline = [
       ...guard.postCheckIns.map(p => ({
@@ -535,6 +548,7 @@ export const getGuardProfile = async (req: Request, res: Response, next: NextFun
       name: guard.name,
       badgeNumber: guard.badgeNumber,
       isOnDuty: guard.isOnDuty,
+      onLeave: !!activeLeave,
       phone: guard.user.phone,
       createdAt: guard.createdAt,
       lastPost: guard.postCheckIns[0] || null,

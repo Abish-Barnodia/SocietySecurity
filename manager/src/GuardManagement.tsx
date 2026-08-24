@@ -356,10 +356,10 @@ const GuardManagement: React.FC = () => {
                               <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(g.name)}&background=0D2B24&color=00C896`} alt={g.name} className="table-avatar" style={{ width: 40, height: 40 }} />
                             )}
                             {/* Status Dot */}
-                            <span style={{ 
-                              position: 'absolute', bottom: 0, right: 0, 
-                              width: 10, height: 10, borderRadius: '50%', 
-                              backgroundColor: g.isOnDuty ? '#00C896' : '#94A3B8',
+                            <span style={{
+                              position: 'absolute', bottom: 0, right: 0,
+                              width: 10, height: 10, borderRadius: '50%',
+                              backgroundColor: g.onLeave ? '#F59E0B' : g.isOnDuty ? '#00C896' : '#94A3B8',
                               border: '2px solid white'
                             }}></span>
                           </div>
@@ -370,7 +370,11 @@ const GuardManagement: React.FC = () => {
                         </div>
                       </td>
                       <td style={{ padding: '16px' }}>
-                        <span className={`status-badge-modern ${g.isOnDuty ? 'status-on-post-modern' : 'status-offline-modern'}`}>{g.isOnDuty ? 'On Post' : 'Offline'}</span>
+                        {g.onLeave ? (
+                          <span className="status-badge-modern" style={{ backgroundColor: '#FEF3C7', color: '#B45309' }}>On Leave</span>
+                        ) : (
+                          <span className={`status-badge-modern ${g.isOnDuty ? 'status-on-post-modern' : 'status-offline-modern'}`}>{g.isOnDuty ? 'On Post' : 'Offline'}</span>
+                        )}
                       </td>
                       <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{g.lastPost?.entryPoint?.name || 'Main Gate — Entry'}</td>
                       <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace' }}>

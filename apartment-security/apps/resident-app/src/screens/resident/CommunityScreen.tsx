@@ -176,33 +176,46 @@ export default function CommunityScreen() {
           return;
         }
 
-        const pickerOptions: ImagePicker.ImagePickerOptions = { mediaTypes: ['images', 'videos'], quality: 0.8 };
+        // Camera can only capture one shot per launch, so multi-select only
+        // applies to the gallery picker - cropping (allowsEditing) is also
+        // mutually exclusive with allowsMultipleSelection, so it stays off.
+        const pickerOptions: ImagePicker.ImagePickerOptions = {
+          mediaTypes: ['images', 'videos'],
+          quality: 0.8,
+          allowsMultipleSelection: action === 'gallery',
+        };
         const result =
           action === 'gallery'
             ? await ImagePicker.launchImageLibraryAsync(pickerOptions)
             : await ImagePicker.launchCameraAsync(pickerOptions);
 
-        if (result.canceled || !result.assets?.[0]) return;
-        const asset = result.assets[0];
-        const type = asset.type === 'video' ? 'VIDEO' : 'IMAGE';
-        await sendMediaMessage(
-          type,
-          asset.uri,
-          asset.mimeType ?? (type === 'VIDEO' ? 'video/mp4' : 'image/jpeg'),
-          asset.fileName ?? `${type.toLowerCase()}-${Date.now()}.${type === 'VIDEO' ? 'mp4' : 'jpg'}`,
-          { replyToId: replyTo?.id }
-        );
+        if (result.canceled || result.assets.length === 0) return;
+        for (let i = 0; i < result.assets.length; i++) {
+          const asset = result.assets[i]!;
+          const type = asset.type === 'video' ? 'VIDEO' : 'IMAGE';
+          const isLast = i === result.assets.length - 1;
+          await sendMediaMessage(
+            type,
+            asset.uri,
+            asset.mimeType ?? (type === 'VIDEO' ? 'video/mp4' : 'image/jpeg'),
+            asset.fileName ?? `${type.toLowerCase()}-${Date.now()}.${type === 'VIDEO' ? 'mp4' : 'jpg'}`,
+            { replyToId: isLast ? replyTo?.id : undefined }
+          );
+        }
         setReplyTo(null);
         return;
       }
 
       if (action === 'document') {
-        const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
-        if (result.canceled || !result.assets?.[0]) return;
-        const asset = result.assets[0];
-        await sendMediaMessage('FILE', asset.uri, asset.mimeType ?? 'application/octet-stream', asset.name, {
-          replyToId: replyTo?.id,
-        });
+        const result = await DocumentPicker.getDocumentAsync({ type: '*/*', multiple: true });
+        if (result.canceled || result.assets.length === 0) return;
+        for (let i = 0; i < result.assets.length; i++) {
+          const asset = result.assets[i]!;
+          const isLast = i === result.assets.length - 1;
+          await sendMediaMessage('FILE', asset.uri, asset.mimeType ?? 'application/octet-stream', asset.name, {
+            replyToId: isLast ? replyTo?.id : undefined,
+          });
+        }
         setReplyTo(null);
       }
     } catch (error) {

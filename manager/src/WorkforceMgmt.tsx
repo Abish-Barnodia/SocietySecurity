@@ -13,7 +13,6 @@ const WorkforceMgmt = () => {
   // Data States
   const [workers, setWorkers] = useState<any[]>([]);
   const [activeAssignments, setActiveAssignments] = useState<any[]>([]);
-  const [leaves, setLeaves] = useState<any[]>([]); // Backend has no leaves schema, keeping empty to avoid mock data
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -50,9 +49,6 @@ const WorkforceMgmt = () => {
         const data = await resEntryPoints.json();
         setEntryPoints(data.data || []);
       }
-
-      // Leaves (Currently unsupported in schema)
-      setLeaves([]); 
 
     } catch (error) {
       console.error('Failed to fetch workforce data', error);
@@ -121,7 +117,6 @@ const WorkforceMgmt = () => {
     { id: 'workerPool', label: 'Worker Pool', icon: <Icon name="users" size={16} /> },
     { id: 'activeAssignments', label: 'Active Assignments', icon: <Icon name="briefcase" size={16} /> },
     { id: 'leaves', label: 'Leaves & Time Off', icon: <Icon name="calendar-off" size={16} /> },
-    { id: 'schedules', label: 'Shift Schedules', icon: <Icon name="calendar-time" size={16} /> }
   ];
 
   return (
@@ -257,32 +252,6 @@ const WorkforceMgmt = () => {
           {/* LEAVES */}
           {activeTab === 'leaves' && (
             <GuardLeaveManagement />
-          )}
-
-          {/* SCHEDULES */}
-          {activeTab === 'schedules' && (
-            <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#F8FAFC' }}>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Worker</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Type</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Dates</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Days</th>
-                    <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaves.length === 0 ? (
-                    <tr>
-                      <td colSpan={5}>
-                        <EmptyState icon="calendar-off" message="No leave records found." />
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
           )}
         </>
       )}

@@ -35,8 +35,14 @@ function FeedTab() {
   const [pollOpen, setPollOpen] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
 
   const load = async (silent = false) => {
     try {
@@ -57,6 +63,13 @@ function FeedTab() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages.length]);
+
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   const send = async () => {
     const body = draft.trim();
@@ -97,10 +110,7 @@ function FeedTab() {
     input.click();
   };
 
-  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  const uploadAndSend = async (file: File, durationSec?: number) => {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -113,7 +123,7 @@ function FeedTab() {
       const msgRes = await fetch(`${API_BASE}/community/messages`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes }),
+        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes, mediaDurationSec: durationSec }),
       });
       if (!msgRes.ok) { const d = await msgRes.json(); alert(`Failed to send: ${d.message || 'Unknown error'}`); return; }
       await load();
@@ -122,6 +132,49 @@ function FeedTab() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    await uploadAndSend(file);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordStreamRef.current = stream;
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch (err) {
+      alert('Microphone access denied or unavailable');
+    }
+  };
+
+  const stopRecording = (send: boolean) => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    const duration = recordSeconds;
+    recorder.onstop = async () => {
+      recordStreamRef.current?.getTracks().forEach((t) => t.stop());
+      recordStreamRef.current = null;
+      setRecording(false);
+      const chunks = audioChunksRef.current;
+      audioChunksRef.current = [];
+      if (!send || chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+      await uploadAndSend(new File([blob], `voice-${Date.now()}.webm`, { type: blob.type }), duration);
+    };
+    recorder.stop();
+    mediaRecorderRef.current = null;
   };
 
   const submitPoll = async () => {
@@ -155,7 +208,7 @@ function FeedTab() {
         return <audio src={m.mediaUrl} controls style={{ width: 240 }} />;
       case 'FILE':
         return (
-          <a href={m.mediaUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', background: 'rgba(255,255,255,0.06)', padding: '10px 12px', borderRadius: 8 }}>
+          <a href={m.mediaUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', background: 'rgba(0,0,0,0.04)', padding: '10px 12px', borderRadius: 8 }}>
             <Icon name="file-text" size={22} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{m.fileName || 'Document'}</div>
@@ -169,20 +222,20 @@ function FeedTab() {
   };
 
   const composer = (
-    <div style={{ background: '#202c33', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+    <div style={{ background: '#f0f2f5', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
       <div style={{ position: 'relative' }}>
         <button
           onClick={() => setAttachOpen((o) => !o)}
           title="Attach"
-          disabled={uploading}
-          style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#2a3942', color: '#8696a0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          disabled={uploading || recording}
+          style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid #d1d7db', background: '#ffffff', color: '#54656f', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
         >
           {uploading ? <Icon name="loader-2" className="spin" size={18} /> : <Icon name="plus" size={20} />}
         </button>
         {attachOpen && (
-          <div style={{ position: 'absolute', bottom: 48, left: 0, background: '#233138', borderRadius: 12, padding: 14, display: 'flex', gap: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', zIndex: 10 }}>
+          <div style={{ position: 'absolute', bottom: 48, left: 0, background: '#ffffff', borderRadius: 12, padding: 14, display: 'flex', gap: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.18)', border: '1px solid #e9edef', zIndex: 10 }}>
             {ATTACH_OPTIONS.map((opt) => (
-              <button key={opt.key} onClick={() => openAttachPicker(opt.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: '#e9edef', width: 64 }}>
+              <button key={opt.key} onClick={() => openAttachPicker(opt.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: '#111b21', width: 64 }}>
                 <span style={{ width: 44, height: 44, borderRadius: '50%', background: opt.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon name={opt.icon} size={20} color="white" />
                 </span>
@@ -195,32 +248,60 @@ function FeedTab() {
 
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChosen} />
 
-      <input
-        type="text"
-        placeholder="Message the community feed as Admin Manager…"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-        style={{ flex: 1, background: '#2a3942', border: 'none', borderRadius: 20, padding: '10px 16px', color: '#e9edef', fontSize: 14, outline: 'none' }}
-      />
+      {recording ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, background: '#ffffff', border: '1px solid #d1d7db', borderRadius: 20, padding: '10px 16px' }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#EF4444' }} />
+          <span style={{ color: '#111b21', fontSize: 14 }}>Recording… {String(Math.floor(recordSeconds / 60)).padStart(2, '0')}:{String(recordSeconds % 60).padStart(2, '0')}</span>
+        </div>
+      ) : (
+        <input
+          type="text"
+          placeholder="Message the community feed as Admin Manager…"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+          style={{ flex: 1, background: '#ffffff', border: '1px solid #d1d7db', borderRadius: 20, padding: '10px 16px', color: '#111b21', fontSize: 14, outline: 'none' }}
+        />
+      )}
 
-      <button
-        onClick={send}
-        disabled={sending || !draft.trim()}
-        style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#00a884', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: draft.trim() ? 'pointer' : 'default', opacity: draft.trim() ? 1 : 0.5, flexShrink: 0 }}
-      >
-        <Icon name="send" size={16} />
-      </button>
+      {recording && (
+        <button
+          onClick={() => stopRecording(false)}
+          title="Cancel recording"
+          style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid #d1d7db', background: '#ffffff', color: '#54656f', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <Icon name="trash" size={16} />
+        </button>
+      )}
+
+      {draft.trim() && !recording ? (
+        <button
+          onClick={send}
+          disabled={sending}
+          style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#00a884', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <Icon name="send" size={16} />
+        </button>
+      ) : (
+        <button
+          onClick={() => (recording ? stopRecording(true) : startRecording())}
+          disabled={uploading}
+          title={recording ? 'Stop and send' : 'Record a voice message'}
+          style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: recording ? '#EF4444' : '#00a884', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <Icon name={recording ? 'player-stop-filled' : 'microphone'} size={16} />
+        </button>
+      )}
     </div>
   );
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }} onClick={() => attachOpen && setAttachOpen(false)}>
-      <div ref={scrollRef} style={{ background: '#0b141a', height: 560, overflowY: 'auto', padding: '16px 0' }}>
+      <div ref={scrollRef} style={{ background: '#e5ddd5', height: 560, overflowY: 'auto', padding: '16px 0' }}>
         {loading ? (
-          <div style={{ color: '#8696a0', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>
+          <div style={{ color: '#667781', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>
         ) : messages.length === 0 ? (
-          <div style={{ color: '#8696a0', textAlign: 'center', marginTop: 40, fontSize: 13 }}>No messages in the community feed yet.</div>
+          <div style={{ color: '#667781', textAlign: 'center', marginTop: 40, fontSize: 13 }}>No messages in the community feed yet.</div>
         ) : (
           messages.map((m: any) => {
             const isOwn = m.sender?.role === 'MANAGER';
@@ -228,17 +309,17 @@ function FeedTab() {
               <div key={m.id} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10, padding: '0 16px' }}>
                 <div style={{ maxWidth: '65%' }}>
                   <div style={{
-                    background: isOwn ? '#005c4b' : '#202c33',
-                    color: '#e9edef',
+                    background: isOwn ? '#d9fdd3' : '#ffffff',
+                    color: '#111b21',
                     borderRadius: 8,
                     borderTopRightRadius: isOwn ? 2 : 8,
                     borderTopLeftRadius: isOwn ? 2 : 8,
                     padding: '6px 8px 5px',
                     fontSize: 13.5,
-                    boxShadow: '0 1px 1px rgba(0,0,0,0.3)',
+                    boxShadow: '0 1px 0.5px rgba(0,0,0,0.13)',
                   }}>
                     {!isOwn && (
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#00bfa5', marginBottom: 3 }}>{senderLabel(m.sender)}</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#008069', marginBottom: 3 }}>{senderLabel(m.sender)}</div>
                     )}
 
                     {m.type === 'TEXT' && (
@@ -262,10 +343,10 @@ function FeedTab() {
                             <div key={o.id} style={{ marginBottom: 6 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
                                 <span>{o.text}</span>
-                                <span style={{ color: 'rgba(233,237,239,0.7)' }}>{o.votes.length} vote{o.votes.length === 1 ? '' : 's'}</span>
+                                <span style={{ color: 'rgba(0,0,0,0.55)' }}>{o.votes.length} vote{o.votes.length === 1 ? '' : 's'}</span>
                               </div>
-                              <div style={{ height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${pct}%`, background: '#00bfa5' }} />
+                              <div style={{ height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: '#00a884' }} />
                               </div>
                             </div>
                           );
@@ -274,14 +355,14 @@ function FeedTab() {
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                      <span style={{ fontSize: 10.5, color: 'rgba(233,237,239,0.6)' }}>
+                      <span style={{ fontSize: 10.5, color: 'rgba(0,0,0,0.45)' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <button
                         onClick={() => handleDelete(m.id)}
                         disabled={deletingId === m.id}
                         title="Remove message"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(233,237,239,0.5)', padding: 0, display: 'flex' }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(0,0,0,0.4)', padding: 0, display: 'flex' }}
                       >
                         <Icon name="trash" size={11} />
                       </button>

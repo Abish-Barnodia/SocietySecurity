@@ -21,6 +21,7 @@ import {
   getLeaves,
   cancelLeave,
   getSalarySlip,
+  listSalaries,
   createSalaryOrder,
   verifySalaryPayment,
 } from './guard.controller';
@@ -52,6 +53,7 @@ router.post('/leaves',             requireRole('MANAGER', 'COMMITTEE'), requireM
 router.patch('/leaves/:id/cancel', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), cancelLeave);
 
 // Salary management (manager only) — also Workforce Mgmt
+router.get('/salaries',                 requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), listSalaries);
 router.post('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), createSalaryOrder);
 router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), verifySalaryPayment);
 

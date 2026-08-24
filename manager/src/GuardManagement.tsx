@@ -8,7 +8,7 @@ import { API_BASE } from './config';
 const GuardManagement: React.FC = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
   
-  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'incidents' | 'overrides'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'incidents' | 'salary'>('roster');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -17,7 +17,8 @@ const GuardManagement: React.FC = () => {
   const [guardStatusFilter, setGuardStatusFilter] = useState('All Status');
   const [activeGuards, setActiveGuards] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
+  const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
 
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
 
@@ -187,11 +188,11 @@ const GuardManagement: React.FC = () => {
         'Content-Type': 'application/json'
       };
 
-      const [dirRes, activeRes, incRes, auditRes] = await Promise.allSettled([
+      const [dirRes, activeRes, incRes, salaryRes] = await Promise.allSettled([
         fetch(`${API_BASE}/guards/directory?date=${selectedDate}`, { headers }),
         fetch(`${API_BASE}/guards/active`, { headers }),
         fetch(`${API_BASE}/incidents`, { headers }),
-        fetch(`${API_BASE}/reports/audit`, { headers })
+        fetch(`${API_BASE}/guards/salaries${salaryMonthFilter ? `?month=${salaryMonthFilter}` : ''}`, { headers })
       ]);
 
       if (dirRes.status === 'fulfilled' && dirRes.value.ok) {
@@ -206,9 +207,9 @@ const GuardManagement: React.FC = () => {
         const data = await incRes.value.json();
         setIncidents(data.data || []);
       }
-      if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
-        const data = await auditRes.value.json();
-        setAuditLogs(data.data || []);
+      if (salaryRes.status === 'fulfilled' && salaryRes.value.ok) {
+        const data = await salaryRes.value.json();
+        setSalaryHistory(data.data || []);
       }
     } catch (err) {
       console.error('Failed to fetch guard data', err);
@@ -221,7 +222,7 @@ const GuardManagement: React.FC = () => {
     fetchData();
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
-  }, [selectedDate]);
+  }, [selectedDate, salaryMonthFilter]);
 
   const handleGuardDeleted = (id: string) => {
     setGuards(prev => prev.filter(x => x.id !== id));
@@ -276,11 +277,11 @@ const GuardManagement: React.FC = () => {
         >
           <Icon name="alert-circle" size={16} /> Incidents
         </button>
-        <button 
-          onClick={() => setActiveTab('overrides')}
-          className={`tab-btn ${activeTab === 'overrides' ? 'active' : ''}`}
+        <button
+          onClick={() => setActiveTab('salary')}
+          className={`tab-btn ${activeTab === 'salary' ? 'active' : ''}`}
         >
-          <Icon name="user-cog" size={16} /> Override Log
+          <Icon name="currency-rupee" size={16} /> Salary Management
         </button>
       </div>
 
@@ -468,30 +469,54 @@ const GuardManagement: React.FC = () => {
           </div>
         )}
 
-        {/* OVERRIDES TAB */}
-        {activeTab === 'overrides' && (
+        {/* SALARY TAB */}
+        {activeTab === 'salary' && (
           <div style={{ padding: 24 }}>
-             <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <input
+                type="month"
+                className="form-input"
+                style={{ width: 180, cursor: 'pointer' }}
+                value={salaryMonthFilter}
+                onChange={(e) => setSalaryMonthFilter(e.target.value)}
+              />
+              {salaryMonthFilter && (
+                <button className="btn btn-outline" onClick={() => setSalaryMonthFilter('')}>Clear filter</button>
+              )}
+              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{salaryHistory.length} record{salaryHistory.length === 1 ? '' : 's'}</span>
+            </div>
+            <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ color: 'var(--text-muted)', fontSize: 12, borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '12px 16px' }}>Timestamp</th>
-                  <th style={{ padding: '12px 16px' }}>Actor</th>
-                  <th style={{ padding: '12px 16px' }}>Action</th>
-                  <th style={{ padding: '12px 16px' }}>Entity</th>
+                  <th style={{ padding: '12px 16px' }}>Guard</th>
+                  <th style={{ padding: '12px 16px' }}>Month</th>
+                  <th style={{ padding: '12px 16px' }}>Base Salary</th>
+                  <th style={{ padding: '12px 16px' }}>Deductions</th>
+                  <th style={{ padding: '12px 16px' }}>Net Amount</th>
+                  <th style={{ padding: '12px 16px' }}>Status</th>
+                  <th style={{ padding: '12px 16px' }}>Paid On</th>
                 </tr>
               </thead>
               <tbody>
-                {auditLogs.length === 0 ? (
-                  <tr><td colSpan={4}><EmptyState icon="clipboard-list" message="No audit logs found." compact /></td></tr>
+                {salaryHistory.length === 0 ? (
+                  <tr><td colSpan={7}><EmptyState icon="currency-rupee" message={salaryMonthFilter ? 'No salary records for this month.' : 'No salary records found.'} compact /></td></tr>
                 ) : (
-                  auditLogs.map((log, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{new Date(log.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: '16px', fontSize: 13, fontWeight: 600 }}>{log.user?.name || 'Unknown'} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({log.user?.role})</span></td>
-                      <td style={{ padding: '16px' }}>
-                        <span className="severity-badge" style={{ backgroundColor: '#E0F2FE', color: '#0369A1' }}>{log.action}</span>
+                  salaryHistory.map((s) => (
+                    <tr key={s.id} style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }} className="table-row" onClick={() => openSalaryModal(s.guard)}>
+                      <td style={{ padding: '16px', fontSize: 13 }}>
+                        <div style={{ fontWeight: 600 }}>{s.guard?.name}</div>
+                        <div style={{ color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 12 }}>{s.guard?.badgeNumber}</div>
                       </td>
-                      <td style={{ padding: '16px', fontSize: 13 }}>{log.entity} #{log.entityId}</td>
+                      <td style={{ padding: '16px', fontSize: 13 }}>{new Date(s.monthYear + '-01').toLocaleString('en-IN', { month: 'long', year: 'numeric' })}</td>
+                      <td style={{ padding: '16px', fontSize: 13 }}>₹{Number(s.baseSalary).toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '16px', fontSize: 13, color: s.deductions > 0 ? '#DC2626' : 'inherit' }}>₹{Number(s.deductions).toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '16px', fontSize: 13, fontWeight: 600 }}>₹{Number(s.netAmount).toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '16px' }}>
+                        <span className="status-badge-modern" style={{ backgroundColor: s.status === 'PAID' ? '#E6FBF5' : '#FEF3C7', color: s.status === 'PAID' ? '#00A676' : '#D97706' }}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{s.paidAt ? new Date(s.paidAt).toLocaleDateString('en-IN') : '—'}</td>
                     </tr>
                   ))
                 )}

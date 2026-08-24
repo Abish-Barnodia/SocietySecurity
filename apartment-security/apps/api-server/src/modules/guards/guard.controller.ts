@@ -640,6 +640,25 @@ const overlapDays = (leaveStart: Date, leaveEnd: Date, monthStart: Date, monthEn
   return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 };
 
+// Manager-facing history across all guards, optionally narrowed to one
+// month - only surfaces GuardSalary rows that already exist (created
+// whenever a manager has opened that guard's slip via getSalarySlip),
+// it doesn't retroactively generate PENDING records for every guard.
+export const listSalaries = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+    const salaries = await prisma.guardSalary.findMany({
+      where: {
+        guard: { propertyId: req.user!.propertyId },
+        ...(month ? { monthYear: month } : {}),
+      },
+      include: { guard: { select: { id: true, name: true, badgeNumber: true } } },
+      orderBy: [{ monthYear: 'desc' }, { createdAt: 'desc' }],
+    });
+    return sendSuccess(res, 200, 'Salary history', salaries);
+  } catch (err) { next(err); }
+};
+
 export const getSalarySlip = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string; // guard id

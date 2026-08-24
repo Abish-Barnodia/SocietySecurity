@@ -287,7 +287,7 @@ const ALLOWED_UPLOAD_MIME = /^(image\/|video\/|audio\/|application\/pdf$|applica
 
 export const uploadMedia = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { propertyId } = await getResidentContext(req.user!.userId);
+    const propertyId = await getCallerPropertyId(req.user!.userId);
     const file = req.file;
     if (!file) return next(new AppError('No file uploaded', 400));
     if (!ALLOWED_UPLOAD_MIME.test(file.mimetype)) {

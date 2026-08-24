@@ -1,16 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
 import { API_BASE } from './config';
 
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
 const authHeaders = () => ({ Authorization: `Bearer ${getAuthToken()}` });
-
-const MEDIA_LABEL: Record<string, { icon: string; label: string }> = {
-  IMAGE: { icon: 'photo', label: 'Photo' },
-  VIDEO: { icon: 'video', label: 'Video' },
-  AUDIO: { icon: 'microphone-2', label: 'Voice note' },
-  FILE: { icon: 'paperclip', label: 'File' },
-};
 
 const senderLabel = (sender: any) => {
   const resident = sender?.resident;
@@ -19,28 +12,51 @@ const senderLabel = (sender: any) => {
   return unit ? `${name} · ${unit}` : name;
 };
 
+const formatSize = (bytes?: number) => {
+  if (!bytes) return '';
+  return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const ATTACH_OPTIONS = [
+  { key: 'media', label: 'Photo & Video', icon: 'photo', color: '#8B5CF6', accept: 'image/*,video/*' },
+  { key: 'camera', label: 'Camera', icon: 'camera', color: '#EF4444', accept: 'image/*', capture: 'environment' },
+  { key: 'document', label: 'Document', icon: 'file-text', color: '#3B82F6', accept: '.pdf,.doc,.docx,.txt,application/*' },
+  { key: 'poll', label: 'Poll', icon: 'chart-bar', color: '#00C896' },
+] as const;
+
 function FeedTab() {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const load = async () => {
+  const load = async (silent = false) => {
     try {
       const res = await fetch(`${API_BASE}/community/messages`, { headers: authHeaders() });
       const data = await res.json();
-      setMessages(data.data?.messages || []);
+      setMessages((data.data?.messages || []).slice().reverse());
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 10000);
+    const interval = setInterval(() => load(true), 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages.length]);
 
   const send = async () => {
     const body = draft.trim();
@@ -69,73 +85,258 @@ function FeedTab() {
     }
   };
 
+  const openAttachPicker = (key: string) => {
+    setAttachOpen(false);
+    if (key === 'poll') { setPollOpen(true); return; }
+    const opt = ATTACH_OPTIONS.find((o) => o.key === key)!;
+    const input = fileInputRef.current;
+    if (!input) return;
+    input.accept = ('accept' in opt && opt.accept) || '*/*';
+    if ('capture' in opt && opt.capture) input.setAttribute('capture', opt.capture);
+    else input.removeAttribute('capture');
+    input.click();
+  };
+
+  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/community/uploads`, { method: 'POST', headers: authHeaders(), body: formData });
+      const data = await res.json();
+      if (!res.ok) { alert(`Upload failed: ${data.message || 'Unknown error'}`); return; }
+      const { url, mimeType, fileName, sizeBytes } = data.data;
+      const type = mimeType.startsWith('image/') ? 'IMAGE' : mimeType.startsWith('video/') ? 'VIDEO' : mimeType.startsWith('audio/') ? 'AUDIO' : 'FILE';
+      const msgRes = await fetch(`${API_BASE}/community/messages`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes }),
+      });
+      if (!msgRes.ok) { const d = await msgRes.json(); alert(`Failed to send: ${d.message || 'Unknown error'}`); return; }
+      await load();
+    } catch (err) {
+      alert('Network error while uploading');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submitPoll = async () => {
+    const question = pollQuestion.trim();
+    const options = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (!question || options.length < 2 || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(`${API_BASE}/community/messages`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'POLL', poll: { question, options } }),
+      });
+      if (!res.ok) { const d = await res.json(); alert(`Failed to create poll: ${d.message || 'Unknown error'}`); return; }
+      setPollOpen(false);
+      setPollQuestion('');
+      setPollOptions(['', '']);
+      await load();
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const bubbleMedia = (m: any) => {
+    switch (m.type) {
+      case 'IMAGE':
+        return <img src={m.mediaUrl} alt="" style={{ maxWidth: 260, maxHeight: 320, borderRadius: 8, display: 'block', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(m.mediaUrl, '_blank')} />;
+      case 'VIDEO':
+        return <video src={m.mediaUrl} controls style={{ maxWidth: 260, maxHeight: 320, borderRadius: 8, display: 'block' }} />;
+      case 'AUDIO':
+        return <audio src={m.mediaUrl} controls style={{ width: 240 }} />;
+      case 'FILE':
+        return (
+          <a href={m.mediaUrl} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', background: 'rgba(255,255,255,0.06)', padding: '10px 12px', borderRadius: 8 }}>
+            <Icon name="file-text" size={22} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{m.fileName || 'Document'}</div>
+              <div style={{ fontSize: 11, opacity: 0.7 }}>{formatSize(m.fileSizeBytes)}</div>
+            </div>
+          </a>
+        );
+      default:
+        return null;
+    }
+  };
+
   const composer = (
-    <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 10 }}>
+    <div style={{ background: '#202c33', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setAttachOpen((o) => !o)}
+          title="Attach"
+          disabled={uploading}
+          style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#2a3942', color: '#8696a0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          {uploading ? <Icon name="loader-2" className="spin" size={18} /> : <Icon name="plus" size={20} />}
+        </button>
+        {attachOpen && (
+          <div style={{ position: 'absolute', bottom: 48, left: 0, background: '#233138', borderRadius: 12, padding: 14, display: 'flex', gap: 18, boxShadow: '0 4px 16px rgba(0,0,0,0.4)', zIndex: 10 }}>
+            {ATTACH_OPTIONS.map((opt) => (
+              <button key={opt.key} onClick={() => openAttachPicker(opt.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: '#e9edef', width: 64 }}>
+                <span style={{ width: 44, height: 44, borderRadius: '50%', background: opt.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name={opt.icon} size={20} color="white" />
+                </span>
+                <span style={{ fontSize: 11, textAlign: 'center' }}>{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileChosen} />
+
       <input
         type="text"
-        className="form-input"
         placeholder="Message the community feed as Admin Manager…"
-        style={{ flex: 1 }}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
+        style={{ flex: 1, background: '#2a3942', border: 'none', borderRadius: 20, padding: '10px 16px', color: '#e9edef', fontSize: 14, outline: 'none' }}
       />
-      <button className="btn btn-primary" onClick={send} disabled={sending || !draft.trim()}>
-        <Icon name="send" size={14} /> Send
+
+      <button
+        onClick={send}
+        disabled={sending || !draft.trim()}
+        style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: '#00a884', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: draft.trim() ? 'pointer' : 'default', opacity: draft.trim() ? 1 : 0.5, flexShrink: 0 }}
+      >
+        <Icon name="send" size={16} />
       </button>
     </div>
   );
 
-  if (loading) return <div>{composer}<div className="card">Loading feed…</div></div>;
-  if (messages.length === 0) {
-    return <div>{composer}<div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No messages in the community feed yet.</div></div>;
-  }
-
   return (
-    <div>
-      {composer}
-      {messages.map((m: any) => (
-        <div key={m.id} className="card" style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div className="feed-title">{senderLabel(m.sender)}</div>
-              <div className="feed-time">
-                {new Date(m.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-              </div>
-            </div>
-            <button
-              className="action-btn"
-              onClick={() => handleDelete(m.id)}
-              disabled={deletingId === m.id}
-              title="Remove message"
-            >
-              <Icon name="trash" size={14} />
-            </button>
-          </div>
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }} onClick={() => attachOpen && setAttachOpen(false)}>
+      <div ref={scrollRef} style={{ background: '#0b141a', height: 560, overflowY: 'auto', padding: '16px 0' }}>
+        {loading ? (
+          <div style={{ color: '#8696a0', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>
+        ) : messages.length === 0 ? (
+          <div style={{ color: '#8696a0', textAlign: 'center', marginTop: 40, fontSize: 13 }}>No messages in the community feed yet.</div>
+        ) : (
+          messages.map((m: any) => {
+            const isOwn = m.sender?.role === 'MANAGER';
+            return (
+              <div key={m.id} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10, padding: '0 16px' }}>
+                <div style={{ maxWidth: '65%' }}>
+                  <div style={{
+                    background: isOwn ? '#005c4b' : '#202c33',
+                    color: '#e9edef',
+                    borderRadius: 8,
+                    borderTopRightRadius: isOwn ? 2 : 8,
+                    borderTopLeftRadius: isOwn ? 2 : 8,
+                    padding: '6px 8px 5px',
+                    fontSize: 13.5,
+                    boxShadow: '0 1px 1px rgba(0,0,0,0.3)',
+                  }}>
+                    {!isOwn && (
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: '#00bfa5', marginBottom: 3 }}>{senderLabel(m.sender)}</div>
+                    )}
 
-          {m.type === 'TEXT' && (
-            <p style={{ marginTop: 10, fontSize: 13.5, color: 'var(--text-main)' }}>{m.body}</p>
-          )}
+                    {m.type === 'TEXT' && (
+                      <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '2px 4px' }}>{m.body}</div>
+                    )}
 
-          {m.type === 'POLL' && m.poll && (
-            <div style={{ marginTop: 10 }}>
-              <p style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{m.poll.question}</p>
-              {m.poll.options.map((o: any) => (
-                <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)' }}>
-                  <span>{o.text}</span>
-                  <span>{o.votes.length} vote{o.votes.length === 1 ? '' : 's'}</span>
+                    {(m.type === 'IMAGE' || m.type === 'VIDEO' || m.type === 'AUDIO' || m.type === 'FILE') && (
+                      <>
+                        {bubbleMedia(m)}
+                        {m.body && <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '6px 4px 0' }}>{m.body}</div>}
+                      </>
+                    )}
+
+                    {m.type === 'POLL' && m.poll && (
+                      <div style={{ padding: '2px 4px' }}>
+                        <div style={{ fontWeight: 600, marginBottom: 8 }}>{m.poll.question}</div>
+                        {m.poll.options.map((o: any) => {
+                          const total = m.poll.options.reduce((sum: number, x: any) => sum + x.votes.length, 0) || 1;
+                          const pct = Math.round((o.votes.length / total) * 100);
+                          return (
+                            <div key={o.id} style={{ marginBottom: 6 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
+                                <span>{o.text}</span>
+                                <span style={{ color: 'rgba(233,237,239,0.7)' }}>{o.votes.length} vote{o.votes.length === 1 ? '' : 's'}</span>
+                              </div>
+                              <div style={{ height: 4, background: 'rgba(255,255,255,0.12)', borderRadius: 4, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${pct}%`, background: '#00bfa5' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                      <span style={{ fontSize: 10.5, color: 'rgba(233,237,239,0.6)' }}>
+                        {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        disabled={deletingId === m.id}
+                        title="Remove message"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(233,237,239,0.5)', padding: 0, display: 'flex' }}
+                      >
+                        <Icon name="trash" size={11} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            );
+          })
+        )}
+      </div>
+      {composer}
 
-          {m.type !== 'TEXT' && m.type !== 'POLL' && (
-            <a href={m.mediaUrl ?? '#'} target="_blank" rel="noreferrer" className="feed-meta-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10, textDecoration: 'none' }}>
-              {MEDIA_LABEL[m.type] ? (<><Icon name={MEDIA_LABEL[m.type].icon} size={12} /> {MEDIA_LABEL[m.type].label}</>) : m.type}
-            </a>
-          )}
+      {pollOpen && (
+        <div className="modal-overlay" onClick={() => !sending && setPollOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Create Poll</h3>
+                <p className="modal-subtitle">Ask the community a question.</p>
+              </div>
+              <button className="modal-close" onClick={() => setPollOpen(false)}><Icon name="x" size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="form-label">Question</label>
+                <input className="form-input" value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="e.g. Preferred maintenance day?" />
+              </div>
+              <div>
+                <label className="form-label">Options</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pollOptions.map((opt, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                      <input className="form-input" value={opt} onChange={(e) => setPollOptions((prev) => prev.map((o, i) => (i === idx ? e.target.value : o)))} placeholder={`Option ${idx + 1}`} />
+                      {pollOptions.length > 2 && (
+                        <button className="action-btn" onClick={() => setPollOptions((prev) => prev.filter((_, i) => i !== idx))} title="Remove option">
+                          <Icon name="x" size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {pollOptions.length < 10 && (
+                  <button className="btn btn-outline" style={{ marginTop: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setPollOptions((prev) => [...prev, ''])}>
+                    <Icon name="plus" size={14} /> Add option
+                  </button>
+                )}
+              </div>
+              <button className="btn btn-primary" onClick={submitPoll} disabled={sending || !pollQuestion.trim() || pollOptions.filter((o) => o.trim()).length < 2}>
+                {sending ? 'Posting…' : 'Post Poll'}
+              </button>
+            </div>
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

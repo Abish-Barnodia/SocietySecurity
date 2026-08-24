@@ -33,7 +33,7 @@ router.post('/messages/:id/report', requireRole('RESIDENT'), validate(reportSche
 router.post('/polls/:pollId/vote', requireRole('RESIDENT'), validate(voteSchema), votePoll);
 router.get('/search', requireRole('RESIDENT'), searchMessages);
 router.get('/members', requireRole('RESIDENT'), listMembers);
-router.post('/uploads', requireRole('RESIDENT'), upload.single('file'), uploadMedia);
+router.post('/uploads', requireRole('RESIDENT', 'MANAGER'), upload.single('file'), uploadMedia);
 
 // Resident + Manager: read the feed, moderate messages
 router.get('/messages', requireRole('RESIDENT', 'MANAGER'), listMessages);

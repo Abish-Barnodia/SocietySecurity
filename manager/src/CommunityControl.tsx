@@ -297,7 +297,7 @@ function FeedTab() {
 
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }} onClick={() => attachOpen && setAttachOpen(false)}>
-      <div ref={scrollRef} style={{ background: '#e5ddd5', height: 560, overflowY: 'auto', padding: '16px 0' }}>
+      <div ref={scrollRef} style={{ background: '#ffffff', height: 560, overflowY: 'auto', padding: '16px 0' }}>
         {loading ? (
           <div style={{ color: '#667781', textAlign: 'center', marginTop: 40, fontSize: 13 }}>Loading feed…</div>
         ) : messages.length === 0 ? (
@@ -309,14 +309,14 @@ function FeedTab() {
               <div key={m.id} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10, padding: '0 16px' }}>
                 <div style={{ maxWidth: '65%' }}>
                   <div style={{
-                    background: isOwn ? '#d9fdd3' : '#ffffff',
+                    background: isOwn ? '#d9fdd3' : '#f0f2f5',
                     color: '#111b21',
                     borderRadius: 8,
                     borderTopRightRadius: isOwn ? 2 : 8,
                     borderTopLeftRadius: isOwn ? 2 : 8,
                     padding: '6px 8px 5px',
                     fontSize: 13.5,
-                    boxShadow: '0 1px 0.5px rgba(0,0,0,0.13)',
+                    boxShadow: '0 1px 0.5px rgba(0,0,0,0.08)',
                   }}>
                     {!isOwn && (
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: '#008069', marginBottom: 3 }}>{senderLabel(m.sender)}</div>

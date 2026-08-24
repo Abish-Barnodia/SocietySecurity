@@ -18,7 +18,7 @@ const GuardManagement: React.FC = () => {
   const [activeGuards, setActiveGuards] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
-  const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
+  const [salaryMonthFilter, setSalaryMonthFilter] = useState(new Date().toISOString().slice(0, 7));
 
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
 

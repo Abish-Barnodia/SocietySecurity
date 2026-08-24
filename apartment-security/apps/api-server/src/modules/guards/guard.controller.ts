@@ -640,21 +640,55 @@ const overlapDays = (leaveStart: Date, leaveEnd: Date, monthStart: Date, monthEn
   return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 };
 
-// Manager-facing history across all guards, optionally narrowed to one
-// month - only surfaces GuardSalary rows that already exist (created
-// whenever a manager has opened that guard's slip via getSalarySlip),
-// it doesn't retroactively generate PENDING records for every guard.
+// Manager-facing history across all guards. With no month filter this is a
+// pure browse of whatever GuardSalary rows already exist (past months are
+// fixed, nothing to generate). With a month filter, every active guard in
+// the property is guaranteed a row for that month - mirroring getSalarySlip's
+// per-guard upsert but applied to the whole roster - so the manager sees
+// every guard's paid/pending status for "this month" even before anyone
+// has opened their individual slip.
 export const listSalaries = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const month = typeof req.query.month === 'string' ? req.query.month : undefined;
-    const salaries = await prisma.guardSalary.findMany({
-      where: {
-        guard: { propertyId: req.user!.propertyId },
-        ...(month ? { monthYear: month } : {}),
-      },
-      include: { guard: { select: { id: true, name: true, badgeNumber: true } } },
-      orderBy: [{ monthYear: 'desc' }, { createdAt: 'desc' }],
+
+    if (!month) {
+      const salaries = await prisma.guardSalary.findMany({
+        where: { guard: { propertyId: req.user!.propertyId } },
+        include: { guard: { select: { id: true, name: true, badgeNumber: true } } },
+        orderBy: [{ monthYear: 'desc' }, { createdAt: 'desc' }],
+      });
+      return sendSuccess(res, 200, 'Salary history', salaries);
+    }
+
+    const [year, mon] = month.split('-').map(Number);
+    const monthStart = new Date(year!, mon! - 1, 1);
+    const monthEnd = new Date(year!, mon!, 0, 23, 59, 59, 999);
+
+    const guards = await prisma.guard.findMany({
+      where: { propertyId: req.user!.propertyId, user: { isActive: true } },
+      select: { id: true, name: true, badgeNumber: true },
+      orderBy: { name: 'asc' },
     });
+
+    const salaries = await Promise.all(guards.map(async (guard) => {
+      const existing = await prisma.guardSalary.findUnique({ where: { guardId_monthYear: { guardId: guard.id, monthYear: month } } });
+      if (existing) return { ...existing, guard };
+
+      const leaves = await prisma.guardLeave.findMany({
+        where: { guardId: guard.id, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+      });
+      const leaveDays = leaves.reduce((sum, l) => sum + overlapDays(l.startDate, l.endDate, monthStart, monthEnd), 0);
+      const deductions = Math.min(leaveDays * LEAVE_DEDUCTION_PER_DAY, BASE_SALARY);
+      const netAmount = BASE_SALARY - deductions;
+
+      const created = await prisma.guardSalary.upsert({
+        where: { guardId_monthYear: { guardId: guard.id, monthYear: month } },
+        update: {},
+        create: { guardId: guard.id, monthYear: month, baseSalary: BASE_SALARY, deductions, netAmount },
+      });
+      return { ...created, guard };
+    }));
+
     return sendSuccess(res, 200, 'Salary history', salaries);
   } catch (err) { next(err); }
 };

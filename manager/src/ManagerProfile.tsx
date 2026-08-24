@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Icon from './Icon';
+import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
 
 const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -77,7 +78,7 @@ function SecurityTab({ email }: { email: string }) {
           </div>
           <div>
             <label className="form-label">New password</label>
-            <input type="password" className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
+            <PasswordInput className="form-input" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-outline" onClick={() => { setStep('idle'); setCode(''); setNewPassword(''); setMessage(null); }}>Cancel</button>

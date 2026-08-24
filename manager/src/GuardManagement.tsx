@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Icon from './Icon';
 import EmptyState from './EmptyState';
 import GuardProfile from './GuardProfile';
+import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
 
 const GuardManagement: React.FC = () => {
@@ -547,8 +548,7 @@ const GuardManagement: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Password</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     className="form-input"
                     placeholder="Login password (min 6 chars)"

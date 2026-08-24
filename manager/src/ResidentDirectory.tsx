@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Icon from './Icon';
 import EmptyState from './EmptyState';
+import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
 
 interface FamilyMember {
@@ -708,7 +709,7 @@ const ResidentDirectory = () => {
                     </div>
                     <div style={{ marginTop: 12 }}>
                       <label className="form-label">Password {(!member.id) && <span style={{ color: '#DC2626' }}>*</span>}</label>
-                      <input type="password" autoComplete="new-password" className="form-input" placeholder={member.id ? "Leave blank to keep unchanged" : "Individual password (min 6 chars)"} value={member.password}
+                      <PasswordInput autoComplete="new-password" className="form-input" placeholder={member.id ? "Leave blank to keep unchanged" : "Individual password (min 6 chars)"} value={member.password}
                         onChange={e => { const u = [...newResidentForm.members]; u[index].password = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
                     </div>
                   </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
+import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
 
 interface RoleSummary {
@@ -341,7 +342,7 @@ function ManageManagersTab() {
                   </div>
                   <div>
                     <label className="form-label">Password</label>
-                    <input type="password" className="form-input" placeholder="At least 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                    <PasswordInput className="form-input" placeholder="At least 6 characters" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
                   </div>
                 </div>
               )}
@@ -381,7 +382,7 @@ function ManageManagersTab() {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="form-label">New Password</label>
-                <input type="password" className="form-input" autoFocus placeholder="At least 6 characters" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
+                <PasswordInput className="form-input" autoFocus placeholder="At least 6 characters" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setResetTarget(null)}>Cancel</button>

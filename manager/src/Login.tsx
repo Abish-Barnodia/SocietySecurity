@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
+import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
 
 interface LoginProps {
@@ -145,12 +146,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
                 Password
               </label>
-              <input 
-                type="password" 
-                value={password} 
+              <PasswordInput
+                value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="form-input" 
+                className="form-input"
                 style={{ padding: '14px 16px', fontSize: 15, letterSpacing: '0.1em', borderRadius: 10, background: '#F8FAFC' }}
                 required
               />

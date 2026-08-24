@@ -194,6 +194,7 @@ const en = {
 
   details_appName: 'Sentinel Guard',
   details_subtitle: 'Apartment Security Platform',
+  details_skipForNow: 'Skip for now',
   details_stepDetails: 'Your Details',
   details_stepConfirm: 'Confirm',
   details_fullName: 'Full Name',
@@ -409,6 +410,7 @@ const hi: typeof en = {
 
   details_appName: 'सेंटिनल गार्ड',
   details_subtitle: 'अपार्टमेंट सुरक्षा प्लेटफ़ॉर्म',
+  details_skipForNow: 'अभी के लिए छोड़ें',
   details_stepDetails: 'आपका विवरण',
   details_stepConfirm: 'पुष्टि करें',
   details_fullName: 'पूरा नाम',

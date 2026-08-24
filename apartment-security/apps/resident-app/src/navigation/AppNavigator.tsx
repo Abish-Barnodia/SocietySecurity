@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +39,7 @@ import NotificationSettingsScreen from '../screens/shared/NotificationSettingsSc
 // Guard Screens
 import GuardShell from '../screens/guard/GuardShell';
 import ScanPassScreen from '../screens/guard/ScanScreen';
+import GuardDetailsScreen from '../screens/guard/GuardDetailsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -118,7 +119,11 @@ const MainTabs = () => {
 };
 
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading, userRole, isOnboarded } = useAuth();
+  const { isAuthenticated, isLoading, userRole, isOnboarded, guardProfile } = useAuth();
+  // Session-only — resets on next login. GuardDetailsScreen's "Start Duty"
+  // flips guardProfile.isOnDuty via refreshProfile(), which re-evaluates this
+  // check on its own; Skip is the only other way out of the prompt.
+  const [guardOnboardingSkipped, setGuardOnboardingSkipped] = useState(false);
 
   // While bootstrapAsync() is still validating a stored token against
   // /auth/me, isAuthenticated is momentarily false — rendering nothing here
@@ -136,10 +141,16 @@ export default function AppNavigator() {
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
         </Stack.Group>
       ) : userRole === 'GUARD' ? (
-        <>
-          <Stack.Screen name="GuardTabs" component={GuardShell} />
-          <Stack.Screen name="ScanPass" component={ScanPassScreen} options={{ headerShown: true, title: 'Scan Pass' }} />
-        </>
+        !guardProfile?.isOnDuty && !guardOnboardingSkipped ? (
+          <Stack.Screen name="GuardTabs">
+            {() => <GuardDetailsScreen onSkip={() => setGuardOnboardingSkipped(true)} />}
+          </Stack.Screen>
+        ) : (
+          <>
+            <Stack.Screen name="GuardTabs" component={GuardShell} />
+            <Stack.Screen name="ScanPass" component={ScanPassScreen} options={{ headerShown: true, title: 'Scan Pass' }} />
+          </>
+        )
       ) : !isOnboarded ? (
         <Stack.Screen name="ResidentOnboarding" component={ResidentOnboardingScreen} />
       ) : (

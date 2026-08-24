@@ -355,13 +355,19 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
     });
 
     // Create Guard
+    // isOnDuty is never set true here — the dashboard's "Post Assignment"
+    // dropdown isn't backed by real EntryPoint records, so there's no valid
+    // post to pair with a Shift/GuardPost. A guard marked on-duty with no
+    // real shift could never scan or hand over (both require an active
+    // Shift row). They start a real shift themselves via the guard app's
+    // start-duty screen on first login instead.
     const guard = await prisma.guard.create({
       data: {
         userId: user.id,
         propertyId,
         name,
         badgeNumber,
-        isOnDuty: status === 'On Post'
+        isOnDuty: false
       }
     });
 

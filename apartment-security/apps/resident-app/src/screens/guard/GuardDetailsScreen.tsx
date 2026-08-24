@@ -23,7 +23,7 @@ const SHIFTS = [
 // ponytail: shift label is picked for the guard's own reference only —
 // the Shift model has no "type" field yet, so only entryPointId is sent
 // to /guards/shift/start. Persist it if rosters need to read it back later.
-export default function GuardDetailsScreen() {
+export default function GuardDetailsScreen({ onSkip }: { onSkip?: () => void }) {
   const { guardProfile, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
@@ -81,6 +81,12 @@ export default function GuardDetailsScreen() {
         </View>
         <Text style={styles.title}>{t('details_appName')}</Text>
         <Text style={styles.subtitle}>{t('details_subtitle')}</Text>
+
+        {onSkip && (
+          <TouchableOpacity onPress={onSkip} style={styles.skipButton}>
+            <Text style={styles.skipButtonText}>{t('details_skipForNow')}</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.stepper}>
           <View style={styles.stepperItem}>
@@ -230,7 +236,9 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: 16,
   },
   title: { fontSize: 22, fontWeight: '800', color: colors.text },
-  subtitle: { fontSize: 14, color: colors.textMuted, marginTop: 4, marginBottom: 28 },
+  subtitle: { fontSize: 14, color: colors.textMuted, marginTop: 4, marginBottom: 16 },
+  skipButton: { marginBottom: 20, padding: 4 },
+  skipButtonText: { fontSize: 14, color: colors.primary, fontWeight: '700' },
 
   stepper: { flexDirection: 'row', alignItems: 'center', marginBottom: 28, width: '100%', justifyContent: 'center' },
   stepperItem: { alignItems: 'center' },

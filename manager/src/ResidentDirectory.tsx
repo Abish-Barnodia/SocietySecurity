@@ -29,7 +29,6 @@ interface Family {
 const ResidentDirectory = () => {
   const [activeTab, setActiveTab] = useState('directory');
   const [families, setFamilies] = useState<Family[]>([]);
-  const [passes, setPasses] = useState<any[]>([]);
   const [amenities, setAmenities] = useState<any[]>([]);
   const [complaints, setComplaints] = useState<any[]>([]);
   const [resolvingComplaintId, setResolvingComplaintId] = useState<string | null>(null);
@@ -99,10 +98,6 @@ const ResidentDirectory = () => {
         const res = await fetch(`${API_BASE}/residents`, { headers });
         const data = await res.json();
         if (data.status === 'success') setFamilies(data.data);
-      } else if (activeTab === 'passes') {
-        const res = await fetch(`${API_BASE}/passes`, { headers });
-        const data = await res.json();
-        if (data.status === 'success') setPasses(data.data.passes || []);
       } else if (activeTab === 'amenities') {
         const res = await fetch(`${API_BASE}/amenities`, { headers });
         const data = await res.json();
@@ -291,7 +286,6 @@ const ResidentDirectory = () => {
 
   const tabs = [
     { id: 'directory', label: 'Directory', icon: <Icon name="users" size={16} /> },
-    { id: 'passes', label: 'Credentials & Passes', icon: <Icon name="key" size={16} /> },
     { id: 'amenities', label: 'Amenities', icon: <Icon name="building-skyscraper" size={16} /> },
     { id: 'complaints', label: 'Complaints', icon: <Icon name="message-exclamation" size={16} /> },
   ];
@@ -445,41 +439,6 @@ const ResidentDirectory = () => {
                 </div>
               )}
             </>
-          )}
-
-          {activeTab === 'passes' && (
-            <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: '#F8FAFC' }}>
-                    {['Pass ID', 'Resident / Unit', 'Visitor', 'Type', 'Status', 'Created'].map(h => (
-                      <th key={h} style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {passes.length === 0
-                    ? <tr><td colSpan={6}><EmptyState icon="key" message="No passes found." compact /></td></tr>
-                    : passes.map(pass => (
-                      <tr key={pass.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '14px 20px', fontSize: 13, fontFamily: 'monospace' }}>PASS-{pass.id.slice(-4).toUpperCase()}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 13 }}>
-                          <div style={{ fontWeight: 500 }}>{pass.resident?.name || 'Unknown'}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{pass.unit?.unitNumber || 'N/A'}</div>
-                        </td>
-                        <td style={{ padding: '14px 20px', fontSize: 13 }}>{pass.visitorName}</td>
-                        <td style={{ padding: '14px 20px' }}><span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#475569' }}>{pass.type}</span></td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, backgroundColor: pass.status === 'ACTIVE' ? '#E0F2FE' : '#FEF3C7', color: pass.status === 'ACTIVE' ? '#0369A1' : '#B45309' }}>
-                            {pass.status?.toLowerCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px 20px', fontSize: 13 }}>{new Date(pass.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
           )}
 
           {activeTab === 'amenities' && (

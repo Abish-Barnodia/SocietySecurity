@@ -10,6 +10,7 @@ import {
   getDirectory,
   getActiveGuards,
   createGuard,
+  updateGuard,
   deleteGuard,
   getGuardProfile,
   getShiftSummary,
@@ -27,7 +28,8 @@ import {
   startShiftSchema,
   endShiftSchema,
   checkInPostSchema,
-  createGuardSchema
+  createGuardSchema,
+  updateGuardSchema
 } from './guard.schema';
 
 const router = Router();
@@ -55,6 +57,7 @@ router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), requ
 
 router.post('/', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), validate(createGuardSchema), createGuard);
 router.post('/:id/assign',   requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), assignGuardToPost);
+router.put('/:id',           requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), validate(updateGuardSchema), updateGuard);
 router.delete('/:id',        requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), deleteGuard);
 router.get('/:id/salary',    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), getSalarySlip);
 router.get('/:id/profile',   requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), getGuardProfile);

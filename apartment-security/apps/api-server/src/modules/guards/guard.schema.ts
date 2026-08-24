@@ -37,3 +37,10 @@ export const createGuardSchema = z.object({
     photoUrl: z.string().optional()
   })
 });
+
+export const updateGuardSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).optional(),
+    phone: z.string().min(10).optional(),
+  })
+});

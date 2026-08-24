@@ -376,6 +376,30 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
+export const updateGuard = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const { name, phone } = req.body;
+    const guard = await prisma.guard.findUnique({ where: { id } });
+    if (!guard || guard.propertyId !== req.user!.propertyId) {
+      return next(new AppError('Guard not found', 404));
+    }
+
+    const updated = await prisma.guard.update({
+      where: { id },
+      // Guard names are stored upper-case for consistent display/search
+      // across the roster - enforced here rather than trusting the client.
+      data: { name: name ? name.toUpperCase() : undefined },
+    });
+    if (phone) {
+      await prisma.user.update({ where: { id: guard.userId }, data: { phone } });
+    }
+
+    await auditLog(req.user!.userId, 'UPDATE_GUARD', 'Guard', guard.id);
+    return sendSuccess(res, 200, 'Guard updated', updated);
+  } catch (err) { next(err); }
+};
+
 export const deleteGuard = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;

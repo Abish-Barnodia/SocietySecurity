@@ -46,6 +46,11 @@ window.fetch = async (...args: Parameters<typeof fetch>) => {
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  // Bumped on every sidebar click (even re-clicking the current tab) and
+  // used as the page-content key, so re-clicking "Guard Management" while
+  // deep in a guard's profile actually remounts it back to the roster -
+  // activeTab alone wouldn't change in that case, so nothing would happen.
+  const [navResetToken, setNavResetToken] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -183,7 +188,7 @@ const App: React.FC = () => {
                 href="#"
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
                 title={isSidebarCollapsed ? item.label : undefined}
-                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); }}
+                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); setNavResetToken(c => c + 1); }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
                 {!isSidebarCollapsed && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>}
@@ -210,7 +215,7 @@ const App: React.FC = () => {
                 href="#"
                 className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
                 title={isSidebarCollapsed ? item.label : undefined}
-                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); }}
+                onClick={(e) => { e.preventDefault(); setActiveTab(item.id); setNavResetToken(c => c + 1); }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{item.icon}</span>
                 {!isSidebarCollapsed && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>}
@@ -303,7 +308,7 @@ const App: React.FC = () => {
         </header>
 
         {/* Page Content */}
-        <div className="page-content">
+        <div className="page-content" key={`${activeTab}-${navResetToken}`}>
           {activeTab === 'dashboard' && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'guards' && <GuardManagement />}
           {activeTab === 'residents' && <ResidentDirectory />}

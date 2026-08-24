@@ -26,16 +26,35 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
   // Form states
   const [editForm, setEditForm] = useState({
     name: initialGuard.name,
-    phone: initialGuard.phone || '',
-    badgeNumber: initialGuard.badgeNumber || ''
+    phone: initialGuard.phone || ''
   });
-  
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+
   const [flagForm, setFlagForm] = useState({ reason: 'Late Arrival', notes: '' });
   const [reassignPostName, setReassignPostName] = useState('Main Gate — Entry');
 
-  const handleEditSubmit = () => {
-    setGuard({ ...guard, name: editForm.name, phone: editForm.phone, badgeNumber: editForm.badgeNumber });
-    setIsEditOpen(false);
+  const handleEditSubmit = async () => {
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const res = await fetch(`${API_BASE}/guards/${guard.id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editForm.name, phone: editForm.phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.message || 'Failed to update guard');
+        return;
+      }
+      setGuard({ ...guard, name: data.data.name, phone: editForm.phone });
+      setIsEditOpen(false);
+    } catch (err) {
+      setEditError('Network error while updating guard');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const handleFlagSubmit = () => {
@@ -397,7 +416,7 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
       </div>
       {/* Edit Profile Modal */}
       {isEditModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsEditOpen(false)}>
+        <div className="modal-overlay" onClick={() => !editSaving && setIsEditOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -409,17 +428,16 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="form-label">Full Name</label>
-                <input type="text" className="form-input" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                <input type="text" className="form-input" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value.toUpperCase()})} />
               </div>
               <div>
                 <label className="form-label">Phone</label>
                 <input type="text" className="form-input" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} />
               </div>
-              <div>
-                <label className="form-label">Badge Number</label>
-                <input type="text" className="form-input" value={editForm.badgeNumber} onChange={e => setEditForm({...editForm, badgeNumber: e.target.value})} />
-              </div>
-              <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={handleEditSubmit}>Save Changes</button>
+              {editError && <p style={{ fontSize: 13, color: '#DC2626', margin: 0 }}>{editError}</p>}
+              <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={handleEditSubmit} disabled={editSaving}>
+                {editSaving ? 'Saving…' : 'Save Changes'}
+              </button>
             </div>
           </div>
         </div>

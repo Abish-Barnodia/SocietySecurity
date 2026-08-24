@@ -13,6 +13,8 @@ const GuardManagement: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   const [guards, setGuards] = useState<any[]>([]);
+  const [guardSearch, setGuardSearch] = useState('');
+  const [guardStatusFilter, setGuardStatusFilter] = useState('All Status');
   const [activeGuards, setActiveGuards] = useState<any[]>([]);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -227,6 +229,13 @@ const GuardManagement: React.FC = () => {
     setSelectedGuard(null);
   };
 
+  const filteredGuards = guards.filter(g => {
+    const q = guardSearch.trim().toLowerCase();
+    const matchesSearch = !q || g.name?.toLowerCase().includes(q) || g.badgeNumber?.toLowerCase().includes(q) || g.phone?.toLowerCase().includes(q);
+    const matchesStatus = guardStatusFilter === 'All Status' || (guardStatusFilter === 'On Post' ? g.isOnDuty : !g.isOnDuty);
+    return matchesSearch && matchesStatus;
+  });
+
   if (selectedGuard) {
     return <GuardProfile guard={selectedGuard} onBack={() => setSelectedGuard(null)} onDeleted={() => handleGuardDeleted(selectedGuard.id)} />;
   }
@@ -284,7 +293,13 @@ const GuardManagement: React.FC = () => {
             <div style={{ display: 'flex', gap: 16, marginBottom: 16, padding: '0 24px', alignItems: 'center' }}>
               <div className="search-container" style={{ width: 320 }}>
                 <Icon name="search" size={16} className="search-icon" />
-                <input type="text" placeholder="Search guards..." className="form-input search-input" />
+                <input
+                  type="text"
+                  placeholder="Search guards..."
+                  className="form-input search-input"
+                  value={guardSearch}
+                  onChange={(e) => setGuardSearch(e.target.value)}
+                />
               </div>
               <select className="form-input" style={{ width: 140, cursor: 'pointer' }} defaultValue="All Shifts">
                 <option value="All Shifts">All Shifts</option>
@@ -292,7 +307,12 @@ const GuardManagement: React.FC = () => {
                 <option value="Afternoon">Afternoon</option>
                 <option value="Night">Night</option>
               </select>
-              <select className="form-input" style={{ width: 140, cursor: 'pointer' }} defaultValue="All Status">
+              <select
+                className="form-input"
+                style={{ width: 140, cursor: 'pointer' }}
+                value={guardStatusFilter}
+                onChange={(e) => setGuardStatusFilter(e.target.value)}
+              >
                 <option value="All Status">All Status</option>
                 <option value="On Post">On Post</option>
                 <option value="Offline">Offline</option>
@@ -305,7 +325,7 @@ const GuardManagement: React.FC = () => {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 max={new Date().toISOString().split('T')[0]}
               />
-              <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>{guards.length} guards</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>{filteredGuards.length} guards</span>
             </div>
             
             <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
@@ -321,10 +341,10 @@ const GuardManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {guards.length === 0 ? (
-                  <tr><td colSpan={7}><EmptyState icon="shield-check" message="No guards found in directory." compact /></td></tr>
+                {filteredGuards.length === 0 ? (
+                  <tr><td colSpan={7}><EmptyState icon="shield-check" message={guards.length === 0 ? 'No guards found in directory.' : 'No guards match your search/filter.'} compact /></td></tr>
                 ) : (
-                  guards.map((g, idx) => (
+                  filteredGuards.map((g, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }} className="table-row">
                       <td style={{ padding: '16px 24px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

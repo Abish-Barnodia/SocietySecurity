@@ -221,27 +221,14 @@ const GuardManagement: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedDate]);
 
-  const handleDeleteGuard = async (g: any) => {
-    if (!window.confirm(`Remove ${g.name} from the guard roster? They will no longer be able to log in.`)) return;
-    try {
-      const res = await fetch(`${API_BASE}/guards/${g.id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(`Failed to remove guard: ${data.message || 'Unknown error'}`);
-        return;
-      }
-      setGuards(prev => prev.filter(x => x.id !== g.id));
-      setActiveGuards(prev => prev.filter(x => x.id !== g.id));
-    } catch (err) {
-      alert('Network error while removing guard');
-    }
+  const handleGuardDeleted = (id: string) => {
+    setGuards(prev => prev.filter(x => x.id !== id));
+    setActiveGuards(prev => prev.filter(x => x.id !== id));
+    setSelectedGuard(null);
   };
 
   if (selectedGuard) {
-    return <GuardProfile guard={selectedGuard} onBack={() => setSelectedGuard(null)} />;
+    return <GuardProfile guard={selectedGuard} onBack={() => setSelectedGuard(null)} onDeleted={() => handleGuardDeleted(selectedGuard.id)} />;
   }
 
   return (
@@ -384,7 +371,7 @@ const GuardManagement: React.FC = () => {
                           <button className="action-btn" title="Pay Salary" onClick={() => openSalaryModal(g)} style={{ color: '#16a34a' }}>
                             <Icon name="currency-rupee" size={16} />
                           </button>
-                          <button className="action-btn" title="Remove Guard" onClick={() => handleDeleteGuard(g)} style={{ color: 'var(--danger)' }}>
+                          <button className="action-btn" title="Remove Guard" onClick={() => setSelectedGuard(g)} style={{ color: 'var(--danger)' }}>
                             <Icon name="trash" size={16} />
                           </button>
                         </div>

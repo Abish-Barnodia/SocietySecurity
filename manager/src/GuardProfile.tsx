@@ -5,10 +5,11 @@ import { API_BASE } from './config';
 interface GuardProfileProps {
   guard: any; // Basic info passed from roster
   onBack: () => void;
+  onDeleted?: () => void;
 }
 
 
-const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack }) => {
+const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack, onDeleted }) => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
   const [guard, setGuard] = useState(initialGuard);
   const [loading, setLoading] = useState(true);
@@ -18,6 +19,9 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
   const [isFlagModalOpen, setIsFlagOpen] = useState(false);
   const [isReassignModalOpen, setIsReassignOpen] = useState(false);
   const [isForceClearModalOpen, setIsForceClearOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Form states
   const [editForm, setEditForm] = useState({
@@ -54,6 +58,28 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
   const handleForceClear = () => {
     setGuard({ ...guard, lastShift: { ...guard.lastShift, endedAt: new Date().toISOString() }});
     setIsForceClearOpen(false);
+  };
+
+  const handleDeleteGuard = async () => {
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch(`${API_BASE}/guards/${guard.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteError(data.message || 'Failed to remove guard');
+        return;
+      }
+      setIsDeleteOpen(false);
+      onDeleted?.();
+    } catch (err) {
+      setDeleteError('Network error while removing guard');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   useEffect(() => {
@@ -150,6 +176,9 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
             </button>
             <button className="btn btn-outline" onClick={() => setIsFlagOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px', color: '#D97706', borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }}>
               <Icon name="flag" size={14} /> Flag
+            </button>
+            <button className="btn btn-outline" onClick={() => { setDeleteError(''); setIsDeleteOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '8px 16px', color: '#DC2626', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
+              <Icon name="trash" size={14} /> Delete Guard
             </button>
           </div>
         </div>
@@ -474,6 +503,36 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
               <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsForceClearOpen(false)}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626' }} onClick={handleForceClear}>Yes, Clear Shift</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Guard Modal */}
+      {isDeleteModalOpen && (
+        <div className="modal-overlay" onClick={() => !isDeleting && setIsDeleteOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title" style={{ color: '#DC2626' }}>Delete Guard</h3>
+                <p className="modal-subtitle">Remove this guard from the roster.</p>
+              </div>
+              <button className="modal-close" onClick={() => setIsDeleteOpen(false)}><Icon name="x" size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>
+                Are you sure you want to delete <strong>{guard.name}</strong>? Their login will be revoked
+                immediately and any active shift will be ended. Past entries and shift history are kept for records.
+              </p>
+              {deleteError && (
+                <p style={{ fontSize: 13, color: '#DC2626', margin: 0 }}>{deleteError}</p>
+              )}
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsDeleteOpen(false)} disabled={isDeleting}>Cancel</button>
+                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626' }} onClick={handleDeleteGuard} disabled={isDeleting}>
+                  {isDeleting ? 'Deleting…' : 'Yes, Delete Guard'}
+                </button>
               </div>
             </div>
           </div>

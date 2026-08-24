@@ -24,6 +24,14 @@ const ATTACH_OPTIONS = [
   { key: 'poll', label: 'Poll', icon: 'chart-bar', color: '#00C896' },
 ] as const;
 
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+const groupReactions = (reactions: any[]) => {
+  const byEmoji: Record<string, number> = {};
+  (reactions || []).forEach((r: any) => { byEmoji[r.emoji] = (byEmoji[r.emoji] || 0) + 1; });
+  return Object.entries(byEmoji);
+};
+
 function FeedTab() {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +49,8 @@ function FeedTab() {
   const [stagedIndex, setStagedIndex] = useState(0);
   const [stagedCaption, setStagedCaption] = useState('');
   const [sendingStaged, setSendingStaged] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ message: any; x: number; y: number } | null>(null);
+  const [replyTo, setReplyTo] = useState<any | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -83,16 +93,30 @@ function FeedTab() {
       await fetch(`${API_BASE}/community/messages`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'TEXT', body }),
+        body: JSON.stringify({ type: 'TEXT', body, replyToId: replyTo?.id }),
       });
       setDraft('');
+      setReplyTo(null);
       await load();
     } finally {
       setSending(false);
     }
   };
 
+  const toggleReactionOn = async (messageId: string, emoji: string) => {
+    setContextMenu(null);
+    try {
+      await fetch(`${API_BASE}/community/messages/${messageId}/reactions`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      await load();
+    } catch (e) {}
+  };
+
   const handleDelete = async (id: string) => {
+    setContextMenu(null);
     setDeletingId(id);
     try {
       await fetch(`${API_BASE}/community/messages/${id}`, { method: 'DELETE', headers: authHeaders() });
@@ -124,7 +148,7 @@ function FeedTab() {
     input.click();
   };
 
-  const uploadAndSend = async (file: File, durationSec?: number, caption?: string) => {
+  const uploadAndSend = async (file: File, durationSec?: number, caption?: string, replyToId?: string) => {
     setUploading(true);
     try {
       const formData = new FormData();
@@ -137,7 +161,7 @@ function FeedTab() {
       const msgRes = await fetch(`${API_BASE}/community/messages`, {
         method: 'POST',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes, mediaDurationSec: durationSec, body: caption }),
+        body: JSON.stringify({ type, mediaUrl: url, mediaMimeType: mimeType, fileName, fileSizeBytes: sizeBytes, mediaDurationSec: durationSec, body: caption, replyToId }),
       });
       if (!msgRes.ok) { const d = await msgRes.json(); alert(`Failed to send: ${d.message || 'Unknown error'}`); return; }
       await load();
@@ -177,7 +201,7 @@ function FeedTab() {
     try {
       for (let i = 0; i < stagedItems.length; i++) {
         const isLast = i === stagedItems.length - 1;
-        await uploadAndSend(stagedItems[i].file, undefined, isLast ? (stagedCaption.trim() || undefined) : undefined);
+        await uploadAndSend(stagedItems[i].file, undefined, isLast ? (stagedCaption.trim() || undefined) : undefined, isLast ? replyTo?.id : undefined);
       }
     } finally {
       stagedItems.forEach((item) => URL.revokeObjectURL(item.url));
@@ -185,6 +209,7 @@ function FeedTab() {
       setStagedCaption('');
       setStagedIndex(0);
       setSendingStaged(false);
+      setReplyTo(null);
     }
   };
 
@@ -284,7 +309,21 @@ function FeedTab() {
   };
 
   const composer = (
-    <div style={{ background: '#f0f2f5', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+    <div style={{ background: '#f0f2f5' }}>
+      {replyTo && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', background: '#e9edef', borderBottom: '1px solid #d1d7db' }}>
+          <div style={{ borderLeft: '3px solid #00a884', paddingLeft: 8, overflow: 'hidden' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#008069' }}>{senderLabel(replyTo.sender)}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 420 }}>
+              {replyTo.body || (replyTo.type === 'POLL' ? replyTo.poll?.question : replyTo.type)}
+            </div>
+          </div>
+          <button onClick={() => setReplyTo(null)} title="Cancel reply" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', flexShrink: 0 }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+      )}
+      <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
       <div style={{ position: 'relative' }}>
         <button
           onClick={() => setAttachOpen((o) => !o)}
@@ -354,6 +393,7 @@ function FeedTab() {
           <Icon name={recording ? 'player-stop-filled' : 'microphone'} size={16} />
         </button>
       )}
+      </div>
     </div>
   );
 
@@ -421,7 +461,9 @@ function FeedTab() {
             return (
               <div key={m.id} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10, padding: '0 16px' }}>
                 <div style={{ maxWidth: '65%' }}>
-                  <div style={{
+                  <div
+                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ message: m, x: e.clientX, y: e.clientY }); }}
+                    style={{
                     background: isOwn ? '#d9fdd3' : '#f0f2f5',
                     color: '#111b21',
                     borderRadius: 8,
@@ -433,6 +475,15 @@ function FeedTab() {
                   }}>
                     {!isOwn && (
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: '#008069', marginBottom: 3 }}>{senderLabel(m.sender)}</div>
+                    )}
+
+                    {m.replyTo && (
+                      <div style={{ borderLeft: '3px solid #00a884', background: 'rgba(0,0,0,0.04)', borderRadius: 4, padding: '4px 8px', marginBottom: 5 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#008069' }}>{senderLabel(m.replyTo.sender)}</div>
+                        <div style={{ fontSize: 11.5, color: 'rgba(0,0,0,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {m.replyTo.body || m.replyTo.type}
+                        </div>
+                      </div>
                     )}
 
                     {m.type === 'TEXT' && (
@@ -467,6 +518,17 @@ function FeedTab() {
                       </div>
                     )}
 
+                    {groupReactions(m.reactions).length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        {groupReactions(m.reactions).map(([emoji, count]) => (
+                          <button key={emoji} onClick={() => toggleReactionOn(m.id, emoji)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(0,0,0,0.06)', border: 'none', borderRadius: 10, padding: '1px 6px', fontSize: 11, cursor: 'pointer' }}>
+                            <span>{emoji}</span><span style={{ color: 'rgba(0,0,0,0.55)' }}>{count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 3 }}>
                       <span style={{ fontSize: 10.5, color: 'rgba(0,0,0,0.45)' }}>
                         {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -488,6 +550,32 @@ function FeedTab() {
         )}
       </div>
       {composer}
+
+      {contextMenu && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setContextMenu(null)} onContextMenu={(e) => { e.preventDefault(); setContextMenu(null); }} />
+          <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 30, transform: 'translate(-50%, 8px)' }}>
+            <div style={{ display: 'flex', gap: 6, background: '#ffffff', borderRadius: 24, padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.22)', marginBottom: 6 }}>
+              {REACTION_EMOJIS.map((emoji) => (
+                <button key={emoji} onClick={() => toggleReactionOn(contextMenu.message.id, emoji)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, padding: 2, lineHeight: 1 }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div style={{ background: '#ffffff', borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.22)', overflow: 'hidden', minWidth: 160 }}>
+              <button onClick={() => { setReplyTo(contextMenu.message); setContextMenu(null); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: '#111b21', textAlign: 'left' }}>
+                <Icon name="corner-up-left" size={16} /> Reply
+              </button>
+              <button onClick={() => handleDelete(contextMenu.message.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13.5, color: '#DC2626', textAlign: 'left', borderTop: '1px solid #f0f2f5' }}>
+                <Icon name="trash" size={16} /> Delete
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {pollOpen && (
         <div className="modal-overlay" onClick={() => !sending && setPollOpen(false)}>

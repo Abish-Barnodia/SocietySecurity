@@ -175,7 +175,7 @@ export const deleteMessage = async (req: Request, res: Response, next: NextFunct
 
 export const toggleReaction = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { propertyId } = await getResidentContext(req.user!.userId);
+    const propertyId = await getCallerPropertyId(req.user!.userId);
     const messageId = req.params.id as string;
     const { emoji } = req.body;
     const userId = req.user!.userId;

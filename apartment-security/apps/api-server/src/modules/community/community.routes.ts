@@ -28,7 +28,7 @@ router.use(requireManagerPermission('community'));
 
 // Resident + Manager: participate in the chat
 router.post('/messages', requireRole('RESIDENT', 'MANAGER'), validate(createMessageSchema), createMessage);
-router.post('/messages/:id/reactions', requireRole('RESIDENT'), validate(reactionSchema), toggleReaction);
+router.post('/messages/:id/reactions', requireRole('RESIDENT', 'MANAGER'), validate(reactionSchema), toggleReaction);
 router.post('/messages/:id/report', requireRole('RESIDENT'), validate(reportSchema), reportMessage);
 router.post('/polls/:pollId/vote', requireRole('RESIDENT'), validate(voteSchema), votePoll);
 router.get('/search', requireRole('RESIDENT'), searchMessages);

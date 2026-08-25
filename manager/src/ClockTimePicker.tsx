@@ -1,9 +1,15 @@
 import { useState } from 'react';
+import Icon from './Icon';
 
 // A circular analog clock-face time picker matching the native mobile
 // picker's look (tap an hour, it switches to minute mode, then OK/Cancel) -
 // used instead of plain dropdowns so picking a time on the web dashboard
-// feels the same as the resident app.
+// feels the same as the resident app. Renders as a centered fixed modal
+// (like every other modal in this app) rather than anchored to the trigger
+// button - anchoring it absolutely next to the button let it drift outside
+// the visible card and, depending on which field opened it, overlap
+// neighboring form controls, which was silently swallowing clicks on the
+// AM/PM buttons.
 type Props = {
   hour: string;   // '1'-'12'
   minute: string; // '00'-'55'
@@ -47,19 +53,18 @@ export default function ClockTimePicker({ hour, minute, period, onChange }: Prop
   const selectedValue = mode === 'hour' ? draftHour : draftMinute;
 
   return (
-    <div style={{ position: 'relative', flex: 1 }}>
+    <div style={{ flex: 1 }}>
       <button
         type="button"
         onClick={openPicker}
         style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', textAlign: 'left', fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}
       >
-        <span style={{ fontSize: 14 }}>🕐</span> {hour}:{minute} {period}
+        <Icon name="clock" size={14} color="#6B7280" /> {hour}:{minute} {period}
       </button>
 
       {open && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
-          <div style={{ position: 'absolute', top: '110%', left: 0, zIndex: 41, background: '#1F2937', borderRadius: 12, padding: 20, width: 280, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setOpen(false)}>
+          <div style={{ background: '#1F2937', borderRadius: 12, padding: 20, width: 280, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
             {/* Digital readout, matching the reference picker's header */}
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 20 }}>
               <button type="button" onClick={() => setMode('hour')}
@@ -73,11 +78,11 @@ export default function ClockTimePicker({ hour, minute, period, onChange }: Prop
               </button>
               <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 4 }}>
                 <button type="button" onClick={() => setDraftPeriod('AM')}
-                  style={{ fontSize: 13, fontWeight: 700, color: draftPeriod === 'AM' ? '#5EEAD4' : '#9CA3AF', background: 'none', border: 'none', padding: '2px 0' }}>
+                  style={{ fontSize: 13, fontWeight: 700, color: draftPeriod === 'AM' ? '#5EEAD4' : '#9CA3AF', background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer' }}>
                   AM
                 </button>
                 <button type="button" onClick={() => setDraftPeriod('PM')}
-                  style={{ fontSize: 13, fontWeight: 700, color: draftPeriod === 'PM' ? '#5EEAD4' : '#9CA3AF', background: 'none', border: 'none', padding: '2px 0' }}>
+                  style={{ fontSize: 13, fontWeight: 700, color: draftPeriod === 'PM' ? '#5EEAD4' : '#9CA3AF', background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer' }}>
                   PM
                 </button>
               </div>
@@ -109,7 +114,7 @@ export default function ClockTimePicker({ hour, minute, period, onChange }: Prop
                     }}
                     style={{
                       position: 'absolute', left: `${p.x}%`, top: `${p.y}%`, transform: 'translate(-50%, -50%)',
-                      width: 32, height: 32, borderRadius: '50%', border: 'none',
+                      width: 32, height: 32, borderRadius: '50%', border: 'none', cursor: 'pointer',
                       backgroundColor: active ? '#5EEAD4' : 'transparent',
                       color: active ? '#1F2937' : 'white',
                       fontSize: 13, fontWeight: 600,
@@ -122,11 +127,11 @@ export default function ClockTimePicker({ hour, minute, period, onChange }: Prop
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 16 }}>
-              <button type="button" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#5EEAD4', fontWeight: 600, fontSize: 13 }}>CANCEL</button>
-              <button type="button" onClick={confirm} style={{ background: 'none', border: 'none', color: '#5EEAD4', fontWeight: 600, fontSize: 13 }}>OK</button>
+              <button type="button" onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#5EEAD4', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>CANCEL</button>
+              <button type="button" onClick={confirm} style={{ background: 'none', border: 'none', color: '#5EEAD4', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>OK</button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

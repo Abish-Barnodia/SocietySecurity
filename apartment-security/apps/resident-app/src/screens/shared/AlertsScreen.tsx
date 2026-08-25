@@ -100,11 +100,11 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity
             key={alert.id}
             style={styles.card}
-            activeOpacity={alert.entryId || alert.imageUrl ? 0.7 : 1}
+            activeOpacity={0.7}
             onPress={() => {
               if (alert.entryId) {
                 navigation.navigate('WalkInApproval', { requestId: alert.entryId });
-              } else if (alert.imageUrl) {
+              } else {
                 setSelectedAlert(alert);
               }
             }}

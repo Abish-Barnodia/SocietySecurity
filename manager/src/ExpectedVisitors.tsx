@@ -3,6 +3,56 @@ import { QRCodeSVG } from 'qrcode.react';
 import Icon from './Icon';
 import { API_BASE } from './config';
 
+const WEEK_DAYS: { label: string; value: string }[] = [
+  { label: 'Mon', value: 'MONDAY' },
+  { label: 'Tue', value: 'TUESDAY' },
+  { label: 'Wed', value: 'WEDNESDAY' },
+  { label: 'Thu', value: 'THURSDAY' },
+  { label: 'Fri', value: 'FRIDAY' },
+  { label: 'Sat', value: 'SATURDAY' },
+  { label: 'Sun', value: 'SUNDAY' },
+];
+
+const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+const selectStyle: React.CSSProperties = { padding: '10px 8px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: 'white' };
+
+// 12-hour hour/minute/AM-PM controls, matching the resident app's own time
+// picker format instead of the browser's locale-dependent 24h datetime input.
+const TimeSelect = ({ hour, minute, period, onHour, onMinute, onPeriod }: {
+  hour: string; minute: string; period: string;
+  onHour: (v: string) => void; onMinute: (v: string) => void; onPeriod: (v: string) => void;
+}) => (
+  <div style={{ display: 'flex', gap: 6, flex: 1 }}>
+    <select value={hour} onChange={e => onHour(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+      {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(h => <option key={h} value={h}>{h}</option>)}
+    </select>
+    <select value={minute} onChange={e => onMinute(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+      {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
+    </select>
+    <select value={period} onChange={e => onPeriod(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
+      <option value="AM">AM</option>
+      <option value="PM">PM</option>
+    </select>
+  </div>
+);
+
+// hour is 1-12 + AM/PM here, but the backend/Date constructor both need 24h.
+const to24Hour = (hour: string, minute: string, period: string) => {
+  let h = parseInt(hour, 10) % 12;
+  if (period === 'PM') h += 12;
+  return `${String(h).padStart(2, '0')}:${minute}`;
+};
+
+const blankAddForm = () => ({
+  visitorName: '', visitorPhone: '', type: 'ONE_TIME', purpose: '', unitId: '',
+  validFromDate: '', validFromHour: '9', validFromMinute: '00', validFromPeriod: 'AM',
+  validUntilDate: '', validUntilHour: '6', validUntilMinute: '00', validUntilPeriod: 'PM',
+  entryStartHour: '8', entryStartMinute: '00', entryStartPeriod: 'AM',
+  entryEndHour: '6', entryEndMinute: '00', entryEndPeriod: 'PM',
+  expiresOnDate: '',
+  recurringDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as string[],
+});
+
 const ExpectedVisitors = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
   
@@ -19,15 +69,7 @@ const ExpectedVisitors = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Add Form State
-  const [addForm, setAddForm] = useState({
-    visitorName: '',
-    visitorPhone: '',
-    type: 'ONE_TIME',
-    purpose: '',
-    validFrom: '',
-    validUntil: '',
-    unitId: ''
-  });
+  const [addForm, setAddForm] = useState(blankAddForm());
 
   const fetchData = async () => {
     try {
@@ -61,8 +103,62 @@ const ExpectedVisitors = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const closeAddModal = () => {
+    setIsAddModalOpen(false);
+    setAddForm(blankAddForm());
+  };
+
+  const toggleRecurringDay = (day: string) => {
+    setAddForm(prev => ({
+      ...prev,
+      recurringDays: prev.recurringDays.includes(day)
+        ? prev.recurringDays.filter(d => d !== day)
+        : [...prev.recurringDays, day],
+    }));
+  };
+
   const handleAddPass = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isRecurring = addForm.type === 'RECURRING';
+    if (isRecurring && addForm.recurringDays.length === 0) {
+      alert('Select at least one day of the week for a recurring pass.');
+      return;
+    }
+    if (!isRecurring && (!addForm.validFromDate || !addForm.validUntilDate)) {
+      alert('Valid From and Valid Until dates are required.');
+      return;
+    }
+    if (isRecurring && !addForm.expiresOnDate) {
+      alert('Pass expiry date is required for a recurring pass.');
+      return;
+    }
+
+    // Recurring passes reuse the same top-level validFrom/validUntil window
+    // as everything else (now → the day the recurring rule expires) - the
+    // actual daily access window/days live in recurringRule instead.
+    const validFrom = isRecurring ? new Date() : new Date(`${addForm.validFromDate}T${to24Hour(addForm.validFromHour, addForm.validFromMinute, addForm.validFromPeriod)}:00`);
+    const validUntil = isRecurring
+      ? new Date(`${addForm.expiresOnDate}T23:59:59`)
+      : new Date(`${addForm.validUntilDate}T${to24Hour(addForm.validUntilHour, addForm.validUntilMinute, addForm.validUntilPeriod)}:00`);
+
+    const payload: Record<string, unknown> = {
+      visitorName: addForm.visitorName,
+      visitorPhone: addForm.visitorPhone,
+      type: addForm.type,
+      purpose: addForm.purpose,
+      unitId: addForm.unitId,
+      validFrom: validFrom.toISOString(),
+      validUntil: validUntil.toISOString(),
+    };
+    if (isRecurring) {
+      payload.recurringRule = {
+        allowedDays: addForm.recurringDays,
+        windowStartTime: to24Hour(addForm.entryStartHour, addForm.entryStartMinute, addForm.entryStartPeriod),
+        windowEndTime: to24Hour(addForm.entryEndHour, addForm.entryEndMinute, addForm.entryEndPeriod),
+      };
+    }
+
     try {
       const res = await fetch(`${API_BASE}/passes`, {
         method: 'POST',
@@ -70,16 +166,12 @@ const ExpectedVisitors = () => {
           'Authorization': `Bearer ${getAuthToken()}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...addForm,
-          validFrom: new Date(addForm.validFrom).toISOString(),
-          validUntil: new Date(addForm.validUntil).toISOString()
-        })
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
         setIsAddModalOpen(false);
-        setAddForm({ visitorName: '', visitorPhone: '', type: 'ONE_TIME', purpose: '', validFrom: '', validUntil: '', unitId: '' });
+        setAddForm(blankAddForm());
         fetchData(); // Refresh list immediately
       } else {
         const error = await res.json();
@@ -344,7 +436,7 @@ const ExpectedVisitors = () => {
           <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 500, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Add Visitor</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="modal-close"><Icon name="x" size={18}/></button>
+              <button onClick={closeAddModal} className="modal-close"><Icon name="x" size={18}/></button>
             </div>
             
             <form onSubmit={handleAddPass} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -398,24 +490,96 @@ const ExpectedVisitors = () => {
                 </select>
               </div>
 
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Valid From</label>
-                  <input 
-                    type="datetime-local" required
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
-                    value={addForm.validFrom} onChange={e => setAddForm({...addForm, validFrom: e.target.value})}
-                  />
+              {addForm.type === 'RECURRING' ? (
+                <>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 500 }}>Days of the Week</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {WEEK_DAYS.map(d => {
+                        const active = addForm.recurringDays.includes(d.value);
+                        return (
+                          <button
+                            key={d.value}
+                            type="button"
+                            onClick={() => toggleRecurringDay(d.value)}
+                            style={{
+                              flex: 1, padding: '8px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                              border: active ? '1px solid var(--primary)' : '1px solid #E5E7EB',
+                              backgroundColor: active ? 'var(--primary)' : 'white',
+                              color: active ? 'white' : '#4B5563',
+                            }}
+                          >
+                            {d.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Daily Entry Window</label>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <TimeSelect
+                        hour={addForm.entryStartHour} minute={addForm.entryStartMinute} period={addForm.entryStartPeriod}
+                        onHour={v => setAddForm({...addForm, entryStartHour: v})}
+                        onMinute={v => setAddForm({...addForm, entryStartMinute: v})}
+                        onPeriod={v => setAddForm({...addForm, entryStartPeriod: v})}
+                      />
+                      <span style={{ color: '#9CA3AF', fontSize: 13 }}>to</span>
+                      <TimeSelect
+                        hour={addForm.entryEndHour} minute={addForm.entryEndMinute} period={addForm.entryEndPeriod}
+                        onHour={v => setAddForm({...addForm, entryEndHour: v})}
+                        onMinute={v => setAddForm({...addForm, entryEndMinute: v})}
+                        onPeriod={v => setAddForm({...addForm, entryEndPeriod: v})}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Pass Expires On</label>
+                    <input
+                      type="date" required
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
+                      value={addForm.expiresOnDate} onChange={e => setAddForm({...addForm, expiresOnDate: e.target.value})}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Valid From</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <input
+                        type="date" required
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
+                        value={addForm.validFromDate} onChange={e => setAddForm({...addForm, validFromDate: e.target.value})}
+                      />
+                      <TimeSelect
+                        hour={addForm.validFromHour} minute={addForm.validFromMinute} period={addForm.validFromPeriod}
+                        onHour={v => setAddForm({...addForm, validFromHour: v})}
+                        onMinute={v => setAddForm({...addForm, validFromMinute: v})}
+                        onPeriod={v => setAddForm({...addForm, validFromPeriod: v})}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Valid Until</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <input
+                        type="date" required
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
+                        value={addForm.validUntilDate} onChange={e => setAddForm({...addForm, validUntilDate: e.target.value})}
+                      />
+                      <TimeSelect
+                        hour={addForm.validUntilHour} minute={addForm.validUntilMinute} period={addForm.validUntilPeriod}
+                        onHour={v => setAddForm({...addForm, validUntilHour: v})}
+                        onMinute={v => setAddForm({...addForm, validUntilMinute: v})}
+                        onPeriod={v => setAddForm({...addForm, validUntilPeriod: v})}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Valid Until</label>
-                  <input 
-                    type="datetime-local" required
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
-                    value={addForm.validUntil} onChange={e => setAddForm({...addForm, validUntil: e.target.value})}
-                  />
-                </div>
-              </div>
+              )}
 
               <div>
                 <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Purpose / Notes</label>
@@ -429,7 +593,7 @@ const ExpectedVisitors = () => {
               <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
                 <button 
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={closeAddModal}
                   style={{ flex: 1, padding: '12px', borderRadius: 6, backgroundColor: 'white', border: '1px solid #E5E7EB', color: '#4B5563', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Cancel

@@ -37,6 +37,7 @@ const GuardManagement: React.FC = () => {
     name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: ''
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [guardFormError, setGuardFormError] = useState('');
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -46,8 +47,8 @@ const GuardManagement: React.FC = () => {
   };
 
   const handleCreateGuard = async () => {
-    if (!newGuardForm.email.trim()) { alert('Email is required so the guard can log in to the guard app'); return; }
-    if (newGuardForm.password.length < 6) { alert('Password must be at least 6 characters'); return; }
+    if (!newGuardForm.email.trim()) { setGuardFormError('Email is required so the guard can log in to the guard app'); return; }
+    if (newGuardForm.password.length < 6) { setGuardFormError('Password must be at least 6 characters'); return; }
     try {
       const response = await fetch(`${API_BASE}/guards`, {
         method: 'POST',
@@ -70,6 +71,7 @@ const GuardManagement: React.FC = () => {
       });
       if (response.ok) {
         setIsAddGuardOpen(false);
+        setGuardFormError('');
         setNewGuardForm({ name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: '' });
         fetchData(); // refresh the directory
       } else {
@@ -80,11 +82,11 @@ const GuardManagement: React.FC = () => {
         const detail = Array.isArray(errorData.errors)
           ? errorData.errors.map((e: any) => `${e.path?.slice(1).join('.') || 'field'}: ${e.message}`).join('\n')
           : '';
-        alert(`Failed to create guard: ${errorData.message}${detail ? `\n${detail}` : ''}`);
+        setGuardFormError(`Failed to create guard: ${errorData.message}${detail ? `\n${detail}` : ''}`);
       }
     } catch (err) {
       console.error(err);
-      alert('Error creating guard');
+      setGuardFormError('Error creating guard');
     }
   };
 
@@ -259,7 +261,7 @@ const GuardManagement: React.FC = () => {
             <span style={{ display: 'flex', transform: isRefreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.5s ease' }}><Icon name="refresh" size={14} /></span>
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setIsAddGuardOpen(true)}><Icon name="plus" size={16} /> Add Guard</button>
+          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { setGuardFormError(''); setIsAddGuardOpen(true); }}><Icon name="plus" size={16} /> Add Guard</button>
         </div>
       </div>
 
@@ -549,6 +551,11 @@ const GuardManagement: React.FC = () => {
               <button className="modal-close" onClick={() => setIsAddGuardOpen(false)}>×</button>
             </div>
             <div className="modal-body">
+              {guardFormError && (
+                <div style={{ padding: '10px 14px', marginBottom: 20, background: '#ffebee', color: '#c62828', borderRadius: 8, fontSize: 13, whiteSpace: 'pre-line' }}>
+                  {guardFormError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
                 {/* Photo Upload Area */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>

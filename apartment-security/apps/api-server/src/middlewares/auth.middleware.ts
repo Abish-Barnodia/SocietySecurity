@@ -98,9 +98,9 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
       // Re-extending the idle timeout on literally every request means a write on
       // every manager API call. Only re-extend once the previous extension is more
-      // than 2 minutes old — well inside the 15-minute idle window, so the session
-      // never actually expires early, but a manager clicking around the portal no
-      // longer serializes every request behind a DB write.
+      // than 2 minutes old — well inside the idle window (MANAGER_SESSION_IDLE_MS),
+      // so the session never actually expires early, but a manager clicking around
+      // the portal no longer serializes every request behind a DB write.
       const idleRefreshBufferMs = 2 * 60 * 1000;
       if (!lock!.expiresAt || lock!.expiresAt.getTime() - now.getTime() < MANAGER_SESSION_IDLE_MS - idleRefreshBufferMs) {
         await prisma.managerPortalLock.update({

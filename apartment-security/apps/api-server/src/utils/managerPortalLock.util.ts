@@ -3,7 +3,7 @@ import { prisma } from '../config/prisma';
 
 // Idle timeout for a Manager Portal session. Refreshed on every authenticated
 // request (see auth.middleware.ts) so only genuine inactivity releases the lock.
-export const MANAGER_SESSION_IDLE_MS = 15 * 60 * 1000;
+export const MANAGER_SESSION_IDLE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Atomically claims the single-active-manager slot for a property. Returns the
 // session token on success, or null if a DIFFERENT manager already holds it.

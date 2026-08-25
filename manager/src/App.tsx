@@ -52,6 +52,11 @@ const App: React.FC = () => {
   // activeTab alone wouldn't change in that case, so nothing would happen.
   const [navResetToken, setNavResetToken] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Gates the very first render: stays false until the stored token (if any)
+  // has actually been checked, so a stale/invalidated localStorage token
+  // can't flash the whole Dashboard shell before its own data fetches 401
+  // and bounce back to Login — see the effect below.
+  const [authChecked, setAuthChecked] = useState(false);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -70,14 +75,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     const storedUser = localStorage.getItem('user');
-    if (!token || !storedUser) return;
-
-    setIsAuthenticated(true);
+    if (!token || !storedUser) { setAuthChecked(true); return; }
 
     // Fetch full profile for property details, and confirm the stored token
     // is actually still valid — a stale/expired/session-ended token (e.g.
     // a manager whose Manager Portal session ended) must bounce back to
     // Login instead of leaving the app stuck with no data ever loading.
+    // isAuthenticated only flips to true on success, so a bad token never
+    // renders the Dashboard shell first — that used to fire the shell's own
+    // data requests, which then 401'd and surfaced a jarring "session
+    // expired" alert on what looked like a fresh page load.
     fetch(`${API_BASE}/auth/me`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -85,6 +92,7 @@ const App: React.FC = () => {
         const data = await res.json();
         if (res.ok && data.status === 'success') {
           setFullProfile(data.data);
+          setIsAuthenticated(true);
         } else {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -92,7 +100,8 @@ const App: React.FC = () => {
           setIsAuthenticated(false);
         }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setAuthChecked(true));
   }, [isAuthenticated]);
 
   const handleLogin = (_token: string, _loggedInUser: any) => {
@@ -119,6 +128,14 @@ const App: React.FC = () => {
     localStorage.removeItem('user');
     setIsAuthenticated(false);
   };
+
+  if (!authChecked) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-app, #F8FAFC)' }}>
+        <Icon name="loader-2" className="spin" size={32} color="var(--primary)" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLogin} />;

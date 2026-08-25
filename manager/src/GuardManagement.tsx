@@ -19,6 +19,7 @@ const GuardManagement: React.FC = () => {
   const [incidents, setIncidents] = useState<any[]>([]);
   const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
   const [salaryMonthFilter, setSalaryMonthFilter] = useState(new Date().toISOString().slice(0, 7));
+  const [entryPoints, setEntryPoints] = useState<any[]>([]);
 
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
 
@@ -188,11 +189,12 @@ const GuardManagement: React.FC = () => {
         'Content-Type': 'application/json'
       };
 
-      const [dirRes, activeRes, incRes, salaryRes] = await Promise.allSettled([
+      const [dirRes, activeRes, incRes, salaryRes, epRes] = await Promise.allSettled([
         fetch(`${API_BASE}/guards/directory?date=${selectedDate}`, { headers }),
         fetch(`${API_BASE}/guards/active`, { headers }),
         fetch(`${API_BASE}/incidents`, { headers }),
-        fetch(`${API_BASE}/guards/salaries${salaryMonthFilter ? `?month=${salaryMonthFilter}` : ''}`, { headers })
+        fetch(`${API_BASE}/guards/salaries${salaryMonthFilter ? `?month=${salaryMonthFilter}` : ''}`, { headers }),
+        fetch(`${API_BASE}/entries/entry-points`, { headers })
       ]);
 
       if (dirRes.status === 'fulfilled' && dirRes.value.ok) {
@@ -210,6 +212,10 @@ const GuardManagement: React.FC = () => {
       if (salaryRes.status === 'fulfilled' && salaryRes.value.ok) {
         const data = await salaryRes.value.json();
         setSalaryHistory(data.data || []);
+      }
+      if (epRes.status === 'fulfilled' && epRes.value.ok) {
+        const data = await epRes.value.json();
+        setEntryPoints(data.data || []);
       }
     } catch (err) {
       console.error('Failed to fetch guard data', err);
@@ -569,7 +575,7 @@ const GuardManagement: React.FC = () => {
                     className="form-input" 
                     placeholder="e.g. Rajesh Kumar" 
                     value={newGuardForm.name}
-                    onChange={e => setNewGuardForm({...newGuardForm, name: e.target.value})}
+                    onChange={e => setNewGuardForm({...newGuardForm, name: e.target.value.toUpperCase()})}
                   />
                 </div>
               </div>
@@ -581,7 +587,7 @@ const GuardManagement: React.FC = () => {
                     className="form-input" 
                     placeholder="e.g. SEC-1150" 
                     value={newGuardForm.badgeId}
-                    onChange={e => setNewGuardForm({...newGuardForm, badgeId: e.target.value})}
+                    onChange={e => setNewGuardForm({...newGuardForm, badgeId: e.target.value.toUpperCase()})}
                   />
                 </div>
                 <div className="form-group">
@@ -626,9 +632,9 @@ const GuardManagement: React.FC = () => {
                     onChange={e => setNewGuardForm({...newGuardForm, post: e.target.value})}
                   >
                     <option value="">Select a post...</option>
-                    <option value="main-gate">Main Gate - Tower A</option>
-                    <option value="service">Service Gate</option>
-                    <option value="parking">Parking Entry</option>
+                    {entryPoints.map(ep => (
+                      <option key={ep.id} value={ep.name}>{ep.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">

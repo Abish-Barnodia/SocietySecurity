@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
+import { io } from '../../server';
 import bcrypt from 'bcryptjs';
 
 export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -114,7 +115,8 @@ export const addHouseholdMember = async (req: Request, res: Response, next: Next
         });
         
         await auditLog(req.user!.userId, 'ADD_HOUSEHOLD_MEMBER', 'Resident', newResident.id);
-        
+        io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+
         return sendSuccess(res, 201, 'Household member added successfully', newResident);
     } catch (err) { next(err); }
 };
@@ -140,7 +142,8 @@ export const removeHouseholdMember = async (req: Request, res: Response, next: N
         });
         
         await auditLog(req.user!.userId, 'REMOVE_HOUSEHOLD_MEMBER', 'Resident', memberId);
-        
+        io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+
         return sendSuccess(res, 200, 'Household member removed successfully');
     } catch (err) { next(err); }
 };
@@ -522,7 +525,8 @@ export const onboardHousehold = async (req: Request, res: Response, next: NextFu
         });
         
         await auditLog(req.user!.userId, 'ONBOARD_HOUSEHOLD', 'Unit', result.unitId);
-        
+        io?.to(`unit_${result.unitId}`).emit('household_updated', { unitId: result.unitId });
+
         return sendSuccess(res, 201, 'Household onboarded successfully', result.createdResidents);
     } catch (err) { next(err); }
 };
@@ -680,7 +684,8 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
         });
         
         await auditLog(req.user!.userId, 'UPDATE_HOUSEHOLD', 'Unit', result.unitId);
-        
+        io?.to(`unit_${result.unitId}`).emit('household_updated', { unitId: result.unitId });
+
         return sendSuccess(res, 200, 'Household updated successfully', result.updatedResidents);
     } catch (err) { next(err); }
 };
@@ -697,7 +702,8 @@ export const deactivateResident = async (req: Request, res: Response, next: Next
         });
         
         await auditLog(req.user!.userId, 'DEACTIVATE_RESIDENT', 'Resident', id);
-        
+        io?.to(`unit_${resident.unitId}`).emit('household_updated', { unitId: resident.unitId });
+
         return sendSuccess(res, 200, 'Resident deactivated successfully');
     } catch (err) { next(err); }
 };

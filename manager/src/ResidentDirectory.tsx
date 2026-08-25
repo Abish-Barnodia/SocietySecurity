@@ -114,11 +114,12 @@ const ResidentDirectory = () => {
     }
   };
 
-  // Keep the complaints queue live while it's open — residents file these
-  // from the app in real time and the manager shouldn't have to switch tabs
-  // away and back to see a new one land.
+  // Keep the complaints queue and family directory live while open —
+  // residents add/remove household members and file complaints from the app
+  // in real time, and the manager shouldn't have to switch tabs away and
+  // back (or refresh) to see a change land.
   useEffect(() => {
-    if (activeTab !== 'complaints') return;
+    if (activeTab !== 'complaints' && activeTab !== 'directory') return;
     const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [activeTab]);

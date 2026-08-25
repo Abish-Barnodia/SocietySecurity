@@ -18,7 +18,10 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const activePassesCount = passes.filter(p => p.status === 'Active').length;
   const unreadAlertsCount = alerts.filter(a => a.unread).length;
   const entriesTodayCount = entries.filter(e => e.date === 'TODAY').length;
-  const householdSize = members.length + 1; // +1 for the primary resident, who isn't in `members`
+  // `members` already includes the primary resident (GET /residents/unit
+  // returns every resident on the unit with no isPrimary filter), so this
+  // was double-counting them — a 2-person household showed "3".
+  const householdSize = members.length;
   const recentActivity = entries.slice(0, 3);
 
   const navigateTo = (screen: string) => {

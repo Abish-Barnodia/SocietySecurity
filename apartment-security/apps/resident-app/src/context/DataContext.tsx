@@ -592,6 +592,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       scheduleLocalNotification(raw.title, raw.body);
     };
 
+    // Emitted whenever household composition changes for this unit - either
+    // side (this resident's own add/remove, another member, or a manager
+    // editing the household from the dashboard) should show up live instead
+    // of only refreshing next time the Household screen happens to remount.
+    const handleHouseholdUpdated = () => {
+      fetchMembers();
+    };
+
     // Emitted by acknowledgeAlert() to the user who raised the alert
     // (currently only duress alarms set triggeredByUserId) — the sender's
     // only prior feedback was the one-time "SOS sent" toast, with no way to
@@ -644,6 +652,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('walkin_request', handleWalkinRequest);
     socket.on('new_alert', handleNewAlert);
     socket.on('alert_acknowledged', handleAlertAcknowledged);
+    socket.on('household_updated', handleHouseholdUpdated);
     socket.on('visitor_approval_request', handleVisitorApprovalRequest);
     socket.on('visitor_approval_timeout', handleVisitorApprovalTimeout);
 
@@ -652,10 +661,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('walkin_request', handleWalkinRequest);
       socket.off('new_alert', handleNewAlert);
       socket.off('alert_acknowledged', handleAlertAcknowledged);
+      socket.off('household_updated', handleHouseholdUpdated);
       socket.off('visitor_approval_request', handleVisitorApprovalRequest);
       socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
     };
-  }, [socket, fetchAlerts, addAlert, markAlertRead]);
+  }, [socket, fetchAlerts, addAlert, markAlertRead, fetchMembers]);
 
   const value = useMemo<DataContextType>(() => ({
     passes, fetchPasses, createPass, suspendPass, revokePass,

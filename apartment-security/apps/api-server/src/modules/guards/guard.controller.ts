@@ -335,7 +335,9 @@ export const checkInPost = async (req: Request, res: Response, next: NextFunctio
 
 export const createGuard = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, phone, email, password, badgeNumber, status, shift, post, dateOfJoining, photoUrl } = req.body;
+    const { name, phone, email, password, status, shift, post, dateOfJoining, photoUrl } = req.body;
+    const badgeNumber: string = req.body.badgeNumber.toUpperCase();
+    const nameUpper: string = name.toUpperCase();
 
     // We assume the admin creating the guard belongs to a property
     const manager = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
@@ -343,7 +345,8 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
 
     if (!propertyId) return next(new AppError('No property found to associate guard', 400));
 
-    // Check if badge is already in use
+    // Badge numbers are normalized to uppercase above so "SEC-005" and
+    // "sec-005" can't slip past this as two different guards.
     const existingBadge = await prisma.guard.findUnique({ where: { badgeNumber } });
     if (existingBadge) return next(new AppError('Badge number already in use', 400));
 
@@ -373,7 +376,7 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
       data: {
         userId: user.id,
         propertyId,
-        name,
+        name: nameUpper,
         badgeNumber,
         isOnDuty: false
       }

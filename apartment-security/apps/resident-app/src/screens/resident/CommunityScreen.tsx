@@ -23,6 +23,7 @@ import MessageActionsSheet from '../../components/community/MessageActionsSheet'
 import AttachmentSheet, { AttachmentAction } from '../../components/community/AttachmentSheet';
 import CreatePollModal from '../../components/community/CreatePollModal';
 import MentionAutocomplete from '../../components/community/MentionAutocomplete';
+import ThemedAlertModal from '../../components/ThemedAlertModal';
 
 type ListItem = { kind: 'date'; label: string; key: string } | { kind: 'message'; message: ChatMessage };
 
@@ -79,6 +80,7 @@ export default function CommunityScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sending, setSending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const lastTypingEmitRef = useRef(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,7 +132,7 @@ export default function CommunityScreen() {
       setMentionQuery(null);
       setReplyTo(null);
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send message. Please try again.');
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -147,7 +149,7 @@ export default function CommunityScreen() {
           });
           setReplyTo(null);
         } catch (error: any) {
-          Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send voice message. Please try again.');
+          setErrorMessage(error?.response?.data?.message ?? 'Failed to send voice message. Please try again.');
         }
       }
     } else {
@@ -219,7 +221,7 @@ export default function CommunityScreen() {
         setReplyTo(null);
       }
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send attachment. Please try again.');
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to send attachment. Please try again.');
     }
   };
 
@@ -411,6 +413,7 @@ export default function CommunityScreen() {
       />
       <AttachmentSheet visible={attachmentOpen} onClose={() => setAttachmentOpen(false)} onSelect={handleAttachmentSelect} />
       <CreatePollModal visible={pollModalOpen} onClose={() => setPollModalOpen(false)} replyToId={replyTo?.id} />
+      <ThemedAlertModal visible={!!errorMessage} title="Error" message={errorMessage ?? ''} onClose={() => setErrorMessage(null)} />
     </View>
   );
 }

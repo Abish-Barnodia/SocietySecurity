@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useCommunity } from '../../context/CommunityContext';
+import ThemedAlertModal from '../ThemedAlertModal';
 
 export default function CreatePollModal({
   visible,
@@ -30,6 +31,7 @@ export default function CreatePollModal({
   const [options, setOptions] = useState(['', '']);
   const [allowMultiple, setAllowMultiple] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const reset = () => {
     setQuestion('');
@@ -65,7 +67,7 @@ export default function CreatePollModal({
       await createPoll(question, options, allowMultiple, replyToId);
       close();
     } catch (error: any) {
-      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to create poll. Please try again.');
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to create poll. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -137,6 +139,7 @@ export default function CreatePollModal({
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      <ThemedAlertModal visible={!!errorMessage} title="Error" message={errorMessage ?? ''} onClose={() => setErrorMessage(null)} />
     </Modal>
   );
 }

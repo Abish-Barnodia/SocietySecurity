@@ -113,7 +113,9 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
               <AlertIcon priority={alert.icon} colors={colors} />
               <View style={styles.alertContent}>
                 <Text style={styles.alertTitle}>{alert.title}</Text>
-                <Text style={styles.alertSubtitle}>{alert.subtitle}</Text>
+                <ScrollView style={styles.subtitleScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+                  <Text style={styles.alertSubtitle}>{alert.subtitle}</Text>
+                </ScrollView>
                 <Text style={styles.alertTime}>{alert.time}</Text>
               </View>
               {alert.unread && <View style={styles.unreadDot} />}
@@ -272,10 +274,16 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  // Caps a single alert card's message at ~4 lines and scrolls internally
+  // past that — a long broadcast used to stretch the card to fit the whole
+  // message, forcing a long scroll down the entire list just to get past it.
+  subtitleScroll: {
+    maxHeight: 84,
+    marginBottom: 4,
+  },
   alertSubtitle: {
     fontSize: 14,
     color: colors.textMuted,
-    marginBottom: 4,
     lineHeight: 20,
   },
   alertTime: {

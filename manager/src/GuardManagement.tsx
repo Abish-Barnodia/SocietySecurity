@@ -8,7 +8,7 @@ import { API_BASE } from './config';
 const GuardManagement: React.FC = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
   
-  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'incidents' | 'salary'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'live' | 'salary'>('roster');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -16,7 +16,6 @@ const GuardManagement: React.FC = () => {
   const [guardSearch, setGuardSearch] = useState('');
   const [guardStatusFilter, setGuardStatusFilter] = useState('All Status');
   const [activeGuards, setActiveGuards] = useState<any[]>([]);
-  const [incidents, setIncidents] = useState<any[]>([]);
   const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
   const [salaryMonthFilter, setSalaryMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [entryPoints, setEntryPoints] = useState<any[]>([]);
@@ -191,10 +190,9 @@ const GuardManagement: React.FC = () => {
         'Content-Type': 'application/json'
       };
 
-      const [dirRes, activeRes, incRes, salaryRes, epRes] = await Promise.allSettled([
+      const [dirRes, activeRes, salaryRes, epRes] = await Promise.allSettled([
         fetch(`${API_BASE}/guards/directory?date=${selectedDate}`, { headers }),
         fetch(`${API_BASE}/guards/active`, { headers }),
-        fetch(`${API_BASE}/incidents`, { headers }),
         fetch(`${API_BASE}/guards/salaries${salaryMonthFilter ? `?month=${salaryMonthFilter}` : ''}`, { headers }),
         fetch(`${API_BASE}/entries/entry-points`, { headers })
       ]);
@@ -206,10 +204,6 @@ const GuardManagement: React.FC = () => {
       if (activeRes.status === 'fulfilled' && activeRes.value.ok) {
         const data = await activeRes.value.json();
         setActiveGuards(data.data || []);
-      }
-      if (incRes.status === 'fulfilled' && incRes.value.ok) {
-        const data = await incRes.value.json();
-        setIncidents(data.data || []);
       }
       if (salaryRes.status === 'fulfilled' && salaryRes.value.ok) {
         const data = await salaryRes.value.json();
@@ -278,12 +272,6 @@ const GuardManagement: React.FC = () => {
           className={`tab-btn ${activeTab === 'live' ? 'active' : ''}`}
         >
           <Icon name="activity" size={16} /> Live Monitoring
-        </button>
-        <button 
-          onClick={() => setActiveTab('incidents')}
-          className={`tab-btn ${activeTab === 'incidents' ? 'active' : ''}`}
-        >
-          <Icon name="alert-circle" size={16} /> Incidents
         </button>
         <button
           onClick={() => setActiveTab('salary')}
@@ -439,45 +427,6 @@ const GuardManagement: React.FC = () => {
                 </div>
               ))
             )}
-          </div>
-        )}
-
-        {/* INCIDENTS TAB */}
-        {activeTab === 'incidents' && (
-          <div style={{ padding: 24 }}>
-             <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ color: 'var(--text-muted)', fontSize: 12, borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ padding: '12px 16px' }}>Time</th>
-                  <th style={{ padding: '12px 16px' }}>Guard / Post</th>
-                  <th style={{ padding: '12px 16px' }}>Type</th>
-                  <th style={{ padding: '12px 16px' }}>Status</th>
-                  <th style={{ padding: '12px 16px' }}>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incidents.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No incidents logged.</td></tr>
-                ) : (
-                  incidents.map((inc, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{new Date(inc.createdAt).toLocaleString()}</td>
-                      <td style={{ padding: '16px', fontSize: 13 }}>
-                        <div style={{ fontWeight: 600 }}>{inc.guard?.user?.name || 'Unknown Guard'}</div>
-                        <div style={{ color: 'var(--text-muted)' }}>{inc.location}</div>
-                      </td>
-                      <td style={{ padding: '16px', fontSize: 13 }}>{inc.type}</td>
-                      <td style={{ padding: '16px' }}>
-                        <span className="status-badge" style={{ backgroundColor: inc.status === 'CLOSED' ? '#F1F5F9' : '#FEF3C7', color: inc.status === 'CLOSED' ? '#64748B' : '#D97706' }}>
-                          {inc.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px', fontSize: 13, maxWidth: 300 }}>{inc.description}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
         )}
 

@@ -23,8 +23,8 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-/* Dark theme — applied via [data-theme="dark"] on <html>, set from the
-   manager's saved Platform Config preference (see Settings.tsx / App.tsx). */
+/* Dark theme — applied via [data-theme="dark"] on <html>, from the manager's
+   saved theme preference (see applyManagerTheme in Settings.tsx / App.tsx). */
 [data-theme="dark"] {
   --primary-bg: #0D2B24;
   --bg-sidebar: #101312;
@@ -62,6 +62,27 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/* Baseline click feedback for every button on the site. Most buttons here
+   (Acknowledge, Broadcast Alert, salary/pay actions, modal confirm/cancel,
+   etc.) are styled entirely with inline style={{}} and no shared className,
+   so they had no :hover state at all - inline styles can't express pseudo-
+   classes. This is a low-specificity element selector, so any of the more
+   specific .btn-primary/.action-btn/.tab-btn/etc. hover rules elsewhere in
+   this file still take priority and layer on top rather than being replaced. */
+button:not(:disabled) {
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+button:not(:disabled):hover {
+  filter: brightness(0.94);
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: default;
 }
 
 body {

@@ -129,8 +129,8 @@ export default function CommunityScreen() {
       setMentionedIds([]);
       setMentionQuery(null);
       setReplyTo(null);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -146,8 +146,8 @@ export default function CommunityScreen() {
             durationSec: result.durationSec,
           });
           setReplyTo(null);
-        } catch {
-          Alert.alert('Error', 'Failed to send voice message. Please try again.');
+        } catch (error: any) {
+          Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send voice message. Please try again.');
         }
       }
     } else {
@@ -218,8 +218,8 @@ export default function CommunityScreen() {
         }
         setReplyTo(null);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to send attachment. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to send attachment. Please try again.');
     }
   };
 

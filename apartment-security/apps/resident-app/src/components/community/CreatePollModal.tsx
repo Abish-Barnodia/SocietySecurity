@@ -64,8 +64,8 @@ export default function CreatePollModal({
     try {
       await createPoll(question, options, allowMultiple, replyToId);
       close();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create poll. Please try again.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.message ?? 'Failed to create poll. Please try again.');
     } finally {
       setSubmitting(false);
     }

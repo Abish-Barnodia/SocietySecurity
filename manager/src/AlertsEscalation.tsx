@@ -16,6 +16,7 @@ const AlertsEscalation = () => {
 
   // Broadcast Modal State
   const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [selectedAlertDetail, setSelectedAlertDetail] = useState<any>(null);
   const [broadcastForm, setBroadcastForm] = useState({ title: '', message: '', severity: 'HIGH' });
 
   const fetchAllData = async () => {
@@ -295,7 +296,11 @@ const AlertsEscalation = () => {
                       <span>•</span>
                       <span>{alert.actor}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#374151', marginTop: 4, maxHeight: 90, overflowY: 'auto', lineHeight: 1.5, paddingRight: 4 }}>
+                    <div
+                      onClick={() => setSelectedAlertDetail(alert)}
+                      title="Click to view the full message"
+                      style={{ fontSize: 13, color: '#374151', marginTop: 4, maxHeight: 90, overflowY: 'auto', lineHeight: 1.5, paddingRight: 4, cursor: 'pointer' }}
+                    >
                       {alert.description}
                     </div>
                   </div>
@@ -420,6 +425,26 @@ const AlertsEscalation = () => {
                   Send to Everyone
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Message Modal */}
+      {selectedAlertDetail && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setSelectedAlertDetail(null)}>
+          <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 24, width: 520, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{selectedAlertDetail.title}</h2>
+                <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4 }}>
+                  {new Date(selectedAlertDetail.createdAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short', year: 'numeric' })} • {selectedAlertDetail.actor}
+                </div>
+              </div>
+              <button onClick={() => setSelectedAlertDetail(null)} className="modal-close"><Icon name="x" size={18}/></button>
+            </div>
+            <div style={{ fontSize: 14, color: '#374151', lineHeight: 1.6, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+              {selectedAlertDetail.description}
             </div>
           </div>
         </div>

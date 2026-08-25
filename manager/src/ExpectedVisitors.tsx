@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import QRCode from 'qrcode';
 import Icon from './Icon';
 import ClockTimePicker from './ClockTimePicker';
 import { API_BASE } from './config';
@@ -87,20 +88,92 @@ const ExpectedVisitors = () => {
   };
 
   const getPassCode = (pass: any) => `PASS-${pass.id.slice(-8).toUpperCase()}`;
+  const passUnitLabel = (pass: any) => pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property';
 
-  // wa.me is WhatsApp's universal link - opens the chat/composer directly in
-  // a new tab, no app-store deep-link registration or extra dependency needed.
-  const sharePassViaWhatsApp = (pass: any) => {
-    const message = `Hello ${pass.visitorName}, your visitor pass for ${pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property'} is: ${getPassCode(pass)}. Valid from ${new Date(pass.validFrom).toLocaleString()} to ${new Date(pass.validUntil).toLocaleString()}.`;
-    const phone = (pass.visitorPhone || '').replace(/\D/g, '');
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  // Draws the same visitor-pass card the resident app generates (name, QR,
+  // validity) onto a canvas so the actual scannable QR travels as an image -
+  // sharing plain text meant the guard had nothing to point a scanner at.
+  const buildPassImageBlob = async (pass: any): Promise<Blob | null> => {
+    if (!pass.qrPayload) return null;
+    const qrDataUrl = await QRCode.toDataURL(pass.qrPayload, { width: 300, margin: 1 });
+    const qrImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = qrDataUrl;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 560;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0F172A';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 26px sans-serif';
+    ctx.fillText(pass.visitorName, canvas.width / 2, 50);
+    ctx.fillStyle = '#64748B';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(pass.purpose || pass.type, canvas.width / 2, 78);
+
+    ctx.drawImage(qrImg, 50, 110, 300, 300);
+
+    ctx.fillStyle = '#16A34A';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(getPassCode(pass), canvas.width / 2, 445);
+    ctx.fillStyle = '#374151';
+    ctx.font = '14px sans-serif';
+    ctx.fillText(`Unit: ${passUnitLabel(pass)}`, canvas.width / 2, 470);
+    ctx.fillText(`Valid: ${new Date(pass.validFrom).toLocaleString()} - ${new Date(pass.validUntil).toLocaleString()}`, canvas.width / 2, 492);
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('SecureGate Visitor Pass', canvas.width / 2, 530);
+
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
   };
 
-  const sharePassViaEmail = (pass: any) => {
-    const subject = `Visitor Pass - ${pass.visitorName}`;
-    const body = `Hello ${pass.visitorName},\n\nYour visitor pass for ${pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property'} is: ${getPassCode(pass)}.\nValid from ${new Date(pass.validFrom).toLocaleString()} to ${new Date(pass.validUntil).toLocaleString()}.\n\nPlease show your pass code or QR at the gate.`;
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
+
+  const sharePassAsImage = async (pass: any, target: 'whatsapp' | 'email') => {
+    const blob = await buildPassImageBlob(pass);
+    if (!blob) { alert('This pass has no scannable QR code to share.'); return; }
+    const file = new File([blob], `${getPassCode(pass)}.png`, { type: 'image/png' });
+    const shareText = `Hello ${pass.visitorName}, your visitor pass for ${passUnitLabel(pass)} is: ${getPassCode(pass)}. Valid ${new Date(pass.validFrom).toLocaleString()} - ${new Date(pass.validUntil).toLocaleString()}.`;
+
+    // Web Share API with a file lets the OS's native share sheet hand the
+    // actual image to WhatsApp/Mail/etc - supported on most mobile browsers,
+    // not on desktop Chrome/Edge/Firefox (no browser API can attach a file
+    // to a wa.me link or a mailto: link - both are text-only by spec).
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Visitor Pass', text: shareText });
+        return;
+      } catch {
+        return; // user cancelled the native share sheet
+      }
+    }
+
+    downloadBlob(blob, file.name);
+    if (target === 'whatsapp') {
+      const phone = (pass.visitorPhone || '').replace(/\D/g, '');
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`, '_blank');
+      alert('Pass image downloaded. Attach it in the WhatsApp chat that just opened - browsers on desktop can\'t attach files to a link automatically.');
+    } else {
+      window.location.href = `mailto:?subject=${encodeURIComponent(`Visitor Pass - ${pass.visitorName}`)}&body=${encodeURIComponent(shareText)}`;
+      alert('Pass image downloaded. Attach it to the email draft that just opened - mailto links can\'t carry attachments.');
+    }
+  };
+
+  const sharePassViaWhatsApp = (pass: any) => sharePassAsImage(pass, 'whatsapp');
+  const sharePassViaEmail = (pass: any) => sharePassAsImage(pass, 'email');
 
   const toggleRecurringDay = (day: string) => {
     setAddForm(prev => ({

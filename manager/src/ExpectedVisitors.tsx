@@ -86,6 +86,22 @@ const ExpectedVisitors = () => {
     setAddForm(blankAddForm());
   };
 
+  const getPassCode = (pass: any) => `PASS-${pass.id.slice(-8).toUpperCase()}`;
+
+  // wa.me is WhatsApp's universal link - opens the chat/composer directly in
+  // a new tab, no app-store deep-link registration or extra dependency needed.
+  const sharePassViaWhatsApp = (pass: any) => {
+    const message = `Hello ${pass.visitorName}, your visitor pass for ${pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property'} is: ${getPassCode(pass)}. Valid from ${new Date(pass.validFrom).toLocaleString()} to ${new Date(pass.validUntil).toLocaleString()}.`;
+    const phone = (pass.visitorPhone || '').replace(/\D/g, '');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const sharePassViaEmail = (pass: any) => {
+    const subject = `Visitor Pass - ${pass.visitorName}`;
+    const body = `Hello ${pass.visitorName},\n\nYour visitor pass for ${pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property'} is: ${getPassCode(pass)}.\nValid from ${new Date(pass.validFrom).toLocaleString()} to ${new Date(pass.validUntil).toLocaleString()}.\n\nPlease show your pass code or QR at the gate.`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
   const toggleRecurringDay = (day: string) => {
     setAddForm(prev => ({
       ...prev,
@@ -396,8 +412,22 @@ const ExpectedVisitors = () => {
                 </div>
               )}
             </div>
-            <div style={{ marginTop: 24, textAlign: 'center' }}>
-              <button 
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              <button
+                onClick={() => sharePassViaWhatsApp(selectedPass)}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 6, backgroundColor: '#25D366', border: 'none', color: 'white', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+              >
+                <Icon name="brand-whatsapp" size={16} /> WhatsApp
+              </button>
+              <button
+                onClick={() => sharePassViaEmail(selectedPass)}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px', borderRadius: 6, backgroundColor: 'white', border: '1px solid #E5E7EB', color: '#374151', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+              >
+                <Icon name="mail" size={16} /> Email
+              </button>
+            </div>
+            <div style={{ marginTop: 10, textAlign: 'center' }}>
+              <button
                 onClick={() => setSelectedPass(null)}
                 style={{ width: '100%', padding: '10px', borderRadius: 6, backgroundColor: 'white', border: '1px solid #E5E7EB', color: '#4B5563', fontWeight: 500, cursor: 'pointer' }}
               >

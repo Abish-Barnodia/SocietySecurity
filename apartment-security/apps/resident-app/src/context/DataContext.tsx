@@ -273,7 +273,7 @@ const mapAlertPreferences = (raw: any): AlertPreferences => ({
 type DataContextType = {
   passes: Pass[];
   fetchPasses: () => Promise<void>;
-  createPass: (data: Partial<Pass>) => Promise<void>;
+  createPass: (data: Partial<Pass>) => Promise<Pass>;
   suspendPass: (id: string) => Promise<void>;
   revokePass: (id: string) => Promise<void>;
   alerts: Alert[];
@@ -350,6 +350,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.post('/passes', data);
       const newPass = mapPass(response.data.data.pass);
       setPasses((prev) => [newPass, ...prev]);
+      return newPass;
     } catch (error) {
       console.error('Failed to create pass:', error);
       throw error;

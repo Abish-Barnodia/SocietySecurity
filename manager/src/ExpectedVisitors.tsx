@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import Icon from './Icon';
+import ClockTimePicker from './ClockTimePicker';
 import { API_BASE } from './config';
 
 const WEEK_DAYS: { label: string; value: string }[] = [
@@ -12,29 +13,6 @@ const WEEK_DAYS: { label: string; value: string }[] = [
   { label: 'Sat', value: 'SATURDAY' },
   { label: 'Sun', value: 'SUNDAY' },
 ];
-
-const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
-const selectStyle: React.CSSProperties = { padding: '10px 8px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: 'white' };
-
-// 12-hour hour/minute/AM-PM controls, matching the resident app's own time
-// picker format instead of the browser's locale-dependent 24h datetime input.
-const TimeSelect = ({ hour, minute, period, onHour, onMinute, onPeriod }: {
-  hour: string; minute: string; period: string;
-  onHour: (v: string) => void; onMinute: (v: string) => void; onPeriod: (v: string) => void;
-}) => (
-  <div style={{ display: 'flex', gap: 6, flex: 1 }}>
-    <select value={hour} onChange={e => onHour(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
-      {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(h => <option key={h} value={h}>{h}</option>)}
-    </select>
-    <select value={minute} onChange={e => onMinute(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
-      {MINUTES.map(m => <option key={m} value={m}>{m}</option>)}
-    </select>
-    <select value={period} onChange={e => onPeriod(e.target.value)} style={{ ...selectStyle, flex: 1 }}>
-      <option value="AM">AM</option>
-      <option value="PM">PM</option>
-    </select>
-  </div>
-);
 
 // hour is 1-12 + AM/PM here, but the backend/Date constructor both need 24h.
 const to24Hour = (hour: string, minute: string, period: string) => {
@@ -519,18 +497,14 @@ const ExpectedVisitors = () => {
                   <div>
                     <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Daily Entry Window</label>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                      <TimeSelect
+                      <ClockTimePicker
                         hour={addForm.entryStartHour} minute={addForm.entryStartMinute} period={addForm.entryStartPeriod}
-                        onHour={v => setAddForm({...addForm, entryStartHour: v})}
-                        onMinute={v => setAddForm({...addForm, entryStartMinute: v})}
-                        onPeriod={v => setAddForm({...addForm, entryStartPeriod: v})}
+                        onChange={(h, m, p) => setAddForm({...addForm, entryStartHour: h, entryStartMinute: m, entryStartPeriod: p})}
                       />
                       <span style={{ color: '#9CA3AF', fontSize: 13 }}>to</span>
-                      <TimeSelect
+                      <ClockTimePicker
                         hour={addForm.entryEndHour} minute={addForm.entryEndMinute} period={addForm.entryEndPeriod}
-                        onHour={v => setAddForm({...addForm, entryEndHour: v})}
-                        onMinute={v => setAddForm({...addForm, entryEndMinute: v})}
-                        onPeriod={v => setAddForm({...addForm, entryEndPeriod: v})}
+                        onChange={(h, m, p) => setAddForm({...addForm, entryEndHour: h, entryEndMinute: m, entryEndPeriod: p})}
                       />
                     </div>
                   </div>
@@ -554,11 +528,9 @@ const ExpectedVisitors = () => {
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
                         value={addForm.validFromDate} onChange={e => setAddForm({...addForm, validFromDate: e.target.value})}
                       />
-                      <TimeSelect
+                      <ClockTimePicker
                         hour={addForm.validFromHour} minute={addForm.validFromMinute} period={addForm.validFromPeriod}
-                        onHour={v => setAddForm({...addForm, validFromHour: v})}
-                        onMinute={v => setAddForm({...addForm, validFromMinute: v})}
-                        onPeriod={v => setAddForm({...addForm, validFromPeriod: v})}
+                        onChange={(h, m, p) => setAddForm({...addForm, validFromHour: h, validFromMinute: m, validFromPeriod: p})}
                       />
                     </div>
                   </div>
@@ -570,11 +542,9 @@ const ExpectedVisitors = () => {
                         style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
                         value={addForm.validUntilDate} onChange={e => setAddForm({...addForm, validUntilDate: e.target.value})}
                       />
-                      <TimeSelect
+                      <ClockTimePicker
                         hour={addForm.validUntilHour} minute={addForm.validUntilMinute} period={addForm.validUntilPeriod}
-                        onHour={v => setAddForm({...addForm, validUntilHour: v})}
-                        onMinute={v => setAddForm({...addForm, validUntilMinute: v})}
-                        onPeriod={v => setAddForm({...addForm, validUntilPeriod: v})}
+                        onChange={(h, m, p) => setAddForm({...addForm, validUntilHour: h, validUntilMinute: m, validUntilPeriod: p})}
                       />
                     </div>
                   </div>

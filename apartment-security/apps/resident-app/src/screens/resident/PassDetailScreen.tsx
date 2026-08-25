@@ -138,6 +138,36 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
     }
   };
 
+  const shareViaWhatsApp = async () => {
+    const message = `Hello ${pass.name}, your visitor pass for ${propertyName} is: ${getPassCode()}. Valid: ${pass.time}.`;
+    const phoneNum = pass.phone ? pass.phone.replace(/\D/g, '') : '';
+    // wa.me is WhatsApp's universal link - works without any native scheme
+    // registration (whatsapp:// requires LSApplicationQueriesSchemes on iOS),
+    // and falls back to WhatsApp's own "app not installed" page if needed.
+    const url = `https://wa.me/${phoneNum}?text=${encodeURIComponent(message)}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Could not open WhatsApp');
+    }
+  };
+
+  const shareViaEmail = async () => {
+    const subject = `Visitor Pass - ${pass.name}`;
+    const body = `Hello ${pass.name},\n\nYour visitor pass for ${propertyName} is: ${getPassCode()}.\nValid: ${pass.time}.\nGate: ${pass.gate || 'Any gate'}\n\nPlease show your pass code or QR at the gate.`;
+    const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('No email app is available.');
+      }
+    } catch {
+      Alert.alert('Could not open email app');
+    }
+  };
+
   const copyPassCode = async () => {
     try {
       await Share.share({
@@ -213,6 +243,14 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           <Text style={styles.primaryActionText}>📤 Share Pass PDF</Text>
         </TouchableOpacity>
         
+        <TouchableOpacity style={styles.secondaryActionBtn} onPress={shareViaWhatsApp}>
+          <Text style={styles.secondaryActionText}>Share via WhatsApp</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.secondaryActionBtn} onPress={shareViaEmail}>
+          <Text style={styles.secondaryActionText}>Share via Email</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.secondaryActionBtn} onPress={shareViaSMS}>
           <Text style={styles.secondaryActionText}>Share via SMS</Text>
         </TouchableOpacity>

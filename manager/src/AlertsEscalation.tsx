@@ -295,7 +295,7 @@ const AlertsEscalation = () => {
                       <span>•</span>
                       <span>{alert.actor}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#374151', marginTop: 4 }}>
+                    <div style={{ fontSize: 13, color: '#374151', marginTop: 4, maxHeight: 90, overflowY: 'auto', lineHeight: 1.5, paddingRight: 4 }}>
                       {alert.description}
                     </div>
                   </div>

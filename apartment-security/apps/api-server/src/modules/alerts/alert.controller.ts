@@ -96,7 +96,8 @@ export const triggerDuress = async (req: Request, res: Response, next: NextFunct
         title: 'SILENT DURESS ALARM',
         body: `${senderName} has triggered a silent duress alarm. Immediate assistance required.`,
         channel: 'PUSH',
-        targetRoles: ['GUARD', 'MANAGER']
+        targetRoles: ['GUARD', 'MANAGER'],
+        triggeredByUserId: user.id
       }
     });
 

@@ -60,7 +60,7 @@ const AlertsEscalation = () => {
             sourceType: 'ALERT',
             title: al.title,
             description: al.body,
-            status: al.acknowledgedByUserId ? 'ACKNOWLEDGED' : 'OPEN',
+            status: al.status === 'ACKNOWLEDGED' ? 'ACKNOWLEDGED' : 'OPEN',
             createdAt: al.createdAt,
             priority: al.priority,
             actor: 'System Monitoring'

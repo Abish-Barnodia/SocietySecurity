@@ -127,8 +127,20 @@ export const acknowledgeAlert = async (alertId: string, userId: string) => {
   });
   if (!alert) return null;
 
-  return prisma.alert.update({
+  const updated = await prisma.alert.update({
     where: { id: alert.id },
     data: { status: 'ACKNOWLEDGED', acknowledgedAt: new Date(), acknowledgedBy: userId },
   });
+
+  // Notify whoever raised this alert (currently only set for duress alarms)
+  // that staff has responded — otherwise the sender never learns a manager
+  // acted on it beyond the one-time "SOS sent" toast at trigger time.
+  if (updated.triggeredByUserId) {
+    try {
+      const { io } = await import('../server');
+      io?.to(`user:${updated.triggeredByUserId}`).emit('alert_acknowledged', updated);
+    } catch { /* server not yet ready during tests */ }
+  }
+
+  return updated;
 };

@@ -592,6 +592,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       scheduleLocalNotification(raw.title, raw.body);
     };
 
+    // Emitted by acknowledgeAlert() to the user who raised the alert
+    // (currently only duress alarms set triggeredByUserId) — the sender's
+    // only prior feedback was the one-time "SOS sent" toast, with no way to
+    // know staff had actually responded until this arrives.
+    const handleAlertAcknowledged = () => {
+      scheduleLocalNotification('Alert acknowledged', 'Your SOS alert has been acknowledged — help is on the way.');
+    };
+
     // QR-scan arrivals — same shape/handling as a manual walk-in request,
     // plus the extra pass-derived fields and a real server timeoutAt.
     const handleVisitorApprovalRequest = (payload: {
@@ -635,6 +643,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('connect', handleConnect);
     socket.on('walkin_request', handleWalkinRequest);
     socket.on('new_alert', handleNewAlert);
+    socket.on('alert_acknowledged', handleAlertAcknowledged);
     socket.on('visitor_approval_request', handleVisitorApprovalRequest);
     socket.on('visitor_approval_timeout', handleVisitorApprovalTimeout);
 
@@ -642,6 +651,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('connect', handleConnect);
       socket.off('walkin_request', handleWalkinRequest);
       socket.off('new_alert', handleNewAlert);
+      socket.off('alert_acknowledged', handleAlertAcknowledged);
       socket.off('visitor_approval_request', handleVisitorApprovalRequest);
       socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
     };

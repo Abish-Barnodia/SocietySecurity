@@ -323,6 +323,10 @@ model Alert {
   claimedAt       DateTime?
   claimedByName   String?
   claimedByUserId String?
+  // Who raised this alert (currently only set for resident/guard-triggered
+  // duress alarms) - lets acknowledgeAlert notify them back that staff has
+  // responded, distinct from targetUserIds/targetRoles which are recipients.
+  triggeredByUserId String?
   imageUrl        String?
   escalationStep  Int           @default(0)
   entry           Entry?        @relation(fields: [entryId], references: [id])

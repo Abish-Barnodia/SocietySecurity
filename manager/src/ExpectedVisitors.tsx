@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import Icon from './Icon';
 import { API_BASE } from './config';
 
@@ -275,6 +276,14 @@ const ExpectedVisitors = () => {
               <button onClick={() => setSelectedPass(null)} className="modal-close"><Icon name="x" size={18}/></button>
             </div>
             
+            {selectedPass.qrPayload && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 20px' }}>
+                <div style={{ padding: 12, background: 'white', borderRadius: 8, border: '1px solid #E5E7EB' }}>
+                  <QRCodeSVG value={selectedPass.qrPayload} size={180} />
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6B7280' }}>Visitor Name</span>
@@ -379,8 +388,12 @@ const ExpectedVisitors = () => {
                   value={addForm.unitId} onChange={e => setAddForm({...addForm, unitId: e.target.value})}
                 >
                   <option value="">Select a unit...</option>
-                  {residents.map(r => r.unit).filter((v,i,a) => a.findIndex(t => t?.id === v?.id) === i).filter(Boolean).map(u => (
-                    <option key={u.id} value={u.id}>{u.tower} - {u.unitNumber}</option>
+                  {/* /residents (getAllResidents) already returns one grouped
+                      entry per unit - {unitId, tower, apartmentNumber} - not
+                      a nested `.unit` object, so this used to map every
+                      family to `undefined` and filter the whole list away. */}
+                  {residents.map(r => (
+                    <option key={r.unitId} value={r.unitId}>{r.tower} - {r.apartmentNumber}</option>
                   ))}
                 </select>
               </div>

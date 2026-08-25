@@ -12,6 +12,7 @@
   "dependencies": {
     "@iconify-json/tabler": "^1.2.38",
     "@iconify/react": "^6.0.2",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "socket.io-client": "^4.8.3"

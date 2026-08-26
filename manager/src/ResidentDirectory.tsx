@@ -90,8 +90,8 @@ const ResidentDirectory = () => {
 
   useEffect(() => { fetchData(); }, [activeTab]);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
       if (activeTab === 'directory') {
@@ -120,7 +120,7 @@ const ResidentDirectory = () => {
   // back (or refresh) to see a change land.
   useEffect(() => {
     if (activeTab !== 'complaints' && activeTab !== 'directory') return;
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(() => fetchData(true), 15000);
     return () => clearInterval(interval);
   }, [activeTab]);
 

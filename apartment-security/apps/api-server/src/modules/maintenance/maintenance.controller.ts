@@ -108,6 +108,38 @@ export const createPaymentOrder = async (req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 };
 
+// After a payment is confirmed, mirror it into Fund Management as income so
+// the manager's fund ledger reflects maintenance collections automatically
+// instead of needing a duplicate manual entry. payerUserId identifies who
+// actually completed the payment (any resident of the unit may pay a bill
+// raised against the unit); falls back to the invoice's billed resident for
+// the public WebView callback, which has no authenticated caller.
+const recordMaintenanceIncome = async (
+  invoice: { propertyId: string; unitId: string; residentId: string | null; amount: number; description: string },
+  payerUserId?: string
+) => {
+  const [payer, unit] = await Promise.all([
+    payerUserId
+      ? prisma.resident.findUnique({ where: { userId: payerUserId }, select: { name: true } })
+      : invoice.residentId
+      ? prisma.resident.findUnique({ where: { id: invoice.residentId }, select: { name: true } })
+      : null,
+    prisma.unit.findUnique({ where: { id: invoice.unitId }, select: { tower: true, unitNumber: true } }),
+  ]);
+  const unitLabel = unit ? [unit.tower, unit.unitNumber].filter(Boolean).join('-') : null;
+  const paidBy = payer?.name ? `${payer.name}${unitLabel ? ` (${unitLabel})` : ''}` : unitLabel ?? 'a resident';
+
+  return prisma.fundTransaction.create({
+    data: {
+      propertyId: invoice.propertyId,
+      amount: invoice.amount,
+      type: 'INCOME',
+      category: 'Maintenance',
+      description: `${invoice.description} — paid by ${paidBy}`,
+    },
+  });
+};
+
 // Resident: verify the Razorpay signature server-side and only then mark the
 // invoice paid. The checkout callback succeeding client-side proves nothing
 // by itself — this HMAC check is what actually proves the payment happened.
@@ -156,6 +188,11 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
 
     const io = req.app.get('io');
     io?.to(`property:${invoice.propertyId}`).emit('invoice:update', finalInvoice);
+
+    if (updatedInvoice) {
+      const fundTx = await recordMaintenanceIncome(updatedInvoice, req.user!.userId);
+      io?.to(`property:${invoice.propertyId}`).emit('fund:new', fundTx);
+    }
 
     return sendSuccess(res, 200, 'Payment verified', { invoice: finalInvoice, paymentId: payment.id });
   } catch (err) { next(err); }
@@ -257,10 +294,16 @@ export const verifyPaymentPublic = async (req: Request, res: Response, next: Nex
     });
 
     const finalInvoice = updatedInvoice ?? (await prisma.invoice.findUnique({ where: { id: invoiceId } }));
-    
+
     if (finalInvoice) {
       const io = req.app.get('io');
       io?.to(`property:${finalInvoice.propertyId}`).emit('invoice:update', finalInvoice);
+    }
+
+    if (updatedInvoice) {
+      const fundTx = await recordMaintenanceIncome(updatedInvoice);
+      const io = req.app.get('io');
+      io?.to(`property:${updatedInvoice.propertyId}`).emit('fund:new', fundTx);
     }
 
     return res.status(200).send(htmlResponse(true, ''));

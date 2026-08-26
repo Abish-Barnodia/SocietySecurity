@@ -372,9 +372,11 @@ const GuardManagement: React.FC = () => {
                           <span className={`status-badge-modern ${g.isOnDuty ? 'status-on-post-modern' : 'status-offline-modern'}`}>{g.isOnDuty ? 'On Post' : 'Offline'}</span>
                         )}
                       </td>
-                      <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{g.lastPost?.entryPoint?.name || 'Main Gate — Entry'}</td>
+                      <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)' }}>{g.lastPost?.entryPoint?.name || 'Not assigned'}</td>
                       <td style={{ padding: '16px', fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                        06:00 - 14:00
+                        {g.lastShift?.startedAt
+                          ? `${new Date(g.lastShift.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${g.lastShift.endedAt ? new Date(g.lastShift.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'now'}`
+                          : '—'}
                       </td>
                       <td style={{ padding: '16px', fontWeight: 600, fontSize: 14 }}>
                         {g.entriesCount !== undefined ? g.entriesCount : (g.lastShift?.totalEntries || 0)}

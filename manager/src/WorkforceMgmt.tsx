@@ -15,8 +15,6 @@ const WorkforceMgmt = () => {
   const [activeAssignments, setActiveAssignments] = useState<any[]>([]);
 
   // Modal State
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', phone: '', badgeNumber: '', status: 'Off Duty' });
   const [toast, setToast] = useState<{message: string, type: string} | null>(null);
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -91,28 +89,6 @@ const WorkforceMgmt = () => {
     }
   };
 
-  const handleAddWorker = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_BASE}/guards`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm)
-      });
-      if (res.ok) {
-        setIsAddModalOpen(false);
-        setAddForm({ name: '', phone: '', badgeNumber: '', status: 'Off Duty' });
-        showToast('Worker added successfully');
-        fetchWorkforceData();
-      } else {
-        const err = await res.json();
-        showToast(err.message || 'Failed to add worker', 'error');
-      }
-    } catch (err) {
-      showToast('Unexpected error occurred', 'error');
-    }
-  };
-
   const tabs = [
     { id: 'workerPool', label: 'Worker Pool', icon: <Icon name="users" size={16} /> },
     { id: 'activeAssignments', label: 'Active Assignments', icon: <Icon name="briefcase" size={16} /> },
@@ -126,12 +102,6 @@ const WorkforceMgmt = () => {
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--text-main)' }}>Workforce Management</h1>
           <p style={{ margin: 0, color: 'var(--text-muted)' }}>Leave tracking, relief guard assignment, shift swaps, and multi-type worker pool management</p>
         </div>
-        <button 
-          onClick={() => setIsAddModalOpen(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 6, backgroundColor: 'var(--primary)', color: 'white', border: 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
-        >
-          + Add Worker
-        </button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--border-color)', paddingBottom: 16 }}>
@@ -254,73 +224,6 @@ const WorkforceMgmt = () => {
             <GuardLeaveManagement />
           )}
         </>
-      )}
-
-      {/* Add Worker Modal */}
-      {isAddModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ backgroundColor: 'white', borderRadius: 12, padding: 32, width: 450, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Add Worker</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="modal-close"><Icon name="x" size={18}/></button>
-            </div>
-            
-            <form onSubmit={handleAddWorker} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Name</label>
-                <input 
-                  type="text" required
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
-                  value={addForm.name} onChange={e => setAddForm({...addForm, name: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Phone (User Account Login)</label>
-                <input 
-                  type="text" required
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
-                  value={addForm.phone} onChange={e => setAddForm({...addForm, phone: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Badge / ID Number</label>
-                <input 
-                  type="text" required
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box' }}
-                  value={addForm.badgeNumber} onChange={e => setAddForm({...addForm, badgeNumber: e.target.value})}
-                />
-              </div>
-              
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Initial Status</label>
-                <select 
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 6, border: '1px solid #E5E7EB', boxSizing: 'border-box', backgroundColor: 'white' }}
-                  value={addForm.status} onChange={e => setAddForm({...addForm, status: e.target.value})}
-                >
-                  <option value="Off Duty">Off Duty</option>
-                  <option value="On Post">On Duty</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-                <button 
-                  type="button" onClick={() => setIsAddModalOpen(false)}
-                  style={{ flex: 1, padding: '12px', borderRadius: 6, backgroundColor: 'white', border: '1px solid #E5E7EB', color: '#4B5563', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  style={{ flex: 1, padding: '12px', borderRadius: 6, backgroundColor: 'var(--primary)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Create Worker
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
       )}
 
       {/* Assign Modal */}

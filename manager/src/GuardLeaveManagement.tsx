@@ -139,7 +139,7 @@ const GuardLeaveManagement: React.FC = () => {
           <h2>Guard Leave Management</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Manage leaves for security guards. Approved leaves will restrict guard app access.</p>
         </div>
-        <button className="btn-primary" onClick={() => setIsAddLeaveOpen(true)}>
+        <button className="btn btn-primary" onClick={() => setIsAddLeaveOpen(true)}>
           <Icon name="calendar-plus" size={18} /> Give Leave
         </button>
       </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
-  RefreshControl, Alert, Image,
+  RefreshControl, Alert, Image, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,6 +57,7 @@ export default function AlertsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('ALL');
   const [ackingId, setAckingId] = useState<string | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
 
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
 
@@ -163,7 +164,12 @@ export default function AlertsScreen() {
             const style = PRIORITY_STYLE[alert.priority];
             const acknowledged = !!alert.acknowledgedAt;
             return (
-              <View key={alert.id} style={[styles.card, { borderLeftWidth: 4, borderLeftColor: style.fg }]}>
+              <TouchableOpacity
+                key={alert.id}
+                activeOpacity={0.7}
+                onPress={() => setSelectedAlert(alert)}
+                style={[styles.card, { borderLeftWidth: 4, borderLeftColor: style.fg }]}
+              >
                 <View style={styles.cardHeaderRow}>
                   <View style={[styles.cardIconWrap, { backgroundColor: style.bg }]}>
                     <Ionicons name={style.icon} size={20} color={style.fg} />
@@ -179,7 +185,9 @@ export default function AlertsScreen() {
                   </View>
                   {!acknowledged && <View style={[styles.unreadDot, { backgroundColor: style.fg }]} />}
                 </View>
-                <Text style={styles.cardBody}>{alert.body}</Text>
+                <ScrollView style={styles.cardBodyScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+                  <Text style={styles.cardBody}>{alert.body}</Text>
+                </ScrollView>
                 {alert.imageUrl && (
                   <Image source={{ uri: alert.imageUrl }} style={styles.cardImage} />
                 )}
@@ -202,7 +210,7 @@ export default function AlertsScreen() {
                     )}
                   </TouchableOpacity>
                 )}
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
@@ -213,6 +221,31 @@ export default function AlertsScreen() {
         onClose={() => setVehicleModalOpen(false)}
         onSent={handleVehicleAlertSent}
       />
+
+      <Modal visible={!!selectedAlert} transparent animationType="fade" onRequestClose={() => setSelectedAlert(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setSelectedAlert(null)}>
+              <Ionicons name="close-circle" size={28} color={colors.textMuted} />
+            </TouchableOpacity>
+            {selectedAlert && (
+              <ScrollView contentContainerStyle={{ padding: 20 }}>
+                <Text style={[styles.cardPriority, { color: PRIORITY_STYLE[selectedAlert.priority].fg, marginBottom: 6 }]}>
+                  {t(PRIORITY_STYLE[selectedAlert.priority].labelKey)}
+                </Text>
+                <Text style={[styles.cardTitle, { fontSize: 18 }]}>{cleanTitle(selectedAlert.title)}</Text>
+                <Text style={styles.cardTime}>
+                  {new Date(selectedAlert.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <Text style={[styles.cardBody, { marginTop: 12, fontSize: 15 }]}>{selectedAlert.body}</Text>
+                {selectedAlert.imageUrl && (
+                  <Image source={{ uri: selectedAlert.imageUrl }} style={[styles.cardImage, { height: 220, marginTop: 16 }]} />
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -255,9 +288,14 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   cardTime: { fontSize: 12, color: colors.textMuted, marginLeft: 'auto' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4, lineHeight: 20 },
   cardBody: { fontSize: 13, color: colors.textMuted, lineHeight: 18, marginBottom: 12 },
+  cardBodyScroll: { maxHeight: 84 },
   cardImage: { width: '100%', height: 140, borderRadius: 12, marginBottom: 12 },
   ackButton: { borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   ackButtonText: { fontSize: 14, fontWeight: '700' },
   acknowledgedRow: { flexDirection: 'row', alignItems: 'center' },
   acknowledgedText: { fontSize: 13, fontWeight: '600', color: colors.success },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 16 },
+  modalContent: { backgroundColor: colors.card, borderRadius: 16, maxHeight: '80%', overflow: 'hidden' },
+  modalClose: { position: 'absolute', top: 12, right: 16, zIndex: 10, padding: 8 },
 });

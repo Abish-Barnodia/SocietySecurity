@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Platform, StatusBar, Alert, ActivityIndicator, Animated, Easing,
+  Platform, StatusBar, Modal, ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // @ts-ignore
@@ -35,7 +35,8 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
   const [loading, setLoading] = useState(false);
-  
+  const [alertInfo, setAlertInfo] = useState<{ title: string; message: string } | null>(null);
+
   const { login, signup } = useAuth();
 
   const turn = useRef(new Animated.Value(0)).current;
@@ -73,11 +74,11 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
   const validateForm = () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      setAlertInfo({ title: 'Invalid Email', message: 'Please enter a valid email address.' });
       return false;
     }
     if (!password || password.length < 6) {
-      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
+      setAlertInfo({ title: 'Invalid Password', message: 'Password must be at least 6 characters.' });
       return false;
     }
     return true;
@@ -100,7 +101,7 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
       const message = (error as any)?.response?.data?.message
         ?? (error instanceof Error ? error.message : undefined)
         ?? `Failed to ${mode}. Please check your credentials or server connection.`;
-      Alert.alert(mode === 'login' ? 'Login Failed' : 'Sign Up Failed', message);
+      setAlertInfo({ title: mode === 'login' ? 'Login Failed' : 'Sign Up Failed', message });
       rattle();
     } finally {
       setLoading(false);
@@ -217,6 +218,18 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
           )}
         </View>
       </KeyboardAwareScrollView>
+
+      <Modal visible={!!alertInfo} transparent animationType="fade" onRequestClose={() => setAlertInfo(null)}>
+        <View style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <Text style={styles.alertTitle}>{alertInfo?.title}</Text>
+            <Text style={styles.alertMessage}>{alertInfo?.message}</Text>
+            <TouchableOpacity style={styles.alertButton} onPress={() => setAlertInfo(null)}>
+              <Text style={styles.alertButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -333,6 +346,42 @@ const styles = StyleSheet.create({
   },
   switchModeTextBold: {
     color: colors.primary,
+    fontWeight: '700',
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  alertCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 24,
+  },
+  alertTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  alertMessage: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  alertButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  alertButtonText: {
+    color: colors.primary,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

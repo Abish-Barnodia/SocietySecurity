@@ -627,8 +627,7 @@ export const updateHousehold = async (req: Request, res: Response, next: NextFun
                         data: {
                             name: member.name,
                             relationship: member.relationship,
-                            isPrimary: member.isPrimary,
-                            isActive: true
+                            isPrimary: member.isPrimary
                         }
                     });
                     updatedResidents.push(updatedResident);

@@ -12,6 +12,7 @@
   "dependencies": {
     "@iconify-json/tabler": "^1.2.38",
     "@iconify/react": "^6.0.2",
+    "jspdf": "^4.2.1",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",

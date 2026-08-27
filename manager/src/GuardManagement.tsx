@@ -4,6 +4,7 @@ import EmptyState from './EmptyState';
 import GuardProfile from './GuardProfile';
 import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
+import { shareCredentialPdf } from './credentialShare';
 
 const GuardManagement: React.FC = () => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
@@ -37,6 +38,31 @@ const GuardManagement: React.FC = () => {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [guardFormError, setGuardFormError] = useState('');
+  const [credentialShare, setCredentialShare] = useState<{ id: string; name: string; loginId: string; password: string; phone: string } | null>(null);
+  const [credentialShareError, setCredentialShareError] = useState('');
+  const [credentialShareBusy, setCredentialShareBusy] = useState(false);
+
+  const handleShareCredential = async (target: 'whatsapp' | 'email') => {
+    if (!credentialShare) return;
+    setCredentialShareBusy(true);
+    setCredentialShareError('');
+    try {
+      await shareCredentialPdf({
+        kind: 'guards',
+        ids: [credentialShare.id],
+        getAuthToken,
+        propertyName: 'the property',
+        role: 'Guard',
+        entries: [{ name: credentialShare.name, loginId: credentialShare.loginId, password: credentialShare.password }],
+        target,
+        phone: credentialShare.phone,
+      });
+    } catch (err: any) {
+      setCredentialShareError(err.message || 'Could not share credentials right now.');
+    } finally {
+      setCredentialShareBusy(false);
+    }
+  };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -69,8 +95,16 @@ const GuardManagement: React.FC = () => {
         })
       });
       if (response.ok) {
+        const data = await response.json();
         setIsAddGuardOpen(false);
         setGuardFormError('');
+        setCredentialShare({
+          id: data.data.id,
+          name: (newGuardForm.name || 'Unknown Guard').toUpperCase(),
+          loginId: newGuardForm.email,
+          password: newGuardForm.password,
+          phone: newGuardForm.phone,
+        });
         setNewGuardForm({ name: '', badgeId: '', phone: '', email: '', password: '', post: '', shift: 'morning', status: 'On Post', dateOfJoining: '', photoUrl: '' });
         fetchData(); // refresh the directory
       } else {
@@ -634,6 +668,53 @@ const GuardManagement: React.FC = () => {
             <div className="modal-footer">
               <button className="btn btn-outline" onClick={() => setIsAddGuardOpen(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleCreateGuard}>Create Guard</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Credentials Modal — shown right after a guard is created,
+          since the plaintext password only ever exists in this form state. */}
+      {credentialShare && (
+        <div className="modal-overlay" onClick={() => setCredentialShare(null)}>
+          <div className="modal-content" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Guard Created</h3>
+                <p className="modal-subtitle">Share {credentialShare.name}'s login credentials?</p>
+              </div>
+              <button className="modal-close" onClick={() => setCredentialShare(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              {credentialShareError && (
+                <div style={{ padding: '10px 14px', marginBottom: 16, background: '#ffebee', color: '#c62828', borderRadius: 8, fontSize: 13 }}>
+                  {credentialShareError}
+                </div>
+              )}
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Sends a PDF with the login ID and password. Can only be shared up to 2 times per account.
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#25D366' }}
+                  onClick={() => handleShareCredential('whatsapp')}
+                  disabled={credentialShareBusy}
+                >
+                  <Icon name="brand-whatsapp" size={16} /> WhatsApp
+                </button>
+                <button
+                  className="btn btn-outline"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  onClick={() => handleShareCredential('email')}
+                  disabled={credentialShareBusy}
+                >
+                  <Icon name="mail" size={16} /> Email
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setCredentialShare(null)}>Skip</button>
             </div>
           </div>
         </div>

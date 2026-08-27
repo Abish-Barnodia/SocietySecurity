@@ -3,6 +3,7 @@ import Icon from './Icon';
 import EmptyState from './EmptyState';
 import PasswordInput from './PasswordInput';
 import { API_BASE } from './config';
+import { shareCredentialPdf, type CredentialEntry } from './credentialShare';
 
 interface FamilyMember {
   id: string;
@@ -75,6 +76,31 @@ const ResidentDirectory = () => {
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
+
+  const [credentialShare, setCredentialShare] = useState<{ ids: string[]; entries: CredentialEntry[] } | null>(null);
+  const [credentialShareError, setCredentialShareError] = useState('');
+  const [credentialShareBusy, setCredentialShareBusy] = useState(false);
+
+  const handleShareCredential = async (target: 'whatsapp' | 'email') => {
+    if (!credentialShare) return;
+    setCredentialShareBusy(true);
+    setCredentialShareError('');
+    try {
+      await shareCredentialPdf({
+        kind: 'residents',
+        ids: credentialShare.ids,
+        getAuthToken,
+        propertyName: 'the property',
+        role: 'Resident',
+        entries: credentialShare.entries,
+        target,
+      });
+    } catch (err: any) {
+      setCredentialShareError(err.message || 'Could not share credentials right now.');
+    } finally {
+      setCredentialShareBusy(false);
+    }
+  };
 
   const [workersFamily, setWorkersFamily] = useState<Family | null>(null);
   const [workers, setWorkers] = useState<any[]>([]);
@@ -202,6 +228,15 @@ const ResidentDirectory = () => {
       });
       const data = await res.json();
       if (res.ok) {
+        // Only a brand-new household has a plaintext password to share —
+        // editing an existing one leaves most members' passwords untouched.
+        if (!editFamilyUnitId && Array.isArray(data.data)) {
+          const entries: CredentialEntry[] = data.data.map((created: any, i: number) => {
+            const submitted = newResidentForm.members[i];
+            return { name: created.name, loginId: submitted?.email || submitted?.phone || 'N/A', password: submitted?.password || '' };
+          });
+          setCredentialShare({ ids: data.data.map((c: any) => c.id), entries });
+        }
         closeResidentModal();
         showToast(editFamilyUnitId ? 'Household updated successfully!' : 'Household added successfully!', 'success');
         if (isFamilyDetailsOpen && editFamilyUnitId) {
@@ -727,6 +762,53 @@ const ResidentDirectory = () => {
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={closeResidentModal}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleAddResident}>{editFamilyUnitId ? 'Save Changes' : 'Create Household'}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Credentials Modal — shown right after a brand-new household is
+          created, since the plaintext passwords only ever exist in this form state. */}
+      {credentialShare && (
+        <div className="modal-overlay" onClick={() => setCredentialShare(null)}>
+          <div className="modal-content" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Household Created</h3>
+                <p className="modal-subtitle">Share login credentials for {credentialShare.entries.map(e => e.name).join(', ')}?</p>
+              </div>
+              <button className="modal-close" onClick={() => setCredentialShare(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              {credentialShareError && (
+                <div style={{ padding: '10px 14px', marginBottom: 16, background: '#ffebee', color: '#c62828', borderRadius: 8, fontSize: 13 }}>
+                  {credentialShareError}
+                </div>
+              )}
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+                Sends a PDF with each member's login ID and password. Can only be shared up to 2 times per account.
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#25D366' }}
+                  onClick={() => handleShareCredential('whatsapp')}
+                  disabled={credentialShareBusy}
+                >
+                  <Icon name="brand-whatsapp" size={16} /> WhatsApp
+                </button>
+                <button
+                  className="btn btn-outline"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  onClick={() => handleShareCredential('email')}
+                  disabled={credentialShareBusy}
+                >
+                  <Icon name="mail" size={16} /> Email
+                </button>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setCredentialShare(null)}>Skip</button>
             </div>
           </div>
         </div>

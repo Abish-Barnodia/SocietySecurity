@@ -5,6 +5,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 import { shareQrAsImage } from '../../utils/shareQrPass';
+import PhoneInput from '../../components/PhoneInput';
+import { COUNTRIES } from '../../utils/countryCodes';
 
 const passTypes = ['One-time visitor', 'Delivery / service', 'Recurring', 'Contractor'];
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,7 +30,8 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   const { createPass } = useData();
   const [selectedType, setSelectedType] = useState('One-time visitor');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneCountry, setPhoneCountry] = useState(COUNTRIES[0]);
+  const [phoneDigits, setPhoneDigits] = useState('');
   const [purpose, setPurpose] = useState('');
   const [shareWhatsApp, setShareWhatsApp] = useState(true);
   
@@ -111,7 +114,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
       visitorName: name,
       type: PASS_TYPE_TO_API[selectedType] ?? 'ONE_TIME',
       purpose: purpose || 'Visit',
-      visitorPhone: phone,
+      visitorPhone: phoneDigits ? `${phoneCountry.dial}${phoneDigits}` : '',
       validFrom: selectedType === 'Recurring' ? new Date().toISOString() : dates.validFrom.toISOString(),
       validUntil: selectedType === 'Recurring' ? dates.expiresOn.toISOString() : dates.validUntil.toISOString(),
     };
@@ -177,13 +180,13 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
         {selectedType !== 'Recurring' && (
           <>
             <Text style={styles.label}>Visitor phone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. +91 98765 43210"
-              keyboardType="phone-pad"
-              value={phone}
-              onChangeText={setPhone}
-              placeholderTextColor="#9ca3af"
+            <PhoneInput
+              colors={colors}
+              country={phoneCountry}
+              onChangeCountry={setPhoneCountry}
+              digits={phoneDigits}
+              onChangeDigits={setPhoneDigits}
+              placeholder="98765 43210"
             />
           </>
         )}

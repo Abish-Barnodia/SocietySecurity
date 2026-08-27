@@ -253,7 +253,12 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
         // committee access unscoped exactly as before — this only tightens the
         // MANAGER path, which previously leaked residents across all properties.
         const residents = await prisma.resident.findMany({
-            where: req.user!.propertyId ? { unit: { propertyId: req.user!.propertyId } } : undefined,
+            where: {
+                unit: {
+                    isDeleted: false,
+                    ...(req.user!.propertyId ? { propertyId: req.user!.propertyId } : {}),
+                },
+            },
             include: {
                 unit: true,
                 user: { select: { phone: true, email: true, isActive: true } }
@@ -704,6 +709,28 @@ export const deactivateResident = async (req: Request, res: Response, next: Next
         io?.to(`unit_${resident.unitId}`).emit('household_updated', { unitId: resident.unitId });
 
         return sendSuccess(res, 200, 'Resident deactivated successfully');
+    } catch (err) { next(err); }
+};
+
+// "Delete Family" — deactivates every member's login (same effect as
+// suspending each of them) and hides the unit from the directory going
+// forward, but keeps the unit/residents and everything tied to them
+// (passes, complaints, entries, invoices) intact for history/audit.
+export const deleteFamily = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const unitId = req.params.unitId as string;
+        const unit = await prisma.unit.findUnique({ where: { id: unitId }, include: { residents: true } });
+        if (!unit || unit.propertyId !== req.user!.propertyId) {
+            return next(new AppError('Household not found', 404));
+        }
+
+        await prisma.$transaction([
+            ...unit.residents.map(r => prisma.user.update({ where: { id: r.userId }, data: { isActive: false } })),
+            prisma.unit.update({ where: { id: unitId }, data: { isDeleted: true } }),
+        ]);
+
+        await auditLog(req.user!.userId, 'DELETE_FAMILY', 'Unit', unitId);
+        return sendSuccess(res, 200, 'Family deleted successfully');
     } catch (err) { next(err); }
 };
 

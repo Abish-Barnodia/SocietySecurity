@@ -56,6 +56,10 @@ model Unit {
   tower           String?
   familyName      String?
   isOccupied      Boolean          @default(false)
+  // Manager-initiated "Delete Family" — hides the family from the directory
+  // while keeping the unit/residents and everything tied to them (passes,
+  // complaints, entries, invoices) intact for history/audit purposes.
+  isDeleted       Boolean          @default(false)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   complaints      Complaint[]

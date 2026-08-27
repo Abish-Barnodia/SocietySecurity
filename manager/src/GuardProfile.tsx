@@ -187,6 +187,9 @@ const GuardProfile: React.FC<GuardProfileProps> = ({ guard: initialGuard, onBack
                   <Icon name="phone" size={14} /> {guard.phone ? `+91 ${guard.phone.replace('+91', '')}` : 'No phone'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="mail" size={14} /> {guard.email || 'No email'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Icon name="calendar" size={14} /> Joined {guard.createdAt ? new Date(guard.createdAt).toLocaleDateString('en-US', {month:'short', year:'numeric'}) : 'Unknown'}
                 </div>
               </div>

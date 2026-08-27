@@ -422,12 +422,13 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
 };
 
 
-// Delivery moved to Supabase Auth's own mailer — Ethereal (the SMTP
-// provider still configured for other emails) is a dev sandbox that never
-// reaches a real inbox no matter how correctly it's wired up. Supabase is
-// only ever used here to prove the requester owns the email and to send the
-// code; the password that actually matters for login is still our own
-// User.passwordHash, updated below in resetPassword.
+// Delivery goes through Supabase Auth's own mailer (backed by the real
+// Gmail SMTP relay configured inside Supabase's own dashboard, not this
+// repo's .env) — Ethereal never reaches a real inbox no matter how
+// correctly it's wired up. Supabase is only ever used here to prove the
+// requester owns the email and to send the code; the password that
+// actually matters for login is still our own User.passwordHash, updated
+// below in resetPassword.
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;

@@ -3,10 +3,12 @@ import { env } from '../config/env';
 import { logger } from './logger.util';
 
 // Supabase is used here purely as an OTP-email delivery mechanism for
-// password reset — Ethereal (the SMTP provider in .env) never delivers to
-// real inboxes, and Supabase's own mailer does. Login itself is untouched:
-// this never issues a Supabase session for signing in, only for proving the
-// resident owns the email, after which we update our own User.passwordHash.
+// password reset — Ethereal (the SMTP provider previously in .env) never
+// delivers to real inboxes, and Supabase's own mailer (backed by the
+// account's own custom SMTP, configured in the Supabase dashboard, not this
+// repo's .env) does. Login itself is untouched: this never issues a
+// Supabase session for signing in, only for proving the resident owns the
+// email, after which we update our own User.passwordHash.
 const authUrl = (path: string) => `${env.SUPABASE_URL}/auth/v1${path}`;
 
 const isConfigured = () => !!(env.SUPABASE_URL && env.SUPABASE_ANON_KEY && env.SUPABASE_SERVICE_ROLE_KEY);

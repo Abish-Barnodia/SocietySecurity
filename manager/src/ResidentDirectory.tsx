@@ -76,6 +76,8 @@ const ResidentDirectory = () => {
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
+  const [deleteConfirmUnitId, setDeleteConfirmUnitId] = useState<string | null>(null);
+  const [deletingFamily, setDeletingFamily] = useState(false);
 
   const [credentialShare, setCredentialShare] = useState<{ ids: string[]; entries: CredentialEntry[] } | null>(null);
   const [credentialShareError, setCredentialShareError] = useState('');
@@ -263,6 +265,29 @@ const ResidentDirectory = () => {
       setSuspendConfirmUnitId(null);
       fetchData();
     } catch (e) { showToast('An unexpected error occurred', 'error'); }
+  };
+
+  const confirmDeleteFamily = async () => {
+    if (!deleteConfirmUnitId) return;
+    setDeletingFamily(true);
+    try {
+      const res = await fetch(`${API_BASE}/residents/families/${deleteConfirmUnitId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+      });
+      if (res.ok) {
+        showToast('Family deleted', 'success');
+        setDeleteConfirmUnitId(null);
+        fetchData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.message || 'Failed to delete family', 'error');
+      }
+    } catch {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setDeletingFamily(false);
+    }
   };
 
   const openWorkers = async (family: Family) => {
@@ -460,14 +485,21 @@ const ResidentDirectory = () => {
                               <Icon name="users-group" size={14} /> Workers
                             </button>
                           </div>
-                          {active ? (
-                            <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
-                              style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
-                              Suspend
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            {active ? (
+                              <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
+                                style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
+                                Suspend
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Suspended</span>
+                            )}
+                            <button onClick={e => { e.stopPropagation(); setDeleteConfirmUnitId(family.unitId); }}
+                              title="Delete family"
+                              style={{ padding: '7px 10px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #DC2626', color: '#DC2626', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                              <Icon name="trash" size={14} />
                             </button>
-                          ) : (
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Suspended</span>
-                          )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -830,6 +862,33 @@ const ResidentDirectory = () => {
               <div style={{ display: 'flex', gap: 12 }}>
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmUnitId(null)}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmSuspendFamily}>Yes, Suspend</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CONFIRM DELETE MODAL ===== */}
+      {deleteConfirmUnitId && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirmUnitId(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Delete Family</h3>
+                <p className="modal-subtitle" style={{ color: '#DC2626' }}>This will remove the family from the directory.</p>
+              </div>
+              <button className="modal-close" onClick={() => setDeleteConfirmUnitId(null)}>&times;</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: '0 0 20px 0', fontSize: 14 }}>
+                All members will lose app access and this family will no longer appear in the Resident Directory.
+                Their history (passes, complaints, entries) is kept, not erased.
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setDeleteConfirmUnitId(null)} disabled={deletingFamily}>Cancel</button>
+                <button className="btn btn-primary share-action-btn" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmDeleteFamily} disabled={deletingFamily}>
+                  {deletingFamily ? 'Deleting...' : 'Yes, Delete'}
+                </button>
               </div>
             </div>
           </div>

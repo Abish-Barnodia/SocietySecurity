@@ -584,13 +584,28 @@ const GuardManagement: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Phone</label>
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="+91 98xxx xxxxx" 
-                    value={newGuardForm.phone}
-                    onChange={e => setNewGuardForm({...newGuardForm, phone: e.target.value})}
-                  />
+                  {(() => {
+                    const codeMatch = newGuardForm.phone.match(/^\+(\d{1,4})/);
+                    const code = codeMatch ? `+${codeMatch[1]}` : '+91';
+                    const digits = newGuardForm.phone.replace(/^\+\d{1,4}/, '');
+                    const setPhone = (nextCode: string, nextDigits: string) =>
+                      setNewGuardForm({ ...newGuardForm, phone: nextDigits ? `${nextCode}${nextDigits}` : '' });
+                    return (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <select className="form-input" style={{ flex: '0 0 84px', paddingLeft: 8, paddingRight: 4 }}
+                          value={code} onChange={e => setPhone(e.target.value, digits)}>
+                          <option value="+91">🇮🇳 +91</option>
+                          <option value="+1">🇺🇸 +1</option>
+                          <option value="+44">🇬🇧 +44</option>
+                          <option value="+971">🇦🇪 +971</option>
+                          <option value="+65">🇸🇬 +65</option>
+                          <option value="+61">🇦🇺 +61</option>
+                        </select>
+                        <input type="tel" inputMode="numeric" className="form-input" placeholder="98xxx xxxxx" value={digits}
+                          onChange={e => setPhone(code, e.target.value.replace(/\D/g, ''))} />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="form-row">

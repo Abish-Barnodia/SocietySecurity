@@ -2,8 +2,12 @@ import nodemailer from 'nodemailer';
 
 export const sendEmail = async (to: string, subject: string, text: string, html?: string) => {
   const hasAuth = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
-  
-  if (!hasAuth && process.env.NODE_ENV !== 'production') {
+
+  // Without credentials, connecting to smtp.ethereal.email is guaranteed to
+  // fail (or hang until the client times out) — that's what was surfacing as
+  // a generic "please try again" on password reset with no real cause shown.
+  // Log-and-skip in every environment instead of only outside production.
+  if (!hasAuth) {
     console.warn('\n=== EMAIL NOT SENT (Missing SMTP credentials) ===');
     console.warn(`To: ${to}`);
     console.warn(`Subject: ${subject}`);

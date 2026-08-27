@@ -95,7 +95,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
   // --- Actions ---
   const handleAcknowledge = async (id: string) => {
     try {
-      await fetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
+      await fetch(`${API_BASE}/alerts/${id}/acknowledge`, { method: 'PUT', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
       fetchData();
     } catch (err) { console.error(err); }
   };

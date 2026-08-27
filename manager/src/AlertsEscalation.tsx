@@ -140,6 +140,22 @@ const AlertsEscalation = () => {
     }
   };
 
+  const handleMarkAllRead = async () => {
+    // Bypasses statusFilter/priorityFilter/dateFilter on purpose — the sidebar
+    // badge counts every unacknowledged Alert regardless of what's currently
+    // visible here, so an alert outside today's date filter would otherwise
+    // never be reachable to clear.
+    const unread = alerts.filter(a => a.sourceType === 'ALERT' && a.status !== 'ACKNOWLEDGED');
+    if (unread.length === 0) return;
+    try {
+      const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
+      await Promise.all(unread.map(a => fetch(`${API_BASE}/alerts/${a.realId}/acknowledge`, { method: 'PUT', headers })));
+      fetchAllData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleBroadcast = async () => {
     try {
       const res = await fetch(`${API_BASE}/alerts/broadcast`, {
@@ -198,6 +214,7 @@ const AlertsEscalation = () => {
            (!dateFilter || alertDate === dateFilter);
   });
   const criticalActiveCount = alerts.filter(a => a.priority === 'P1' && a.status === 'OPEN').length;
+  const unreadCount = alerts.filter(a => a.sourceType === 'ALERT' && a.status !== 'ACKNOWLEDGED').length;
 
   return (
     <div style={{ padding: '24px 32px', flex: 1, overflowY: 'auto', backgroundColor: '#fff', minHeight: '100%' }}>
@@ -210,7 +227,19 @@ const AlertsEscalation = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6B7280' }}>
             <span style={{ fontWeight: 600 }}>{criticalActiveCount} critical active</span>
           </div>
-          <button 
+          <button
+            onClick={handleMarkAllRead}
+            disabled={unreadCount === 0}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
+              borderRadius: 6, backgroundColor: 'white', color: unreadCount === 0 ? '#9CA3AF' : '#374151',
+              border: '1px solid #E5E7EB', fontWeight: 600, fontSize: 14,
+              cursor: unreadCount === 0 ? 'default' : 'pointer'
+            }}
+          >
+            <Icon name="circle-check" size={16} /> Mark all as read{unreadCount > 0 ? ` (${unreadCount})` : ''}
+          </button>
+          <button
             onClick={() => setIsBroadcastOpen(true)}
             style={{ 
               display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', 

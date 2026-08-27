@@ -39,7 +39,10 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       const pass = parsedQr
         ? await prisma.pass.findUnique({
             where: { id: parsedQr.passId },
-            include: { unit: true, resident: { include: { user: true } } },
+            include: {
+              unit: { include: { residents: { include: { user: true } } } },
+              resident: { include: { user: true } },
+            },
           })
         : null;
 
@@ -159,14 +162,26 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       });
 
       const { triggerAlert } = await import('../../utils/alert.util');
+      // Every household member gets the ringing alert, not just the resident
+      // the pass happens to be booked under — whoever's phone is in hand
+      // should be able to answer the door.
       await triggerAlert({
         priority: 'P2',
         title: 'Visitor at your gate',
         body: `${visitorName} scanned in — approve or deny within 2 minutes.`,
-        targetUserIds: [pass.resident.userId],
+        targetUserIds: unit.residents.map((r: any) => r.userId),
         propertyId: guard.propertyId,
         entryId: entry.id,
         imageUrl: pass.visitorPhoto ?? undefined,
+        dataOnly: true,
+        extraData: {
+          type: 'VISITOR_APPROVAL',
+          visitorName,
+          timeoutAt: timeoutAt.toISOString(),
+          gateName: entryPoint.name,
+          apartment: unit.unitNumber,
+          tower: unit.tower ?? '',
+        },
       });
 
       enriched = {

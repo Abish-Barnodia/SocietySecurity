@@ -18,11 +18,16 @@ interface PushPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
+  // Data-only push (no `notification` block) — lets the client build its own
+  // rich notification (custom channel/sound, action buttons) via a background
+  // task instead of the OS auto-rendering a plain notification it can't
+  // attach actions to. title/body still travel in `data` so nothing is lost.
+  dataOnly?: boolean;
 }
 
 export const sendPush = async (tokens: string[], payload: PushPayload) => {
   if (!tokens.length) return;
-  
+
   if (!getApps().length) {
     logger.warn('Firebase admin not initialized, skipping push notification', payload);
     return;
@@ -35,10 +40,14 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
     try {
       const response = await getMessaging().sendEachForMulticast({
         tokens: chunk,
-        notification: { title: payload.title, body: payload.body },
-        data: payload.data ?? {},
+        ...(payload.dataOnly
+          ? {}
+          : { notification: { title: payload.title, body: payload.body } }),
+        data: payload.dataOnly
+          ? { ...(payload.data ?? {}), title: payload.title, body: payload.body }
+          : (payload.data ?? {}),
         android: { priority: 'high' },
-        apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+        apns: { payload: { aps: { sound: 'default', badge: 1, ...(payload.dataOnly ? { 'content-available': 1 } : {}) } } },
       });
 
       // Remove invalid tokens from DB

@@ -29,6 +29,24 @@ export const visitorApprovalTimeoutJob = cron.schedule('*/15 * * * * *', async (
       io?.to(`guard:${wa.entry.guardId}`).emit('visitor_approval_timeout', { entryId: wa.entryId });
       io?.to(`unit_${wa.entry.unitId}`).emit('visitor_approval_timeout', { entryId: wa.entryId });
 
+      // Silence the ringing alert on household devices that missed the
+      // socket broadcast (app backgrounded/killed) — same data-only push
+      // respondWalkin sends when a family member actually answers.
+      const householdUsers = await prisma.user.findMany({
+        where: { resident: { unitId: wa.entry.unitId } },
+        select: { fcmTokens: true },
+      });
+      const resolveTokens = householdUsers.flatMap((u) => u.fcmTokens);
+      if (resolveTokens.length) {
+        const { sendPush } = await import('../utils/push.util');
+        sendPush(resolveTokens, {
+          title: '',
+          body: '',
+          dataOnly: true,
+          data: { type: 'VISITOR_APPROVAL_RESOLVED', entryId: wa.entryId, status: 'NO_RESPONSE' },
+        }).catch(() => {});
+      }
+
       logger.warn(`Visitor approval timed out: entry ${wa.entryId}`);
     }
   } catch (err) {

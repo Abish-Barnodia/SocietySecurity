@@ -84,6 +84,12 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       propertyId: targetUnit.propertyId,
       entryId: entry.id,
       imageUrl: finalPhotoUrl,
+      dataOnly: true,
+      extraData: {
+        type: 'VISITOR_APPROVAL',
+        visitorName,
+        timeoutAt: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+      },
     });
 
     return sendSuccess(res, 201, 'Walk-in request sent to residents', entry);
@@ -159,6 +165,27 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
       entry.walkinApproval ? 'visitor_approval_response' : 'walkin_response',
       { entryId: entry.id, status }
     );
+
+    // Whichever household member responds first needs to silence the ringing
+    // alert on every other family member's phone — mirrors the same
+    // unit-room broadcast visitorApprovalTimeout.job.ts already uses for the
+    // timeout case, which this endpoint was missing entirely.
+    io?.to(`unit_${entry.unitId}`).emit('walkin_resolved', { entryId: entry.id, status });
+
+    const householdUsers = await prisma.user.findMany({
+      where: { resident: { unitId: entry.unitId } },
+      select: { fcmTokens: true },
+    });
+    const resolveTokens = householdUsers.flatMap((u) => u.fcmTokens);
+    if (resolveTokens.length) {
+      const { sendPush } = await import('../../utils/push.util');
+      sendPush(resolveTokens, {
+        title: '',
+        body: '',
+        dataOnly: true,
+        data: { type: 'VISITOR_APPROVAL_RESOLVED', entryId: entry.id, status },
+      }).catch(() => {});
+    }
 
     // auditLog swallows its own errors and never affects the outcome — no
     // reason to make the guard/resident wait on it after the decision is in.

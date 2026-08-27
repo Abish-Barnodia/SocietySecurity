@@ -14,6 +14,14 @@ interface TriggerAlertParams {
   incidentId?: string;
   propertyId: string;
   imageUrl?: string;
+  // Data-only push (see push.util.ts) — used when the client needs to build
+  // its own actionable notification (e.g. Approve/Deny buttons) rather than
+  // just display title/body.
+  dataOnly?: boolean;
+  // Extra fields folded into the push's data payload alongside alertId/entryId
+  // — e.g. visitorName/timeoutAt for a visitor-approval push, so the client
+  // can render/act on it without an extra round trip.
+  extraData?: Record<string, string>;
 }
 
 export const triggerAlert = async (params: TriggerAlertParams) => {
@@ -27,6 +35,8 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
     incidentId,
     propertyId,
     imageUrl,
+    dataOnly,
+    extraData,
   } = params;
 
   // Determine all target users
@@ -83,11 +93,12 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
   } catch { /* server not yet ready during tests */ }
 
   const allFcmTokens = users.flatMap((u) => u.fcmTokens);
+  const pushData = { alertId: alert.id, priority, ...(entryId ? { entryId } : {}), ...(extraData ?? {}) };
 
   // P1: push + SMS simultaneously, no waiting
   if (priority === 'P1') {
     const pushPromise = allFcmTokens.length
-      ? sendPush(allFcmTokens, { title, body, data: { alertId: alert.id, priority } })
+      ? sendPush(allFcmTokens, { title, body, data: pushData, dataOnly })
       : Promise.resolve();
 
     const smsPromises = users
@@ -105,11 +116,7 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
   } else {
     // P2 and P3: push only; SMS fallback via escalation job
     if (allFcmTokens.length) {
-      await sendPush(allFcmTokens, {
-        title,
-        body,
-        data: { alertId: alert.id, priority },
-      });
+      await sendPush(allFcmTokens, { title, body, data: pushData, dataOnly });
     }
   }
 

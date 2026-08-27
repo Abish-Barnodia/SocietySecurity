@@ -777,11 +777,13 @@ const ResidentDirectory = () => {
                           onChange={e => { const u = [...newResidentForm.members]; u[index].email = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
                       </div>
                     </div>
-                    <div style={{ marginTop: 12 }}>
-                      <label className="form-label">Password {(!member.id) && <span style={{ color: '#DC2626' }}>*</span>}</label>
-                      <PasswordInput autoComplete="new-password" className="form-input" placeholder={member.id ? "Leave blank to keep unchanged" : "Individual password (min 6 chars)"} value={member.password}
-                        onChange={e => { const u = [...newResidentForm.members]; u[index].password = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
-                    </div>
+                    {!member.id && (
+                      <div style={{ marginTop: 12 }}>
+                        <label className="form-label">Password <span style={{ color: '#DC2626' }}>*</span></label>
+                        <PasswordInput autoComplete="new-password" className="form-input" placeholder="Individual password (min 6 chars)" value={member.password}
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].password = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button className="btn btn-outline" style={{ width: '100%', borderStyle: 'dashed', backgroundColor: 'transparent' }}

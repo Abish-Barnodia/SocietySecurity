@@ -123,7 +123,7 @@ export async function scheduleLocalNotification(title: string, body: string, dat
 // task that starts/stops it runs in its own JS context on Android and can't
 // share memory with whatever else the app is doing.
 
-async function getRingMap(): Promise<Record<string, string>> {
+async function getRingMap(): Promise<Record<string, string[]>> {
   try {
     const raw = await SecureStore.getItemAsync(RING_MAP_KEY);
     return raw ? JSON.parse(raw) : {};
@@ -132,13 +132,21 @@ async function getRingMap(): Promise<Record<string, string>> {
   }
 }
 
-async function setRingMap(map: Record<string, string>) {
+async function setRingMap(map: Record<string, string[]>) {
   try {
     await SecureStore.setItemAsync(RING_MAP_KEY, JSON.stringify(map));
   } catch {
     // Best-effort — worst case a stale schedule keeps ringing until its own timeout.
   }
 }
+
+// A single repeats:true schedule was going quiet well before the server's
+// 120s approval window — Android's alarm scheduler doesn't reliably honor a
+// short repeating interval long-term (Doze/battery-optimization throttling).
+// Scheduling every firing as its own one-shot alarm up front is far more
+// reliable, at the cost of holding more schedule ids to cancel later.
+const RING_DURATION_SECONDS = 120;
+const RING_INTERVAL_SECONDS = 5;
 
 export async function startVisitorRing(entryId: string, visitorName: string, extra?: Record<string, string>) {
   const Notifications = await loadNotifications();
@@ -156,26 +164,35 @@ export async function startVisitorRing(entryId: string, visitorName: string, ext
     return;
   }
 
-  const scheduleId = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Visitor at your gate',
-      body: `${visitorName} is waiting — approve or deny`,
-      data,
-      categoryIdentifier: VISITOR_APPROVAL_CATEGORY,
-      priority: Notifications.AndroidNotificationPriority.MAX,
-      sound: true,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      channelId: VISITOR_RING_CHANNEL,
-      // Re-fires every 2s instead of 4s — closer to a real ring cadence.
-      seconds: 2,
-      repeats: true,
-    },
-  });
+  const content = {
+    title: 'Visitor at your gate',
+    body: `${visitorName} is waiting — approve or deny`,
+    data,
+    categoryIdentifier: VISITOR_APPROVAL_CATEGORY,
+    priority: Notifications.AndroidNotificationPriority.MAX,
+    sound: true,
+  };
+
+  const scheduleIds: string[] = [];
+  // First one fires right away, then one more every RING_INTERVAL_SECONDS
+  // up through the full approval window.
+  scheduleIds.push(await Notifications.scheduleNotificationAsync({ content, trigger: null }));
+  for (let t = RING_INTERVAL_SECONDS; t <= RING_DURATION_SECONDS; t += RING_INTERVAL_SECONDS) {
+    scheduleIds.push(
+      await Notifications.scheduleNotificationAsync({
+        content,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          channelId: VISITOR_RING_CHANNEL,
+          seconds: t,
+          repeats: false,
+        },
+      })
+    );
+  }
 
   const map = await getRingMap();
-  map[entryId] = scheduleId;
+  map[entryId] = scheduleIds;
   await setRingMap(map);
 }
 
@@ -184,9 +201,11 @@ export async function stopVisitorRing(entryId: string) {
   if (!Notifications) return;
 
   const map = await getRingMap();
-  const scheduleId = map[entryId];
-  if (scheduleId) {
-    await Notifications.cancelScheduledNotificationAsync(scheduleId).catch(() => {});
+  const scheduleIds = map[entryId];
+  if (scheduleIds?.length) {
+    await Promise.all(
+      scheduleIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {}))
+    );
     delete map[entryId];
     await setRingMap(map);
   }

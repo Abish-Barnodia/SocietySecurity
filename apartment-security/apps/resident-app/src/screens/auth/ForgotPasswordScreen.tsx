@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-  Alert,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../utils/api';
+import ThemedAlertModal from '../../components/ThemedAlertModal';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -33,23 +33,24 @@ export default function ForgotPasswordScreen() {
   
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<'email' | 'code' | 'password' | 'confirm' | null>(null);
+  const [alertInfo, setAlertInfo] = useState<{ title: string; message: string; onDismiss?: () => void } | null>(null);
 
   const handleRequestOtp = async () => {
     const trimmedEmail = email.trim();
     if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      setAlertInfo({ title: 'Invalid Email', message: 'Please enter a valid email address.' });
       return;
     }
 
     setLoading(true);
     try {
       const response = await api.post('/auth/forgot-password', { email: trimmedEmail });
-      
+
       setStep('reset');
-      Alert.alert('Code Sent', response.data?.message || 'Check your email for the reset code.');
+      setAlertInfo({ title: 'Code Sent', message: response.data?.message || 'Check your email for the reset code.' });
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to request password reset. Please try again.';
-      Alert.alert('Error', message);
+      setAlertInfo({ title: 'Error', message });
     } finally {
       setLoading(false);
     }
@@ -57,28 +58,30 @@ export default function ForgotPasswordScreen() {
 
   const handleResetPassword = async () => {
     if (code.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter the 6-digit reset code.');
+      setAlertInfo({ title: 'Invalid Code', message: 'Please enter the 6-digit reset code.' });
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Invalid Password', 'Password must be at least 6 characters.');
+      setAlertInfo({ title: 'Invalid Password', message: 'Password must be at least 6 characters.' });
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'Passwords do not match.');
+      setAlertInfo({ title: 'Password Mismatch', message: 'Passwords do not match.' });
       return;
     }
 
     setLoading(true);
     try {
       await api.post('/auth/reset-password', { email: email.trim(), code, password });
-      
-      Alert.alert('Success', 'Your password has been successfully reset. You can now login.', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
-      ]);
+
+      setAlertInfo({
+        title: 'Success',
+        message: 'Your password has been successfully reset. You can now login.',
+        onDismiss: () => navigation.navigate('Login'),
+      });
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to reset password. Please check your code and try again.';
-      Alert.alert('Error', message);
+      setAlertInfo({ title: 'Error', message });
     } finally {
       setLoading(false);
     }
@@ -224,6 +227,17 @@ export default function ForgotPasswordScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ThemedAlertModal
+        visible={!!alertInfo}
+        title={alertInfo?.title ?? ''}
+        message={alertInfo?.message ?? ''}
+        onClose={() => {
+          const onDismiss = alertInfo?.onDismiss;
+          setAlertInfo(null);
+          onDismiss?.();
+        }}
+      />
     </SafeAreaView>
   );
 }

@@ -553,6 +553,7 @@ export const getGuardProfile = async (req: Request, res: Response, next: NextFun
       isOnDuty: guard.isOnDuty,
       onLeave: !!activeLeave,
       phone: guard.user.phone,
+      email: guard.user.email,
       createdAt: guard.createdAt,
       lastPost: guard.postCheckIns[0] || null,
       lastShift: guard.shifts[0] || null,

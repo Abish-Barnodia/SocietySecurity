@@ -20,3 +20,4 @@ minimumReleaseAgeExclude:
   - expo-asset@57.0.12
   - expo-constants@57.0.12
   - expo@57.0.14
+  - expo-task-manager@57.0.14

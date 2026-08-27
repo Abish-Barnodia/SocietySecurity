@@ -13,7 +13,7 @@ import { MaintenanceProvider } from './src/context/MaintenanceContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import { registerForPushNotificationsAsync } from './src/utils/notifications';
+import { registerForPushNotificationsAsync, registerBackgroundNotificationTask, addVisitorNotificationResponseListener } from './src/utils/notifications';
 import api, { API_URL } from './src/utils/api';
 import tokenStorage from './src/utils/tokenStorage';
 
@@ -42,6 +42,11 @@ function ThemedApp() {
         if (token) api.post('/auth/fcm-token', { token }).catch(() => {});
       })
       .catch(error => console.log('Push registration skipped:', error));
+    registerBackgroundNotificationTask().catch(error => console.log('Background task registration skipped:', error));
+
+    let removeListener: (() => void) | undefined;
+    addVisitorNotificationResponseListener().then(remove => { removeListener = remove; });
+    return () => removeListener?.();
   }, [isAuthenticated]);
 
   const navigationTheme = {

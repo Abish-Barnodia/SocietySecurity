@@ -1,5 +1,7 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import api from './api';
 
 /**
  * Expo Go dropped remote push notification support in SDK 53. Importing
@@ -30,6 +32,11 @@ async function loadNotifications() {
   return notificationsModule;
 }
 
+const VISITOR_RING_CHANNEL = 'visitor-ring';
+const VISITOR_APPROVAL_CATEGORY = 'VISITOR_APPROVAL';
+const BACKGROUND_NOTIFICATION_TASK = 'VISITOR_APPROVAL_BACKGROUND_TASK';
+const RING_MAP_KEY = 'visitor_ring_schedule_map';
+
 export async function registerForPushNotificationsAsync(): Promise<string | undefined> {
   const Notifications = await loadNotifications();
   if (!Notifications) {
@@ -46,6 +53,22 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
     });
+    // Separate, more insistent channel for "someone's at the gate" alerts —
+    // MAX importance + a longer vibration pattern so it reads as urgent
+    // (this app has no bundled ringtone asset to loop, so the repeating
+    // schedule in startVisitorRing() re-plays this channel's alert sound
+    // every few seconds instead, approximating a phone "ringing").
+    await Notifications.setNotificationChannelAsync(VISITOR_RING_CHANNEL, {
+      name: 'Visitor at gate',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 500, 250, 500, 250, 500],
+      lightColor: '#FF231F7C',
+      bypassDnd: true,
+    });
+    await Notifications.setNotificationCategoryAsync(VISITOR_APPROVAL_CATEGORY, [
+      { identifier: 'APPROVE', buttonTitle: 'Approve', options: { opensAppToForeground: false } },
+      { identifier: 'DENY', buttonTitle: 'Deny', options: { opensAppToForeground: false } },
+    ]);
   }
 
   if (!Device.isDevice) {
@@ -85,4 +108,167 @@ export async function scheduleLocalNotification(title: string, body: string, dat
     content: { title, body, data: data ?? {} },
     trigger: null, // Send immediately
   });
+}
+
+// --- Visitor "ringing" alert (Accept/Deny from the notification itself) ---
+//
+// A single notification can't loop a sound on its own, so the "ring" is a
+// repeating scheduled notification (re-fires every few seconds) that keeps
+// replaying the visitor-ring channel's alert sound/vibration until it's
+// cancelled — by an in-app Approve/Deny, another household member
+// responding elsewhere, or the 2-minute server timeout. The schedule id is
+// persisted to SecureStore (not an in-memory var) because the background
+// task that starts/stops it runs in its own JS context on Android and can't
+// share memory with whatever else the app is doing.
+
+async function getRingMap(): Promise<Record<string, string>> {
+  try {
+    const raw = await SecureStore.getItemAsync(RING_MAP_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function setRingMap(map: Record<string, string>) {
+  try {
+    await SecureStore.setItemAsync(RING_MAP_KEY, JSON.stringify(map));
+  } catch {
+    // Best-effort — worst case a stale schedule keeps ringing until its own timeout.
+  }
+}
+
+export async function startVisitorRing(entryId: string, visitorName: string, extra?: Record<string, string>) {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
+  const data = { type: VISITOR_APPROVAL_CATEGORY, entryId, visitorName, ...(extra ?? {}) };
+
+  if (Platform.OS !== 'android') {
+    // No repeating-ring/action-button support wired up for iOS yet — a
+    // single alert is still better than nothing.
+    await Notifications.scheduleNotificationAsync({
+      content: { title: 'Visitor at your gate', body: `${visitorName} is waiting — approve or deny`, data },
+      trigger: null,
+    });
+    return;
+  }
+
+  const scheduleId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Visitor at your gate',
+      body: `${visitorName} is waiting — approve or deny`,
+      data,
+      categoryIdentifier: VISITOR_APPROVAL_CATEGORY,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      sound: true,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      channelId: VISITOR_RING_CHANNEL,
+      seconds: 4,
+      repeats: true,
+    },
+  });
+
+  const map = await getRingMap();
+  map[entryId] = scheduleId;
+  await setRingMap(map);
+}
+
+export async function stopVisitorRing(entryId: string) {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
+  const map = await getRingMap();
+  const scheduleId = map[entryId];
+  if (scheduleId) {
+    await Notifications.cancelScheduledNotificationAsync(scheduleId).catch(() => {});
+    delete map[entryId];
+    await setRingMap(map);
+  }
+
+  try {
+    const shown = await Notifications.getPresentedNotificationsAsync();
+    for (const n of shown) {
+      if (n.request.content.data?.entryId === entryId) {
+        await Notifications.dismissNotificationAsync(n.request.identifier).catch(() => {});
+      }
+    }
+  } catch {
+    // Non-fatal — the repeating schedule is already cancelled either way.
+  }
+}
+
+/** Approve/Deny tapped on the notification itself — no app UI involved. */
+export async function respondToVisitorFromNotification(entryId: string, status: 'APPROVED' | 'DENIED') {
+  try {
+    await api.post(`/walkins/${entryId}/respond`, { status });
+  } catch (error) {
+    console.log('Failed to respond to visitor from notification:', error);
+  } finally {
+    await stopVisitorRing(entryId);
+  }
+}
+
+// Expo's docs are explicit that TaskManager.defineTask() must run at module
+// scope in a module required early (not inside a component effect) — when
+// the app is fully killed, Android loads the JS bundle fresh specifically to
+// find this registration, and never mounts any React component to get there.
+// This IIFE runs the moment anything imports this file (App.tsx does, at its
+// top-level import), which is as close to "module scope, loaded early" as
+// this file's Expo-Go-safe dynamic-import pattern allows — a static
+// top-level `import` of expo-task-manager would throw immediately in Expo
+// Go, the same reason expo-notifications itself is never imported eagerly
+// here. The dynamic import does mean there's a brief window on a genuinely
+// cold, headless launch where the task might not be defined yet; accepted
+// as the tradeoff for not crashing Expo Go for every other feature in the app.
+if (!isExpoGo && Platform.OS === 'android') {
+  (async () => {
+    const TaskManager = await import('expo-task-manager');
+    const Notifications = await loadNotifications();
+    if (!Notifications || TaskManager.isTaskDefined(BACKGROUND_NOTIFICATION_TASK)) return;
+
+    TaskManager.defineTask(BACKGROUND_NOTIFICATION_TASK, async ({ data, error }: any) => {
+      if (error) return;
+      const payload = data?.notification?.request?.content?.data;
+      if (!payload) return;
+
+      if (payload.type === 'VISITOR_APPROVAL') {
+        await startVisitorRing(payload.entryId, payload.visitorName, {
+          timeoutAt: payload.timeoutAt, gateName: payload.gateName,
+          apartment: payload.apartment, tower: payload.tower,
+        });
+      } else if (payload.type === 'VISITOR_APPROVAL_RESOLVED') {
+        await stopVisitorRing(payload.entryId);
+      }
+    });
+  })();
+}
+
+/** Lets a data-only push start/stop the ring even while the app is killed. */
+export async function registerBackgroundNotificationTask() {
+  if (isExpoGo || Platform.OS !== 'android') return;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+  await Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => {});
+}
+
+/** Approve/Deny tapped while the app process is alive (foreground or background). */
+export async function addVisitorNotificationResponseListener(): Promise<() => void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return () => {};
+
+  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const data: any = response.notification.request.content.data;
+    if (data?.type !== VISITOR_APPROVAL_CATEGORY || !data.entryId) return;
+
+    if (response.actionIdentifier === 'APPROVE') {
+      respondToVisitorFromNotification(data.entryId, 'APPROVED');
+    } else if (response.actionIdentifier === 'DENY') {
+      respondToVisitorFromNotification(data.entryId, 'DENIED');
+    }
+  });
+
+  return () => sub.remove();
 }

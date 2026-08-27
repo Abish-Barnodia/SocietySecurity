@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useRef, useCallb
 import { colors } from '../theme/colors';
 import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
-import { scheduleLocalNotification } from '../utils/notifications';
+import { scheduleLocalNotification, startVisitorRing, stopVisitorRing } from '../utils/notifications';
 import { useSocket } from './SocketContext';
 
 export type Pass = {
@@ -462,6 +462,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const respondWalkIn = useCallback(async (id: string, status: 'APPROVED' | 'DENIED') => {
     setPendingWalkIns((prev) => prev.filter((w) => w.id !== id));
     markAlertRead(id);
+    stopVisitorRing(id);
     try {
       await api.post(`/walkins/${id}/respond`, { status });
       fetchEntries();
@@ -568,7 +569,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unread: true,
         imageUrl: payload.gatePhotoUrl,
       });
-      scheduleLocalNotification('Walk-in approval requested', `Guard requested entry for ${payload.visitorName}`);
+      startVisitorRing(payload.entryId, payload.visitorName);
     };
 
     // DB-persisted alerts emitted by triggerAlert() to the user's personal room.
@@ -641,12 +642,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unread: true,
         imageUrl: payload.visitorPhoto ?? undefined,
       });
-      scheduleLocalNotification('Visitor scanned in at the gate', `${payload.visitorName} is waiting — respond within 2 minutes`);
+      startVisitorRing(payload.entryId, payload.visitorName, {
+        ...(payload.timeoutAt ? { timeoutAt: payload.timeoutAt } : {}),
+        ...(payload.gateName ? { gateName: payload.gateName } : {}),
+        ...(payload.apartment ? { apartment: payload.apartment } : {}),
+        ...(payload.tower ? { tower: payload.tower } : {}),
+      });
     };
 
     const handleVisitorApprovalTimeout = (payload: { entryId: string }) => {
       setPendingWalkIns((prev) => prev.filter((w) => w.id !== payload.entryId));
       markAlertRead(payload.entryId);
+      stopVisitorRing(payload.entryId);
+    };
+
+    // Emitted by respondWalkin once any household member answers — silences
+    // the ring on every other family member's device that's still connected
+    // (the killed-app case is covered separately by the data-only push).
+    const handleWalkinResolved = (payload: { entryId: string; status: string }) => {
+      setPendingWalkIns((prev) => prev.filter((w) => w.id !== payload.entryId));
+      markAlertRead(payload.entryId);
+      stopVisitorRing(payload.entryId);
     };
 
     socket.on('connect', handleConnect);
@@ -656,6 +672,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('household_updated', handleHouseholdUpdated);
     socket.on('visitor_approval_request', handleVisitorApprovalRequest);
     socket.on('visitor_approval_timeout', handleVisitorApprovalTimeout);
+    socket.on('walkin_resolved', handleWalkinResolved);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -665,6 +682,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('household_updated', handleHouseholdUpdated);
       socket.off('visitor_approval_request', handleVisitorApprovalRequest);
       socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
+      socket.off('walkin_resolved', handleWalkinResolved);
     };
   }, [socket, fetchAlerts, addAlert, markAlertRead, fetchMembers]);
 

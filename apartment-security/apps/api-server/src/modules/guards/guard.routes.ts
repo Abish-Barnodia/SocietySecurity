@@ -10,6 +10,7 @@ import {
   getDirectory,
   getActiveGuards,
   createGuard,
+  shareGuardCredential,
   updateGuard,
   deleteGuard,
   getGuardProfile,
@@ -58,6 +59,7 @@ router.post('/salary/:id/create-order', requireRole('MANAGER', 'COMMITTEE'), req
 router.post('/salary/:id/verify',      requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('workforce'), verifySalaryPayment);
 
 router.post('/', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), validate(createGuardSchema), createGuard);
+router.post('/:id/credential-share', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), shareGuardCredential);
 router.post('/:id/assign',   requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), assignGuardToPost);
 router.put('/:id',           requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), validate(updateGuardSchema), updateGuard);
 router.delete('/:id',        requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('guards'), deleteGuard);

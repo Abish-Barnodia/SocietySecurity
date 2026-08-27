@@ -81,6 +81,10 @@ model User {
   fcmTokens       String[]         @default([])
   isActive        Boolean          @default(true)
   lastLoginAt     DateTime?
+  // How many times a manager has shared this account's login credentials
+  // (PDF via WhatsApp/email) since it was created — capped at 2 to limit
+  // how many times a plaintext password gets sent out.
+  credentialShareCount Int         @default(0)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   auditLogs       AuditLog[]

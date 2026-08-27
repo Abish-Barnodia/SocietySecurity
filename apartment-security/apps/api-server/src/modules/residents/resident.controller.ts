@@ -707,6 +707,29 @@ export const deactivateResident = async (req: Request, res: Response, next: Next
     } catch (err) { next(err); }
 };
 
+// Gate for sharing a resident's plaintext login credentials (PDF via
+// WhatsApp/email) — caps how many times a manager can re-send the same
+// account's password. Doesn't send anything itself, just claims one of the
+// limited shares; the frontend generates/shares the PDF only if this succeeds.
+export const shareResidentCredential = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const id = req.params.id as string;
+        const resident = await prisma.resident.findUnique({ where: { id }, include: { unit: { select: { propertyId: true } } } });
+        if (!resident || resident.unit.propertyId !== req.user!.propertyId) {
+            return next(new AppError('Resident not found', 404));
+        }
+
+        const { tryConsumeCredentialShare, MAX_CREDENTIAL_SHARES } = await import('../../utils/credentialShare.util');
+        const allowed = await tryConsumeCredentialShare(resident.userId);
+        if (!allowed) {
+            return next(new AppError(`This resident's credentials have already been shared the maximum of ${MAX_CREDENTIAL_SHARES} times.`, 403));
+        }
+
+        await auditLog(req.user!.userId, 'SHARE_RESIDENT_CREDENTIAL', 'Resident', id);
+        return sendSuccess(res, 200, 'Credential share allowed');
+    } catch (err) { next(err); }
+};
+
 export const getUnitSummary = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const id = req.params.id as string; // resident id

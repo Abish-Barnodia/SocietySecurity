@@ -387,6 +387,29 @@ export const createGuard = async (req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 };
 
+// Gate for sharing a guard's plaintext login credentials (PDF via
+// WhatsApp/email) — caps how many times a manager can re-send the same
+// account's password. Doesn't send anything itself, just claims one of the
+// limited shares; the frontend generates/shares the PDF only if this succeeds.
+export const shareGuardCredential = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const guard = await prisma.guard.findUnique({ where: { id }, select: { userId: true, propertyId: true } });
+    if (!guard || guard.propertyId !== req.user!.propertyId) {
+      return next(new AppError('Guard not found', 404));
+    }
+
+    const { tryConsumeCredentialShare, MAX_CREDENTIAL_SHARES } = await import('../../utils/credentialShare.util');
+    const allowed = await tryConsumeCredentialShare(guard.userId);
+    if (!allowed) {
+      return next(new AppError(`This guard's credentials have already been shared the maximum of ${MAX_CREDENTIAL_SHARES} times.`, 403));
+    }
+
+    await auditLog(req.user!.userId, 'SHARE_GUARD_CREDENTIAL', 'Guard', id);
+    return sendSuccess(res, 200, 'Credential share allowed');
+  } catch (err) { next(err); }
+};
+
 export const updateGuard = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.params.id as string;

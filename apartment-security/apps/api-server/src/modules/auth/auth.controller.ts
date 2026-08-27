@@ -4,12 +4,12 @@ import { prisma } from '../../config/prisma';
 import { createOTP, verifyOTP } from '../../utils/otp.util';
 import { signAccessToken, signRefreshToken, rotateRefreshToken, verifyRefreshToken } from '../../utils/jwt.util';
 import { sendSMS } from '../../utils/sms.util';
-import { sendEmail } from '../../utils/email.service';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 import { logger } from '../../utils/logger.util';
 import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_MS } from '../../utils/managerPortalLock.util';
+import { sendSupabaseRecoveryEmail, verifySupabaseRecoveryCode, setSupabaseUserPassword } from '../../utils/supabaseAuth.util';
 
 export const requestOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -422,38 +422,33 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
 };
 
 
+// Delivery moved to Supabase Auth's own mailer — Ethereal (the SMTP
+// provider still configured for other emails) is a dev sandbox that never
+// reaches a real inbox no matter how correctly it's wired up. Supabase is
+// only ever used here to prove the requester owns the email and to send the
+// code; the password that actually matters for login is still our own
+// User.passwordHash, updated below in resetPassword.
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;
     const user = await prisma.user.findUnique({ where: { email } });
-    
+
     if (!user) {
       // Don't leak whether the email exists or not
       return sendSuccess(res, 200, 'If your email is registered, you will receive a reset code.');
     }
-    
+
     if (!user.isActive) {
       return next(new AppError('Your account has been deactivated', 403));
     }
-    
-    const code = await createOTP(user.id, 'PASSWORD_RESET');
-    
-    const subject = 'Password Reset Code';
-    const text = `Your password reset code is: ${code}. This code will expire in 10 minutes.`;
-    const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <h2>Password Reset</h2>
-        <p>You requested a password reset. Use the following code:</p>
-        <div style="font-size: 24px; font-weight: bold; padding: 10px; background-color: #f4f4f4; text-align: center; border-radius: 5px;">
-          ${code}
-        </div>
-        <p>This code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
-      </div>
-    `;
-    
-    await sendEmail(email, subject, text, html);
+
+    const sent = await sendSupabaseRecoveryEmail(email);
+    if (!sent) {
+      return next(new AppError('Password reset is not configured. Please contact support.', 500));
+    }
+
     await auditLog(user.id, 'PASSWORD_RESET_REQUESTED', 'User', user.id);
-    
+
     return sendSuccess(res, 200, 'If your email is registered, you will receive a reset code.');
   } catch (error) {
     next(error);
@@ -463,26 +458,27 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, code, password } = req.body;
-    
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return next(new AppError('Invalid email or code', 400));
     }
-    
-    const isValid = await verifyOTP(user.id, code, 'PASSWORD_RESET');
-    if (!isValid) {
+
+    const verified = await verifySupabaseRecoveryCode(email, code);
+    if (!verified) {
       return next(new AppError('Invalid or expired OTP', 400));
     }
-    
+
     const passwordHash = await bcrypt.hash(password, 10);
-    
+
     await prisma.user.update({
       where: { id: user.id },
       data: { passwordHash }
     });
-    
+    setSupabaseUserPassword(verified.userId, password).catch(() => {});
+
     await auditLog(user.id, 'PASSWORD_RESET_SUCCESS', 'User', user.id);
-    
+
     return sendSuccess(res, 200, 'Password has been successfully reset');
   } catch (error) {
     next(error);

@@ -22,6 +22,7 @@ const envSchema = z.object({
 
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('uploads'),
   
   TWILIO_ACCOUNT_SID: z.string().optional(),

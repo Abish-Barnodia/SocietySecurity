@@ -30,6 +30,8 @@ interface Family {
 const ResidentDirectory = () => {
   const [activeTab, setActiveTab] = useState('directory');
   const [families, setFamilies] = useState<Family[]>([]);
+  const [deletedFamilies, setDeletedFamilies] = useState<Family[]>([]);
+  const [restoringUnitId, setRestoringUnitId] = useState<string | null>(null);
   const [amenities, setAmenities] = useState<any[]>([]);
   const [complaints, setComplaints] = useState<any[]>([]);
   const [resolvingComplaintId, setResolvingComplaintId] = useState<string | null>(null);
@@ -126,6 +128,10 @@ const ResidentDirectory = () => {
         const res = await fetch(`${API_BASE}/residents`, { headers });
         const data = await res.json();
         if (data.status === 'success') setFamilies(data.data);
+      } else if (activeTab === 'history') {
+        const res = await fetch(`${API_BASE}/residents?deleted=true`, { headers });
+        const data = await res.json();
+        if (data.status === 'success') setDeletedFamilies(data.data);
       } else if (activeTab === 'amenities') {
         const res = await fetch(`${API_BASE}/amenities`, { headers });
         const data = await res.json();
@@ -200,6 +206,13 @@ const ResidentDirectory = () => {
 
   const handleAddResident = async () => {
     if (!newResidentForm.unit.trim()) { showToast('Unit number is required', 'error'); return; }
+    // Existing units predate this format, so only new households are held
+    // to it — enforcing it on edit would block unrelated saves to units
+    // like "101" that were created before this rule existed.
+    if (!editFamilyUnitId && !/^[A-Z]-\d+$/.test(newResidentForm.unit)) {
+      showToast('Unit number must look like A-10 (one letter, dash, number)', 'error');
+      return;
+    }
     const primary = newResidentForm.members[0];
     if (!primary.name.trim()) { showToast('Primary member name is required', 'error'); return; }
     if (!primary.phone && !primary.email) { showToast('Primary member needs a phone or email', 'error'); return; }
@@ -265,6 +278,27 @@ const ResidentDirectory = () => {
       setSuspendConfirmUnitId(null);
       fetchData();
     } catch (e) { showToast('An unexpected error occurred', 'error'); }
+  };
+
+  const restoreFamily = async (unitId: string) => {
+    setRestoringUnitId(unitId);
+    try {
+      const res = await fetch(`${API_BASE}/residents/families/${unitId}/restore`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+      });
+      if (res.ok) {
+        showToast('Family restored', 'success');
+        setDeletedFamilies(prev => prev.filter(f => f.unitId !== unitId));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.message || 'Failed to restore family', 'error');
+      }
+    } catch {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setRestoringUnitId(null);
+    }
   };
 
   const confirmDeleteFamily = async () => {
@@ -349,6 +383,7 @@ const ResidentDirectory = () => {
     { id: 'directory', label: 'Directory', icon: <Icon name="users" size={16} /> },
     { id: 'amenities', label: 'Amenities', icon: <Icon name="building-skyscraper" size={16} /> },
     { id: 'complaints', label: 'Complaints', icon: <Icon name="message-exclamation" size={16} /> },
+    { id: 'history', label: 'History', icon: <Icon name="history" size={16} /> },
   ];
 
   return (
@@ -547,6 +582,38 @@ const ResidentDirectory = () => {
             </div>
           )}
 
+          {activeTab === 'history' && (
+            <div>
+              {deletedFamilies.length === 0 ? (
+                <EmptyState icon="history" message="No deleted families. Anything removed via Delete Family shows up here." compact />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+                  {deletedFamilies.map(family => (
+                    <div key={family.unitId} style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, opacity: 0.85 }}>
+                      <h3 style={{ margin: '0 0 5px 0', fontSize: 15, fontWeight: 700 }}>{displayName(family)}</h3>
+                      <p style={{ margin: '0 0 12px 0', fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Icon name="home" size={11} /> Unit {family.apartmentNumber} &middot; {family.tower} &middot; {family.totalMembers} member{family.totalMembers === 1 ? '' : 's'}
+                      </p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                        {family.members.map(m => (
+                          <span key={m.id} style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, backgroundColor: '#F1F5F9', color: '#64748B' }}>
+                            {m.isPrimary && '★ '}{m.name}
+                          </span>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => restoreFamily(family.unitId)}
+                        disabled={restoringUnitId === family.unitId}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                        <Icon name="rotate-2" size={14} /> {restoringUnitId === family.unitId ? 'Restoring...' : 'Restore'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'complaints' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {complaints.length === 0 ? (
@@ -718,13 +785,19 @@ const ResidentDirectory = () => {
               <div>
                 <label className="form-label">Household / Family Name (Optional)</label>
                 <input type="text" autoComplete="off" className="form-input" placeholder="e.g. Sharma Family"
-                  value={newResidentForm.familyName} onChange={e => setNewResidentForm({ ...newResidentForm, familyName: e.target.value })} />
+                  value={newResidentForm.familyName} onChange={e => setNewResidentForm({ ...newResidentForm, familyName: e.target.value.toUpperCase() })} />
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 2 }}>
                   <label className="form-label">Unit Number <span style={{ color: '#DC2626' }}>*</span></label>
-                  <input type="text" className="form-input" placeholder="e.g. A-501"
-                    value={newResidentForm.unit} onChange={e => setNewResidentForm({ ...newResidentForm, unit: e.target.value })} />
+                  <input type="text" className="form-input" placeholder="e.g. A-10"
+                    value={newResidentForm.unit}
+                    onChange={e => {
+                      // One letter, a dash, then digits — e.g. A-10, B-1. Strips
+                      // anything else as you type rather than blocking mid-entry.
+                      const v = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+                      setNewResidentForm({ ...newResidentForm, unit: v });
+                    }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label className="form-label">Tower</label>
@@ -755,7 +828,7 @@ const ResidentDirectory = () => {
                       <div style={{ flex: 1 }}>
                         <label className="form-label">Full Name <span style={{ color: '#DC2626' }}>*</span></label>
                         <input type="text" className="form-input" placeholder="Name" value={member.name}
-                          onChange={e => { const u = [...newResidentForm.members]; u[index].name = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                          onChange={e => { const u = [...newResidentForm.members]; u[index].name = e.target.value.toUpperCase(); setNewResidentForm({ ...newResidentForm, members: u }); }} />
                       </div>
                       <div style={{ flex: 1 }}>
                         <label className="form-label">Relationship</label>
@@ -768,8 +841,31 @@ const ResidentDirectory = () => {
                     <div style={{ display: 'flex', gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <label className="form-label">Phone</label>
-                        <input type="text" className="form-input" placeholder="+91 98765 43210" value={member.phone}
-                          onChange={e => { const u = [...newResidentForm.members]; u[index].phone = e.target.value; setNewResidentForm({ ...newResidentForm, members: u }); }} />
+                        {(() => {
+                          const codeMatch = member.phone.match(/^\+(\d{1,4})/);
+                          const code = codeMatch ? `+${codeMatch[1]}` : '+91';
+                          const digits = member.phone.replace(/^\+\d{1,4}/, '');
+                          const setPhone = (nextCode: string, nextDigits: string) => {
+                            const u = [...newResidentForm.members];
+                            u[index].phone = nextDigits ? `${nextCode}${nextDigits}` : '';
+                            setNewResidentForm({ ...newResidentForm, members: u });
+                          };
+                          return (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <select className="form-input" style={{ flex: '0 0 84px', paddingLeft: 8, paddingRight: 4 }}
+                                value={code} onChange={e => setPhone(e.target.value, digits)}>
+                                <option value="+91">🇮🇳 +91</option>
+                                <option value="+1">🇺🇸 +1</option>
+                                <option value="+44">🇬🇧 +44</option>
+                                <option value="+971">🇦🇪 +971</option>
+                                <option value="+65">🇸🇬 +65</option>
+                                <option value="+61">🇦🇺 +61</option>
+                              </select>
+                              <input type="tel" inputMode="numeric" className="form-input" placeholder="98765 43210" value={digits}
+                                onChange={e => setPhone(code, e.target.value.replace(/\D/g, ''))} />
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div style={{ flex: 1 }}>
                         <label className="form-label">Email</label>

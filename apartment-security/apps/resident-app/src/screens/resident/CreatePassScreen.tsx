@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
-import { useAuth } from '@apartment-security/shared-auth';
+import { shareQrAsImage } from '../../utils/shareQrPass';
 
 const passTypes = ['One-time visitor', 'Delivery / service', 'Recurring', 'Contractor'];
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -26,8 +26,6 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   const styles = getStyles(colors, isDark);
   const insets = useSafeAreaInsets();
   const { createPass } = useData();
-  const { userProfile } = useAuth();
-  const propertyName = userProfile?.propertyName || 'the property';
   const [selectedType, setSelectedType] = useState('One-time visitor');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -129,15 +127,12 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     setIsSubmitting(true);
     try {
       const created = await createPass(newPass);
-      if (shareWhatsApp) {
-        const passCode = `PASS-${created.id.substring(created.id.length - 8).toUpperCase()}`;
-        const message = `Hello ${created.name}, your visitor pass for ${propertyName} is: ${passCode}. Valid: ${created.time}.`;
-        const phoneNum = created.phone ? created.phone.replace(/\D/g, '') : '';
-        // wa.me is WhatsApp's universal link - no native scheme registration
-        // needed (unlike whatsapp://, which requires LSApplicationQueriesSchemes
-        // on iOS). Fire-and-forget: a failed open shouldn't block navigation
-        // back, the pass is already created either way.
-        Linking.openURL(`https://wa.me/${phoneNum}?text=${encodeURIComponent(message)}`).catch(() => {});
+      if (shareWhatsApp && created.qrPayload) {
+        try {
+          await shareQrAsImage(created.qrPayload, created.id.substring(created.id.length - 8));
+        } catch {
+          // The pass is already created either way — a failed share shouldn't block navigation back.
+        }
       }
       Alert.alert('Success', 'Pass created successfully!');
       navigation.goBack();

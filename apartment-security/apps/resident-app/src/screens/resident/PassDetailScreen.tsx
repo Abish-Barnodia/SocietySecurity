@@ -7,6 +7,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
+import { shareQrAsImage } from '../../utils/shareQrPass';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../navigation/AppNavigator';
 
@@ -139,16 +140,14 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
   };
 
   const shareViaWhatsApp = async () => {
-    const message = `Hello ${pass.name}, your visitor pass for ${propertyName} is: ${getPassCode()}. Valid: ${pass.time}.`;
-    const phoneNum = pass.phone ? pass.phone.replace(/\D/g, '') : '';
-    // wa.me is WhatsApp's universal link - works without any native scheme
-    // registration (whatsapp:// requires LSApplicationQueriesSchemes on iOS),
-    // and falls back to WhatsApp's own "app not installed" page if needed.
-    const url = `https://wa.me/${phoneNum}?text=${encodeURIComponent(message)}`;
+    if (!pass.qrPayload) {
+      Alert.alert('QR unavailable', 'This pass has no scannable QR code to share.');
+      return;
+    }
     try {
-      await Linking.openURL(url);
+      await shareQrAsImage(pass.qrPayload, pass.id.substring(pass.id.length - 8));
     } catch {
-      Alert.alert('Could not open WhatsApp');
+      Alert.alert('Could not share the QR code. Please try again.');
     }
   };
 

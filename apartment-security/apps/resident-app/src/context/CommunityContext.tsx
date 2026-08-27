@@ -105,6 +105,7 @@ const mapMessage = (raw: any, myUserId: string | null): ChatMessage => ({
 type SendMediaOptions = {
   replyToId?: string;
   durationSec?: number;
+  body?: string;
 };
 
 type CommunityContextType = {
@@ -243,6 +244,7 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const uploaded = await uploadMedia(localUri, mimeType, fileName);
       await postMessage({
         type,
+        body: options?.body,
         mediaUrl: uploaded.url,
         mediaMimeType: uploaded.mimeType,
         fileName: uploaded.fileName,

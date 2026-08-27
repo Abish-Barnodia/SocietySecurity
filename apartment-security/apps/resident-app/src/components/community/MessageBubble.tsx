@@ -131,6 +131,12 @@ export default function MessageBubble({
           <PollCard poll={message.poll} tint={message.isMine ? colors.primaryDark : colors.primary} />
         )}
 
+        {message.type !== 'TEXT' && !!message.body && (
+          <Text style={[styles.bodyText, message.isMine && styles.bodyTextMine, { marginTop: 6 }]}>
+            {renderBodyWithMentions(message.body, !!message.isMine)}
+          </Text>
+        )}
+
         <Text style={[styles.timestamp, message.isMine && styles.timestampMine]}>{formatTime(message.createdAt)}</Text>
       </TouchableOpacity>
 

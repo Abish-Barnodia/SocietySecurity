@@ -22,6 +22,7 @@ import MessageBubble from '../../components/community/MessageBubble';
 import MessageActionsSheet from '../../components/community/MessageActionsSheet';
 import AttachmentSheet, { AttachmentAction } from '../../components/community/AttachmentSheet';
 import CreatePollModal from '../../components/community/CreatePollModal';
+import MediaPreviewModal, { PreviewAsset } from '../../components/community/MediaPreviewModal';
 import MentionAutocomplete from '../../components/community/MentionAutocomplete';
 import ThemedAlertModal from '../../components/ThemedAlertModal';
 
@@ -77,6 +78,8 @@ export default function CommunityScreen() {
   const [actionMessage, setActionMessage] = useState<ChatMessage | null>(null);
   const [attachmentOpen, setAttachmentOpen] = useState(false);
   const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [previewAssets, setPreviewAssets] = useState<PreviewAsset[]>([]);
+  const [previewSending, setPreviewSending] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sending, setSending] = useState(false);
@@ -192,19 +195,17 @@ export default function CommunityScreen() {
             : await ImagePicker.launchCameraAsync(pickerOptions);
 
         if (result.canceled || result.assets.length === 0) return;
-        for (let i = 0; i < result.assets.length; i++) {
-          const asset = result.assets[i]!;
-          const type = asset.type === 'video' ? 'VIDEO' : 'IMAGE';
-          const isLast = i === result.assets.length - 1;
-          await sendMediaMessage(
-            type,
-            asset.uri,
-            asset.mimeType ?? (type === 'VIDEO' ? 'video/mp4' : 'image/jpeg'),
-            asset.fileName ?? `${type.toLowerCase()}-${Date.now()}.${type === 'VIDEO' ? 'mp4' : 'jpg'}`,
-            { replyToId: isLast ? replyTo?.id : undefined }
-          );
-        }
-        setReplyTo(null);
+        // Stage for review instead of sending immediately — the sender gets
+        // to see what they picked, drop any of them, and add a caption
+        // before anything actually goes out (see MediaPreviewModal).
+        setPreviewAssets(
+          result.assets.map((asset) => ({
+            uri: asset.uri,
+            mimeType: asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+            fileName: asset.fileName,
+            isVideo: asset.type === 'video',
+          }))
+        );
         return;
       }
 
@@ -222,6 +223,31 @@ export default function CommunityScreen() {
       }
     } catch (error: any) {
       setErrorMessage(error?.response?.data?.message ?? 'Failed to send attachment. Please try again.');
+    }
+  };
+
+  const handleSendPreview = async (assets: PreviewAsset[], caption: string) => {
+    setPreviewSending(true);
+    try {
+      for (let i = 0; i < assets.length; i++) {
+        const asset = assets[i]!;
+        const isLast = i === assets.length - 1;
+        await sendMediaMessage(
+          asset.isVideo ? 'VIDEO' : 'IMAGE',
+          asset.uri,
+          asset.mimeType ?? (asset.isVideo ? 'video/mp4' : 'image/jpeg'),
+          asset.fileName ?? `${asset.isVideo ? 'video' : 'image'}-${Date.now()}.${asset.isVideo ? 'mp4' : 'jpg'}`,
+          // Caption and reply both attach to the last item only, same as
+          // WhatsApp attaching one caption to a multi-photo send.
+          { body: isLast ? caption.trim() || undefined : undefined, replyToId: isLast ? replyTo?.id : undefined }
+        );
+      }
+      setReplyTo(null);
+      setPreviewAssets([]);
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message ?? 'Failed to send attachment. Please try again.');
+    } finally {
+      setPreviewSending(false);
     }
   };
 
@@ -413,6 +439,13 @@ export default function CommunityScreen() {
       />
       <AttachmentSheet visible={attachmentOpen} onClose={() => setAttachmentOpen(false)} onSelect={handleAttachmentSelect} />
       <CreatePollModal visible={pollModalOpen} onClose={() => setPollModalOpen(false)} replyToId={replyTo?.id} />
+      <MediaPreviewModal
+        visible={previewAssets.length > 0}
+        assets={previewAssets}
+        sending={previewSending}
+        onClose={() => setPreviewAssets([])}
+        onSend={handleSendPreview}
+      />
       <ThemedAlertModal visible={!!errorMessage} title="Error" message={errorMessage ?? ''} onClose={() => setErrorMessage(null)} />
     </View>
   );

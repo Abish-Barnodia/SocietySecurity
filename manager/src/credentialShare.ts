@@ -42,11 +42,20 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// Claims one of an account's limited shares (max 2, enforced server-side)
-// before generating/handing off the PDF — throws if any of them has hit the
-// limit, so the caller can show that instead of silently proceeding. A
-// household PDF bundles several accounts at once, so every one of them
-// consumes its own share the moment they're sent out together.
+// Recent desktop Chrome/Edge on Windows also expose navigator.share/canShare,
+// but usually with no WhatsApp/Mail app actually registered as a file-share
+// target — canShare({files}) can return true and then either silently reject
+// or open an empty share sheet, which is what made both buttons look
+// completely dead. Only trust the Web Share API on mobile, where WhatsApp/
+// Mail are genuinely registered share targets; desktop always uses the
+// known-working download + wa.me/mailto fallback below.
+const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// Claims one of the (representative) account's limited shares — max 2,
+// enforced server-side — before generating/handing off the PDF. A household
+// PDF bundles several members, but the share limit is charged once per
+// action against the primary/first account, not once per member, so a
+// 3-person household doesn't burn through the cap 3x faster than a guard.
 async function claimCredentialShare(kind: 'guards' | 'residents', id: string, getAuthToken: () => string) {
   const res = await fetch(`${API_BASE}/${kind}/${id}/credential-share`, {
     method: 'POST',
@@ -60,7 +69,7 @@ async function claimCredentialShare(kind: 'guards' | 'residents', id: string, ge
 
 export async function shareCredentialPdf(opts: {
   kind: 'guards' | 'residents';
-  ids: string[];
+  id: string;
   getAuthToken: () => string;
   propertyName: string;
   role: string;
@@ -68,9 +77,7 @@ export async function shareCredentialPdf(opts: {
   target: 'whatsapp' | 'email';
   phone?: string;
 }) {
-  for (const id of opts.ids) {
-    await claimCredentialShare(opts.kind, id, opts.getAuthToken);
-  }
+  await claimCredentialShare(opts.kind, opts.id, opts.getAuthToken);
 
   const blob = buildCredentialPdf(opts.propertyName, opts.role, opts.entries);
   const filename = `Credentials_${opts.entries[0]?.name.replace(/\s+/g, '_') || 'account'}.pdf`;
@@ -78,11 +85,7 @@ export async function shareCredentialPdf(opts: {
   const names = opts.entries.map(e => e.name).join(', ');
   const shareText = `Hello, here are the login credentials for ${names} at ${opts.propertyName}. Please keep this secure.`;
 
-  // Web Share API with a file lets the OS's native share sheet hand the
-  // actual PDF to WhatsApp/Mail/etc — supported on most mobile browsers,
-  // not on desktop Chrome/Edge/Firefox (no browser API can attach a file to
-  // a wa.me link or a mailto: link — both are text-only by spec).
-  if (navigator.canShare?.({ files: [file] })) {
+  if (isMobileBrowser && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Account Credentials', text: shareText });
       return;

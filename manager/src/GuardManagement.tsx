@@ -49,7 +49,7 @@ const GuardManagement: React.FC = () => {
     try {
       await shareCredentialPdf({
         kind: 'guards',
-        ids: [credentialShare.id],
+        id: credentialShare.id,
         getAuthToken,
         propertyName: 'the property',
         role: 'Guard',
@@ -696,7 +696,7 @@ const GuardManagement: React.FC = () => {
               </p>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary share-action-btn"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#25D366' }}
                   onClick={() => handleShareCredential('whatsapp')}
                   disabled={credentialShareBusy}
@@ -704,7 +704,7 @@ const GuardManagement: React.FC = () => {
                   <Icon name="brand-whatsapp" size={16} /> WhatsApp
                 </button>
                 <button
-                  className="btn btn-outline"
+                  className="btn btn-outline share-action-btn"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                   onClick={() => handleShareCredential('email')}
                   disabled={credentialShareBusy}

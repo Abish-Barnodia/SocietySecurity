@@ -88,7 +88,7 @@ const ResidentDirectory = () => {
     try {
       await shareCredentialPdf({
         kind: 'residents',
-        ids: credentialShare.ids,
+        id: credentialShare.ids[0],
         getAuthToken,
         propertyName: 'the property',
         role: 'Resident',
@@ -790,7 +790,7 @@ const ResidentDirectory = () => {
               </p>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button
-                  className="btn btn-primary"
+                  className="btn btn-primary share-action-btn"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#25D366' }}
                   onClick={() => handleShareCredential('whatsapp')}
                   disabled={credentialShareBusy}
@@ -798,7 +798,7 @@ const ResidentDirectory = () => {
                   <Icon name="brand-whatsapp" size={16} /> WhatsApp
                 </button>
                 <button
-                  className="btn btn-outline"
+                  className="btn btn-outline share-action-btn"
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                   onClick={() => handleShareCredential('email')}
                   disabled={credentialShareBusy}

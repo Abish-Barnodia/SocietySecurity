@@ -81,6 +81,18 @@ button:not(:disabled):hover {
 button:not(:disabled):active {
   transform: scale(0.97);
 }
+/* Extra-visible feedback for prominent share actions (WhatsApp/Email
+   credential-share buttons) — the global brightness dip above is subtle on
+   a bright green button, so these also lift + shadow on hover and sink on
+   click, layering on top of (not replacing) the rules above. */
+.share-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+.share-action-btn:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
 button:disabled {
   cursor: default;
 }

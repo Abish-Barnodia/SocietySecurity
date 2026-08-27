@@ -13,6 +13,7 @@ import { MaintenanceProvider } from './src/context/MaintenanceContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 import { registerForPushNotificationsAsync, registerBackgroundNotificationTask, addVisitorNotificationResponseListener } from './src/utils/notifications';
 import api, { API_URL } from './src/utils/api';
 import tokenStorage from './src/utils/tokenStorage';
@@ -64,6 +65,7 @@ function ThemedApp() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       theme={navigationTheme}
       onStateChange={(state) => {
         const route = state?.routes[state?.index ?? 0];

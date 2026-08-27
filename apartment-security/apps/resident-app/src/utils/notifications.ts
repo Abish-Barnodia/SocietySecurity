@@ -61,7 +61,9 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     await Notifications.setNotificationChannelAsync(VISITOR_RING_CHANNEL, {
       name: 'Visitor at gate',
       importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 500, 250, 500, 250, 500],
+      // Longer, more insistent buzz-buzz-buzz pattern (closer to an
+      // incoming-call vibration) than a single short pulse.
+      vibrationPattern: [0, 600, 200, 600, 200, 600, 200, 600],
       lightColor: '#FF231F7C',
       bypassDnd: true,
     });
@@ -166,7 +168,8 @@ export async function startVisitorRing(entryId: string, visitorName: string, ext
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       channelId: VISITOR_RING_CHANNEL,
-      seconds: 4,
+      // Re-fires every 2s instead of 4s — closer to a real ring cadence.
+      seconds: 2,
       repeats: true,
     },
   });
@@ -267,6 +270,12 @@ export async function addVisitorNotificationResponseListener(): Promise<() => vo
       respondToVisitorFromNotification(data.entryId, 'APPROVED');
     } else if (response.actionIdentifier === 'DENY') {
       respondToVisitorFromNotification(data.entryId, 'DENIED');
+    } else {
+      // Tapped the notification body itself (not an action button) —
+      // open straight to the approval screen, same as answering a call.
+      import('../navigation/navigationRef').then(({ navigateToWalkInApproval }) => {
+        navigateToWalkInApproval(data.entryId);
+      });
     }
   });
 

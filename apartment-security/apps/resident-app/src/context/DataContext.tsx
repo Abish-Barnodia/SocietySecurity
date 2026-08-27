@@ -3,6 +3,7 @@ import { colors } from '../theme/colors';
 import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
 import { scheduleLocalNotification, startVisitorRing, stopVisitorRing } from '../utils/notifications';
+import { navigateToWalkInApproval } from '../navigation/navigationRef';
 import { useSocket } from './SocketContext';
 
 export type Pass = {
@@ -570,6 +571,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         imageUrl: payload.gatePhotoUrl,
       });
       startVisitorRing(payload.entryId, payload.visitorName);
+      // Jump straight to the approval screen while the app is open — the
+      // "feels like an incoming call" behavior, without needing a native
+      // full-screen-intent module.
+      navigateToWalkInApproval(payload.entryId);
     };
 
     // DB-persisted alerts emitted by triggerAlert() to the user's personal room.
@@ -648,6 +653,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...(payload.apartment ? { apartment: payload.apartment } : {}),
         ...(payload.tower ? { tower: payload.tower } : {}),
       });
+      navigateToWalkInApproval(payload.entryId);
     };
 
     const handleVisitorApprovalTimeout = (payload: { entryId: string }) => {

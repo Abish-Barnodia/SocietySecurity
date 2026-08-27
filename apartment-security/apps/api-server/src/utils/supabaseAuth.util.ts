@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { env } from '../config/env';
 import { logger } from './logger.util';
+import { AppError } from '../middlewares/error.middleware';
 
 // Supabase is used here purely as an OTP-email delivery mechanism for
 // password reset — Ethereal (the SMTP provider previously in .env) never
@@ -37,11 +38,21 @@ async function ensureSupabaseUser(email: string) {
 export const sendSupabaseRecoveryEmail = async (email: string): Promise<boolean> => {
   if (!isConfigured()) return false;
   await ensureSupabaseUser(email);
-  await axios.post(
-    authUrl('/recover'),
-    { email },
-    { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` } }
-  );
+  try {
+    await axios.post(
+      authUrl('/recover'),
+      { email },
+      { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` } }
+    );
+  } catch (err: any) {
+    // Supabase itself failing to relay through the configured custom SMTP
+    // (bad host/port/credentials in the Supabase dashboard) surfaces as a
+    // 500 "Error sending recovery email" here — log the real detail
+    // server-side and give the client something more actionable than a
+    // bare "Internal Server Error".
+    logger.error('supabaseAuth: /recover failed', { email, status: err?.response?.status, data: err?.response?.data });
+    throw new AppError('Could not send the reset email right now. Please try again shortly.', 502);
+  }
   return true;
 };
 

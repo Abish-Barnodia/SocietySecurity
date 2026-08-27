@@ -18,8 +18,11 @@ import ManagerProfile from './ManagerProfile';
 import Settings, { applyManagerTheme } from './Settings';
 import CCTVMonitoring from './CCTVMonitoring';
 import Icon from './Icon';
+import { io as connectSocket } from 'socket.io-client';
 
 import { API_BASE } from './config';
+
+const SOCKET_URL = API_BASE.replace(/\/api\/v1\/?$/, '');
 
 // Applied synchronously at module load (before first paint) from the locally
 // cached theme choice, so there's no flash of the wrong theme on refresh.
@@ -59,6 +62,11 @@ const App: React.FC = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [fullProfile, setFullProfile] = useState<any>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // alertId -> status, kept live via socket so the sidebar badge moves the
+  // instant an alert is raised or acknowledged, by this manager or another
+  // one — not just on the next 15s poll some other page happens to run.
+  const [alertStatuses, setAlertStatuses] = useState<Record<string, string>>({});
+  const unreadAlertCount = Object.values(alertStatuses).filter((s) => s !== 'ACKNOWLEDGED').length;
 
   useEffect(() => {
     const onSessionExpired = () => {
@@ -104,6 +112,29 @@ const App: React.FC = () => {
       .finally(() => setAuthChecked(true));
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) { setAlertStatuses({}); return; }
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    fetch(`${API_BASE}/alerts`, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          const map: Record<string, string> = {};
+          for (const a of data.data) map[a.id] = a.status;
+          setAlertStatuses(map);
+        }
+      })
+      .catch(() => {});
+
+    const socket = connectSocket(SOCKET_URL, { auth: { token } });
+    const upsert = (alert: any) => setAlertStatuses((prev) => ({ ...prev, [alert.id]: alert.status }));
+    socket.on('new_alert', upsert);
+    socket.on('alert_updated', upsert);
+    return () => { socket.disconnect(); };
+  }, [isAuthenticated]);
+
   const handleLogin = (_token: string, _loggedInUser: any) => {
     setIsAuthenticated(true);
   };
@@ -146,7 +177,7 @@ const App: React.FC = () => {
     { id: 'guards', label: 'Guard Management', icon: <Icon name="shield-check" size={18} /> },
     { id: 'residents', label: 'Resident Directory', icon: <Icon name="users" size={18} /> },
     { id: 'timeline', label: 'Event Timeline', icon: <Icon name="clock" size={18} /> },
-    { id: 'alerts', label: 'Alerts & Escalation', icon: <Icon name="alert-triangle" size={18} />, badge: '4' },
+    { id: 'alerts', label: 'Alerts & Escalation', icon: <Icon name="alert-triangle" size={18} />, badge: unreadAlertCount > 0 ? String(unreadAlertCount) : undefined },
     { id: 'expected', label: 'Expected Visitors', icon: <Icon name="user-check" size={18} /> },
     { id: 'parking', label: 'Parking & Vehicles', icon: <Icon name="car" size={18} /> },
     { id: 'cctv', label: 'CCTV Monitoring', icon: <Icon name="video" size={18} /> }

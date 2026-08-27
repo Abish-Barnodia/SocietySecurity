@@ -42,15 +42,6 @@ const downloadBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-// Recent desktop Chrome/Edge on Windows also expose navigator.share/canShare,
-// but usually with no WhatsApp/Mail app actually registered as a file-share
-// target — canShare({files}) can return true and then either silently reject
-// or open an empty share sheet, which is what made both buttons look
-// completely dead. Only trust the Web Share API on mobile, where WhatsApp/
-// Mail are genuinely registered share targets; desktop always uses the
-// known-working download + wa.me/mailto fallback below.
-const isMobileBrowser = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
 // Claims one of the (representative) account's limited shares — max 2,
 // enforced server-side — before generating/handing off the PDF. A household
 // PDF bundles several members, but the share limit is charged once per
@@ -85,7 +76,11 @@ export async function shareCredentialPdf(opts: {
   const names = opts.entries.map(e => e.name).join(', ');
   const shareText = `Hello, here are the login credentials for ${names} at ${opts.propertyName}. Please keep this secure.`;
 
-  if (isMobileBrowser && navigator.canShare?.({ files: [file] })) {
+  // Hands the actual PDF straight to whatever the OS's native share sheet
+  // offers — WhatsApp/Mail apps on mobile, and (on Windows) an installed
+  // WhatsApp Desktop app too. Falls through to the download + wa.me/mailto
+  // fallback below only when no such target exists at all.
+  if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Account Credentials', text: shareText });
       return;

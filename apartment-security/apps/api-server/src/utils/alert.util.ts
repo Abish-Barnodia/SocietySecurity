@@ -85,11 +85,16 @@ export const triggerAlert = async (params: TriggerAlertParams) => {
 
   // Emit live socket event to every target user's personal room so the
   // resident app receives the alert instantly without relying on FCM push.
+  // Also broadcast to the whole property room — managers get oversight of
+  // every alert (see getAlerts), not just ones that happened to target
+  // their own user id, and their Alerts & Escalation badge count needs a
+  // live signal regardless of who the alert was actually for.
   try {
     const { io } = await import('../server');
     for (const uid of userIds) {
       io?.to(`user:${uid}`).emit('new_alert', alert);
     }
+    io?.to(`property:${propertyId}`).emit('new_alert', alert);
   } catch { /* server not yet ready during tests */ }
 
   const allFcmTokens = users.flatMap((u) => u.fcmTokens);
@@ -139,15 +144,20 @@ export const acknowledgeAlert = async (alertId: string, userId: string) => {
     data: { status: 'ACKNOWLEDGED', acknowledgedAt: new Date(), acknowledgedBy: userId },
   });
 
-  // Notify whoever raised this alert (currently only set for duress alarms)
-  // that staff has responded — otherwise the sender never learns a manager
-  // acted on it beyond the one-time "SOS sent" toast at trigger time.
-  if (updated.triggeredByUserId) {
-    try {
-      const { io } = await import('../server');
+  try {
+    const { io } = await import('../server');
+    // Notify whoever raised this alert (currently only set for duress
+    // alarms) that staff has responded — otherwise the sender never learns
+    // a manager acted on it beyond the one-time "SOS sent" toast at trigger
+    // time.
+    if (updated.triggeredByUserId) {
       io?.to(`user:${updated.triggeredByUserId}`).emit('alert_acknowledged', updated);
-    } catch { /* server not yet ready during tests */ }
-  }
+    }
+    // Every manager watching Alerts & Escalation needs to see this flip to
+    // ACKNOWLEDGED live too — whichever one of them (or another channel)
+    // just acknowledged it, everyone's unread badge should drop together.
+    io?.to(`property:${updated.propertyId}`).emit('alert_updated', updated);
+  } catch { /* server not yet ready during tests */ }
 
   return updated;
 };

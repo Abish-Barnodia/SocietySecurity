@@ -20,6 +20,7 @@ import {
   getUnitsByTower,
   deactivateResident,
   deleteFamily,
+  restoreFamily,
   shareResidentCredential,
   getUnitSummary,
 } from './resident.controller';
@@ -55,6 +56,7 @@ router.post('/household',          requireRole('MANAGER'), requireManagerPermiss
 router.put('/families/:unitId',    requireRole('MANAGER'), requireManagerPermission('residents'), validate(updateHouseholdSchema), updateHousehold);
 router.delete('/:id',              requireRole('MANAGER'), requireManagerPermission('residents'), deactivateResident);
 router.delete('/families/:unitId', requireRole('MANAGER'), requireManagerPermission('residents'), deleteFamily);
+router.post('/families/:unitId/restore', requireRole('MANAGER'), requireManagerPermission('residents'), restoreFamily);
 router.post('/:id/credential-share', requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), shareResidentCredential);
 router.get('/:id/summary',         requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getUnitSummary);
 

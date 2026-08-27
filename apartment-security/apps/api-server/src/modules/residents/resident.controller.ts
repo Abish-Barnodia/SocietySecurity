@@ -252,10 +252,13 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
         // for COMMITTEE (no property link in the schema today), which leaves
         // committee access unscoped exactly as before — this only tightens the
         // MANAGER path, which previously leaked residents across all properties.
+        // ?deleted=true surfaces the "Delete Family" history view instead of
+        // the normal directory — same shape, just the opposite isDeleted filter.
+        const showDeleted = req.query.deleted === 'true';
         const residents = await prisma.resident.findMany({
             where: {
                 unit: {
-                    isDeleted: false,
+                    isDeleted: showDeleted,
                     ...(req.user!.propertyId ? { propertyId: req.user!.propertyId } : {}),
                 },
             },
@@ -731,6 +734,26 @@ export const deleteFamily = async (req: Request, res: Response, next: NextFuncti
 
         await auditLog(req.user!.userId, 'DELETE_FAMILY', 'Unit', unitId);
         return sendSuccess(res, 200, 'Family deleted successfully');
+    } catch (err) { next(err); }
+};
+
+// Undoes deleteFamily — reinstates the unit in the directory and restores
+// every member's login access.
+export const restoreFamily = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const unitId = req.params.unitId as string;
+        const unit = await prisma.unit.findUnique({ where: { id: unitId }, include: { residents: true } });
+        if (!unit || unit.propertyId !== req.user!.propertyId) {
+            return next(new AppError('Household not found', 404));
+        }
+
+        await prisma.$transaction([
+            ...unit.residents.map(r => prisma.user.update({ where: { id: r.userId }, data: { isActive: true } })),
+            prisma.unit.update({ where: { id: unitId }, data: { isDeleted: false } }),
+        ]);
+
+        await auditLog(req.user!.userId, 'RESTORE_FAMILY', 'Unit', unitId);
+        return sendSuccess(res, 200, 'Family restored successfully');
     } catch (err) { next(err); }
 };
 

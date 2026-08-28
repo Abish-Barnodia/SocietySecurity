@@ -9,6 +9,7 @@ import { errorHandler } from './middlewares/error.middleware';
 import { notFoundHandler } from './middlewares/notFound.middleware';
 import { globalRateLimiter } from './middlewares/rateLimiter.middleware';
 import { logger } from './utils/logger.util';
+import { isKnownOrigin } from './utils/corsOrigin.util';
 
 // Routers
 import { authRouter } from './modules/auth/auth.routes';
@@ -60,19 +61,7 @@ app.use(cors({
       }
       return callback(new Error('CORS: missing origin not allowed'));
     }
-    // In development, allow any localhost origin regardless of port (Vite assigns dynamic ports)
-    if (process.env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
-      return callback(null, true);
-    }
-    const allowed = [
-      env.CLIENT_RESIDENT_APP_URL,
-      env.CLIENT_GUARD_APP_URL,
-      env.CLIENT_MANAGER_URL,
-    ];
-    // Allow configured browser client origins or any vercel.app domain
-    if (allowed.includes(origin) || origin.endsWith('.vercel.app')) {
-      return callback(null, true);
-    }
+    if (isKnownOrigin(origin)) return callback(null, true);
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,

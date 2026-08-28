@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { logger } from './utils/logger.util';
 import { prisma } from './config/prisma';
 import { Server } from 'socket.io';
+import { isKnownOrigin } from './utils/corsOrigin.util';
 
 const server = http.createServer(app);
 
@@ -13,18 +14,7 @@ export const io = new Server(server, {
     // Mobile apps send no Origin header — allow them alongside browser dashboards
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // mobile / server-to-server
-      const allowed = [
-        env.CLIENT_RESIDENT_APP_URL,
-        env.CLIENT_GUARD_APP_URL,
-        env.CLIENT_MANAGER_URL,
-      ];
-      if (allowed.includes(origin)) return callback(null, true);
-      
-      // In development, allow localhost origins for Web clients (like Expo on :8081)
-      if (env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
-        return callback(null, true);
-      }
-      
+      if (isKnownOrigin(origin)) return callback(null, true);
       callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
     },
     credentials: true,

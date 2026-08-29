@@ -48,7 +48,9 @@ window.fetch = async (...args: Parameters<typeof fetch>) => {
 };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // ponytail: derive initial tab from URL path so deep-links and refreshes land on the right page.
+  const tabFromPath = () => window.location.pathname.replace(/^\//, '') || 'dashboard';
+  const [activeTab, setActiveTab] = useState(tabFromPath);
   // Bumped on every sidebar click (even re-clicking the current tab) and
   // used as the page-content key, so re-clicking "Guard Management" while
   // deep in a guard's profile actually remounts it back to the roster -
@@ -69,15 +71,27 @@ const App: React.FC = () => {
   const unreadAlertCount = Object.values(alertStatuses).filter((s) => s !== 'ACKNOWLEDGED').length;
 
   useEffect(() => {
+    // ponytail: silent logout — no browser alert(). The login screen appearing is signal enough.
     const onSessionExpired = () => {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       setIsAuthenticated(false);
-      alert('Your session has ended. Please log in again.');
     };
     window.addEventListener('manager-session-expired', onSessionExpired);
     return () => window.removeEventListener('manager-session-expired', onSessionExpired);
+  }, []);
+
+  // Sync URL when tab changes, and listen for back/forward navigation.
+  useEffect(() => {
+    const path = activeTab === 'dashboard' ? '/' : `/${activeTab}`;
+    if (window.location.pathname !== path) history.pushState(null, '', path);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const onPop = () => setActiveTab(tabFromPath());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   useEffect(() => {

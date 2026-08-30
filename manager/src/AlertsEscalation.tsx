@@ -27,7 +27,7 @@ const AlertsEscalation = () => {
       const [incRes, alertRes, walkinRes, chainsRes] = await Promise.allSettled([
         fetch(`${API_BASE}/incidents`, { headers }),
         fetch(`${API_BASE}/alerts`, { headers }),
-        fetch(`${API_BASE}/walkin/pending`, { headers }),
+        fetch(`${API_BASE}/walkins/pending`, { headers }),
         fetch(`${API_BASE}/escalation/chains`, { headers })
       ]);
 

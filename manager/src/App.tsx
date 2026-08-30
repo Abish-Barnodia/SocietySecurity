@@ -183,7 +183,20 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} />;
+    // ponytail: redirect URL to /login so the address bar matches what's shown.
+    // Save the originally requested path to restore it after login.
+    if (window.location.pathname !== '/login') {
+      history.replaceState({ returnTo: window.location.pathname }, '', '/login');
+    }
+    const returnTo = (history.state?.returnTo && history.state.returnTo !== '/login')
+      ? history.state.returnTo
+      : '/dashboard';
+    const handleLoginWithReturn = (token: string, user: any) => {
+      handleLogin(token, user);
+      const path = returnTo === '/dashboard' ? '/' : returnTo;
+      history.replaceState(null, '', path);
+    };
+    return <Login onLogin={handleLoginWithReturn} />;
   }
 
   const operationsNav = [

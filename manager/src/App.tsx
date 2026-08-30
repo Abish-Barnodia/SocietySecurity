@@ -49,7 +49,10 @@ window.fetch = async (...args: Parameters<typeof fetch>) => {
 
 const App: React.FC = () => {
   // ponytail: derive initial tab from URL path so deep-links and refreshes land on the right page.
-  const tabFromPath = () => window.location.pathname.replace(/^\//, '') || 'dashboard';
+  const tabFromPath = () => {
+    const p = window.location.pathname.replace(/^\//, '');
+    return p === '' || p === 'dashboard' ? 'dashboard' : p;
+  };
   const [activeTab, setActiveTab] = useState(tabFromPath);
   // Bumped on every sidebar click (even re-clicking the current tab) and
   // used as the page-content key, so re-clicking "Guard Management" while
@@ -84,7 +87,7 @@ const App: React.FC = () => {
 
   // Sync URL when tab changes, and listen for back/forward navigation.
   useEffect(() => {
-    const path = activeTab === 'dashboard' ? '/' : `/${activeTab}`;
+    const path = `/${activeTab}`;
     if (window.location.pathname !== path) history.pushState(null, '', path);
   }, [activeTab]);
 

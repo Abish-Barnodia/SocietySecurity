@@ -107,7 +107,7 @@ const MaintenanceManagement: React.FC = () => {
   useEffect(() => {
     const token = getAuthToken();
     if (!token) return;
-    const socket = io(SOCKET_URL, { auth: { token } });
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
     socketRef.current = socket;
 
     const upsert = (raw: Invoice) => {

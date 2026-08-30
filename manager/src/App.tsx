@@ -142,7 +142,7 @@ const App: React.FC = () => {
       })
       .catch(() => {});
 
-    const socket = connectSocket(SOCKET_URL, { auth: { token } });
+    const socket = connectSocket(SOCKET_URL, { auth: { token }, transports: ['websocket'] });
     const upsert = (alert: any) => setAlertStatuses((prev) => ({ ...prev, [alert.id]: alert.status }));
     socket.on('new_alert', upsert);
     socket.on('alert_updated', upsert);

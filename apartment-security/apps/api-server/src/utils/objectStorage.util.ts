@@ -27,10 +27,12 @@ export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: s
     if (env.API_URL && !env.API_URL.includes('localhost') && !env.API_URL.includes('127.0.0.1')) {
       return env.API_URL.replace(/\/api\/v1\/?$/, '');
     }
-    if (process.env.NODE_ENV === 'production') {
-      return 'https://societysecurity.onrender.com';
+    // ponytail: only use local IP in dev — any other env (prod, staging) uses
+    // the hardcoded Render URL so we never leak an internal IP to clients.
+    if (env.NODE_ENV === 'development') {
+      return `http://${getLocalIp()}:${env.PORT}`;
     }
-    return `http://${getLocalIp()}:${env.PORT}`;
+    return 'https://societysecurity.onrender.com';
   };
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {

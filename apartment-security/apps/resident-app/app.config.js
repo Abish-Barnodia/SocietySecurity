@@ -57,7 +57,7 @@ module.exports = {
     ],
     extra: {
       eas: {
-        projectId: "9cc3998a-79a6-4649-8181-b4c17d032c7e"
+        projectId: "24c26ebe-dbf8-4b78-9dfa-57e1baca27d0"
       },
       // Override via API_URL env var — never hardcode an IP here.
       // Left undefined when unset so src/utils/api.ts can derive the right

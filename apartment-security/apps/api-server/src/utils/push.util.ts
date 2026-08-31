@@ -49,7 +49,7 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
         data:  { ...(payload.data ?? {}), title: payload.title, body: payload.body },
         sound: (isVisitorApproval ? 'visitor_ring.wav' : 'default') as any,
         priority: 'high' as const,
-        channelId: isVisitorApproval ? 'visitor-ring' : 'default',
+        channelId: isVisitorApproval ? 'visitor-ring-2' : 'default',
         categoryId: isVisitorApproval ? 'VISITOR_APPROVAL' : undefined,
       };
     });
@@ -91,7 +91,7 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
               : (payload.data ?? {}),
             android: {
               priority: 'high',
-              ...(isVisitorApproval && !payload.dataOnly ? { notification: { channelId: 'visitor-ring', sound: 'visitor_ring.wav' } } : {})
+              ...(isVisitorApproval && !payload.dataOnly ? { notification: { channelId: 'visitor-ring-2', sound: 'visitor_ring.wav' } } : {})
             },
             apns: {
               payload: {

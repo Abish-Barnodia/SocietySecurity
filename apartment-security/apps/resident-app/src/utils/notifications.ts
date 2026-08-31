@@ -32,7 +32,7 @@ async function loadNotifications() {
   return notificationsModule;
 }
 
-const VISITOR_RING_CHANNEL = 'visitor-ring';
+const VISITOR_RING_CHANNEL = 'visitor-ring-2';
 const VISITOR_APPROVAL_CATEGORY = 'VISITOR_APPROVAL';
 const BACKGROUND_NOTIFICATION_TASK = 'VISITOR_APPROVAL_BACKGROUND_TASK';
 const RING_MAP_KEY = 'visitor_ring_schedule_map';

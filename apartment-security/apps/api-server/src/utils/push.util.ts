@@ -40,15 +40,19 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
 
   // --- Expo push ---
   if (expoTokens.length) {
-    const messages: ExpoPushMessage[] = expoTokens.map(to => ({
-      to,
-      title: payload.dataOnly ? undefined : payload.title,
-      body:  payload.dataOnly ? undefined : payload.body,
-      data:  { ...(payload.data ?? {}), title: payload.title, body: payload.body },
-      sound: 'default' as const,
-      priority: 'high' as const,
-      channelId: payload.dataOnly ? 'visitor-ring' : 'default',
-    }));
+    const messages: ExpoPushMessage[] = expoTokens.map(to => {
+      const isVisitorApproval = payload.data?.type === 'VISITOR_APPROVAL';
+      return {
+        to,
+        title: payload.dataOnly ? undefined : payload.title,
+        body:  payload.dataOnly ? undefined : payload.body,
+        data:  { ...(payload.data ?? {}), title: payload.title, body: payload.body },
+        sound: (isVisitorApproval ? 'visitor_ring.wav' : 'default') as any,
+        priority: 'high' as const,
+        channelId: isVisitorApproval ? 'visitor-ring' : 'default',
+        categoryId: isVisitorApproval ? 'VISITOR_APPROVAL' : undefined,
+      };
+    });
 
     // expo-server-sdk handles chunking (100 per request) internally
     const chunks = expo.chunkPushNotifications(messages);
@@ -76,6 +80,7 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
       const fcmChunks = chunkArray(fcmTokens, 500);
       for (const chunk of fcmChunks) {
         try {
+          const isVisitorApproval = payload.data?.type === 'VISITOR_APPROVAL';
           const response = await getMessaging().sendEachForMulticast({
             tokens: chunk,
             ...(payload.dataOnly
@@ -84,8 +89,20 @@ export const sendPush = async (tokens: string[], payload: PushPayload) => {
             data: payload.dataOnly
               ? { ...(payload.data ?? {}), title: payload.title, body: payload.body }
               : (payload.data ?? {}),
-            android: { priority: 'high' },
-            apns: { payload: { aps: { sound: 'default', badge: 1, ...(payload.dataOnly ? { 'content-available': 1 } : {}) } } },
+            android: {
+              priority: 'high',
+              ...(isVisitorApproval && !payload.dataOnly ? { notification: { channelId: 'visitor-ring', sound: 'visitor_ring.wav' } } : {})
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: isVisitorApproval ? 'visitor_ring.wav' : 'default',
+                  badge: 1,
+                  category: isVisitorApproval ? 'VISITOR_APPROVAL' : undefined,
+                  ...(payload.dataOnly ? { 'content-available': 1 } : {})
+                }
+              }
+            },
           });
 
           const invalidTokens: string[] = [];

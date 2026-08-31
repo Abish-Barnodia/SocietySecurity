@@ -61,11 +61,10 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
     await Notifications.setNotificationChannelAsync(VISITOR_RING_CHANNEL, {
       name: 'Visitor at gate',
       importance: Notifications.AndroidImportance.MAX,
-      // Longer, more insistent buzz-buzz-buzz pattern (closer to an
-      // incoming-call vibration) than a single short pulse.
       vibrationPattern: [0, 600, 200, 600, 200, 600, 200, 600],
       lightColor: '#FF231F7C',
       bypassDnd: true,
+      sound: 'visitor_ring.wav',
     });
     await Notifications.setNotificationCategoryAsync(VISITOR_APPROVAL_CATEGORY, [
       { identifier: 'APPROVE', buttonTitle: 'Approve', options: { opensAppToForeground: false } },
@@ -112,41 +111,7 @@ export async function scheduleLocalNotification(title: string, body: string, dat
   });
 }
 
-// --- Visitor "ringing" alert (Accept/Deny from the notification itself) ---
-//
-// A single notification can't loop a sound on its own, so the "ring" is a
-// repeating scheduled notification (re-fires every few seconds) that keeps
-// replaying the visitor-ring channel's alert sound/vibration until it's
-// cancelled — by an in-app Approve/Deny, another household member
-// responding elsewhere, or the 2-minute server timeout. The schedule id is
-// persisted to SecureStore (not an in-memory var) because the background
-// task that starts/stops it runs in its own JS context on Android and can't
-// share memory with whatever else the app is doing.
-
-async function getRingMap(): Promise<Record<string, string[]>> {
-  try {
-    const raw = await SecureStore.getItemAsync(RING_MAP_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-async function setRingMap(map: Record<string, string[]>) {
-  try {
-    await SecureStore.setItemAsync(RING_MAP_KEY, JSON.stringify(map));
-  } catch {
-    // Best-effort — worst case a stale schedule keeps ringing until its own timeout.
-  }
-}
-
-// A single repeats:true schedule was going quiet well before the server's
-// 120s approval window — Android's alarm scheduler doesn't reliably honor a
-// short repeating interval long-term (Doze/battery-optimization throttling).
-// Scheduling every firing as its own one-shot alarm up front is far more
-// reliable, at the cost of holding more schedule ids to cancel later.
-const RING_DURATION_SECONDS = 120;
-const RING_INTERVAL_SECONDS = 5;
+// Removed JS-based repeating ring in favor of a single native OS-level long ringtone
 
 export async function startVisitorRing(entryId: string, visitorName: string, extra?: Record<string, string>) {
   const Notifications = await loadNotifications();
@@ -173,42 +138,13 @@ export async function startVisitorRing(entryId: string, visitorName: string, ext
     sound: true,
   };
 
-  const scheduleIds: string[] = [];
-  // First one fires right away, then one more every RING_INTERVAL_SECONDS
-  // up through the full approval window.
-  scheduleIds.push(await Notifications.scheduleNotificationAsync({ content, trigger: null }));
-  for (let t = RING_INTERVAL_SECONDS; t <= RING_DURATION_SECONDS; t += RING_INTERVAL_SECONDS) {
-    scheduleIds.push(
-      await Notifications.scheduleNotificationAsync({
-        content,
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          channelId: VISITOR_RING_CHANNEL,
-          seconds: t,
-          repeats: false,
-        },
-      })
-    );
-  }
-
-  const map = await getRingMap();
-  map[entryId] = scheduleIds;
-  await setRingMap(map);
+  // A single native notification will play the bundled visitor_ring.wav
+  await Notifications.scheduleNotificationAsync({ content, trigger: null });
 }
 
 export async function stopVisitorRing(entryId: string) {
   const Notifications = await loadNotifications();
   if (!Notifications) return;
-
-  const map = await getRingMap();
-  const scheduleIds = map[entryId];
-  if (scheduleIds?.length) {
-    await Promise.all(
-      scheduleIds.map((id) => Notifications.cancelScheduledNotificationAsync(id).catch(() => {}))
-    );
-    delete map[entryId];
-    await setRingMap(map);
-  }
 
   try {
     const shown = await Notifications.getPresentedNotificationsAsync();

@@ -84,7 +84,7 @@ export const requestWalkin = async (req: Request, res: Response, next: NextFunct
       propertyId: targetUnit.propertyId,
       entryId: entry.id,
       imageUrl: finalPhotoUrl,
-      dataOnly: true,
+      dataOnly: false,
       extraData: {
         type: 'VISITOR_APPROVAL',
         visitorName,
@@ -132,20 +132,24 @@ export const respondWalkin = async (req: Request, res: Response, next: NextFunct
     if (entry.status !== 'PENDING_APPROVAL') {
         return next(new AppError(`Request already ${entry.status.toLowerCase()}`, 400));
     }
-    // A QR-scan approval ticket can still show Entry.status === 'PENDING_APPROVAL'
-    // in the brief window between its deadline passing and the next timeout-job
-    // tick — this closes that race, independent of the job's polling interval.
     if (entry.walkinApproval && (entry.walkinApproval.decision || entry.walkinApproval.timeoutAt < new Date())) {
         return next(new AppError('Request already resolved or timed out', 400));
     }
 
-    const updatedEntry = await prisma.entry.update({
-      where: { id },
+    // Atomic update: ensure we only update if it's still PENDING_APPROVAL
+    const updateResult = await prisma.entry.updateMany({
+      where: { id, status: 'PENDING_APPROVAL' },
       data: {
         status, // 'APPROVED' or 'DENIED'
         notes: notes ? `${entry.notes || ''} | Res: ${notes}` : entry.notes
       }
     });
+
+    if (updateResult.count === 0) {
+      return next(new AppError('Request already resolved by another family member', 400));
+    }
+
+    const updatedEntry = await prisma.entry.findUnique({ where: { id } });
 
     if (entry.walkinApproval) {
       await prisma.walkinApproval.update({

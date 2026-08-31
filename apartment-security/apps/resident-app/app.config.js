@@ -37,7 +37,12 @@ module.exports = {
       // Ensures Android permissions/manifest wiring for remote push and
       // background notification handling (visitor-approval ringing) are
       // properly configured — was relying on autolinking defaults before.
-      'expo-notifications',
+      [
+        'expo-notifications',
+        {
+          sounds: ['./assets/visitor_ring.wav']
+        }
+      ],
       [
         'expo-splash-screen',
         {

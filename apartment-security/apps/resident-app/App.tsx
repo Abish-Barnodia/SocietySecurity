@@ -39,11 +39,21 @@ function ThemedApp() {
   useEffect(() => {
     if (!isAuthenticated) return;
     registerForPushNotificationsAsync()
-      .then(token => {
-        if (token) api.post('/auth/fcm-token', { token }).catch(() => {});
+      .then(async (token) => {
+        if (token) {
+          console.log('🚀 Registering push token to backend:', token);
+          try {
+            const res = await api.post('/auth/fcm-token', { token });
+            console.log('✅ Push token registered successfully:', res.data);
+          } catch (err) {
+            console.error('❌ Failed to register push token with backend:', err);
+          }
+        } else {
+          console.log('⚠️ No push token returned from registerForPushNotificationsAsync');
+        }
       })
-      .catch(error => console.log('Push registration skipped:', error));
-    registerBackgroundNotificationTask().catch(error => console.log('Background task registration skipped:', error));
+      .catch((error) => console.log('Push registration skipped:', error));
+    registerBackgroundNotificationTask().catch((error) => console.log('Background task registration skipped:', error));
 
     let removeListener: (() => void) | undefined;
     addVisitorNotificationResponseListener().then(remove => { removeListener = remove; });

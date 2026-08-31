@@ -2,7 +2,7 @@ import React, { createContext, useState, useContext, useEffect, useRef, useCallb
 import { colors } from '../theme/colors';
 import api from '../utils/api';
 import { useAuth } from '@apartment-security/shared-auth';
-import { scheduleLocalNotification, startVisitorRing, stopVisitorRing } from '../utils/notifications';
+import { scheduleLocalNotification, startVisitorRing, stopVisitorRing, registerForPushNotificationsAsync } from '../utils/notifications';
 import { navigateToWalkInApproval } from '../navigation/navigationRef';
 import { useSocket } from './SocketContext';
 
@@ -489,6 +489,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ? [{ id: resident.id, name: resident.emergencyContactName || 'Emergency contact', phone: resident.emergencyContact, relation: '' }]
           : []
       );
+      registerForPushNotificationsAsync().then((token) => {
+        if (token) api.post('/auth/fcm-token', { token }).catch(() => {});
+      });
     } catch (error) {
       console.error('Failed to fetch profile settings:', error);
     }

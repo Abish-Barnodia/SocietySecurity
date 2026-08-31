@@ -89,10 +89,12 @@ export async function registerForPushNotificationsAsync(): Promise<string | unde
   }
 
   try {
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    const { data } = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined
-    );
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      (Constants as any).easConfig?.projectId ??
+      '9cc3998a-79a6-4649-8181-b4c17d032c7e';
+    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    console.log('🔑 [Push Token Retrieved]:', data);
     return data;
   } catch (error) {
     console.log('Failed to get Expo push token:', error);

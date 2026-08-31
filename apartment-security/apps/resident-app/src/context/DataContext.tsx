@@ -596,7 +596,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return [{ id: raw.entryId, visitorName: raw.title, purpose: raw.body, gatePhotoUrl: raw.imageUrl, time }, ...prev];
         });
       }
-      scheduleLocalNotification(raw.title, raw.body);
+      // ponytail: only notify residents — guards are in the property room too
+      // (new_alert is broadcast property-wide) but visitor alerts are not
+      // meant for them; they already see scan results on their own screen.
+      if (userRole === 'RESIDENT') {
+        scheduleLocalNotification(raw.title, raw.body);
+      }
     };
 
     // Emitted whenever household composition changes for this unit - either
@@ -690,7 +695,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
       socket.off('walkin_resolved', handleWalkinResolved);
     };
-  }, [socket, fetchAlerts, addAlert, markAlertRead, fetchMembers]);
+  }, [socket, userRole, fetchAlerts, addAlert, markAlertRead, fetchMembers]);
 
   const value = useMemo<DataContextType>(() => ({
     passes, fetchPasses, createPass, suspendPass, revokePass,

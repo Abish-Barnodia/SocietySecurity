@@ -49,13 +49,19 @@ window.fetch = async (...args: Parameters<typeof fetch>) => {
   return response;
 };
 
+const VALID_TABS = new Set([
+  'dashboard', 'guards', 'residents', 'timeline', 'alerts', 'expected',
+  'parking', 'cctv', 'reports', 'community', 'workforce', 'events',
+  'maintenance', 'funds', 'settings', 'profile'
+]);
+
 const App: React.FC = () => {
   // ponytail: capture path at construction time — before the URL-sync effect
   // can rewrite '/' to '/dashboard', so the landing page check below is reliable.
   const [initialPath] = useState(() => window.location.pathname);
   const tabFromPath = () => {
-    const p = window.location.pathname.replace(/^\//, '');
-    return p === '' || p === 'dashboard' ? 'dashboard' : p;
+    const p = window.location.pathname.replace(/^\//, '').toLowerCase();
+    return VALID_TABS.has(p) ? p : 'dashboard';
   };
   const [activeTab, setActiveTab] = useState(tabFromPath);
   // Bumped on every sidebar click (even re-clicking the current tab) and
@@ -196,13 +202,10 @@ const App: React.FC = () => {
   if (!isAuthenticated) {
     // ponytail: show landing page at '/', login at '/login'.
     const path = window.location.pathname;
-    const returnTo = (history.state?.returnTo && history.state.returnTo !== '/login')
-      ? history.state.returnTo
-      : '/dashboard';
     const handleLoginWithReturn = (token: string, user: any) => {
+      setActiveTab('dashboard');
       handleLogin(token, user);
-      const dest = returnTo === '/dashboard' ? '/' : returnTo;
-      history.replaceState(null, '', dest);
+      history.replaceState(null, '', '/dashboard');
     };
     // Landing page at root (and user hasn't clicked Sign In yet)
     if ((initialPath === '/' || initialPath === '') && !showLogin) {
@@ -435,12 +438,7 @@ const App: React.FC = () => {
           {activeTab === 'profile' && <ManagerProfile />}
           {activeTab === 'settings' && <Settings />}
           {activeTab === 'cctv' && <CCTVMonitoring />}
-          {activeTab !== 'dashboard' && activeTab !== 'guards' && activeTab !== 'residents' && activeTab !== 'timeline' && activeTab !== 'alerts' && activeTab !== 'expected' && activeTab !== 'parking' && activeTab !== 'community' && activeTab !== 'reports' && activeTab !== 'workforce' && activeTab !== 'events' && activeTab !== 'maintenance' && activeTab !== 'funds' && activeTab !== 'profile' && activeTab !== 'settings' && activeTab !== 'cctv' && (
-            <div className="card">
-              <h2>{operationsNav.concat(adminNav).find(i => i.id === activeTab)?.label}</h2>
-              <p>This module is under construction.</p>
-            </div>
-          )}
+          {!VALID_TABS.has(activeTab) && <Dashboard onNavigate={setActiveTab} />}
         </div>
       </main>
     </div>

@@ -19,7 +19,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onToggleTheme,
 }) => {
   return (
-    <header className="topbar">
+    <header className="sa-topbar">
       {/* Left: Breadcrumbs & Page Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-dim)' }}>

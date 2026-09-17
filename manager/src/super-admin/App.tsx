@@ -75,61 +75,63 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
   const meta = getPageMeta();
 
   return (
-    <div className="app-container">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        pendingDemosCount={stats?.metrics.pendingDemos}
-        onLogout={onLogout}
-      />
-
-      <main className="main-content">
-        <Topbar
-          title={meta.title}
-          subtitle={meta.subtitle}
-          onRefresh={fetchStats}
-          isLoading={isLoading}
-          theme={theme}
-          onToggleTheme={toggleTheme}
+    <div className="super-admin-portal-root" data-theme={theme}>
+      <div className="sa-app-container">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          pendingDemosCount={stats?.metrics.pendingDemos}
+          onLogout={onLogout}
         />
 
-        <div className="page-body">
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              stats={stats}
-              onNavigate={(tab) => setActiveTab(tab)}
-              onOpenProvisionModal={(demo) => setProvisioningDemo(demo)}
-            />
-          )}
+        <main className="sa-main-content">
+          <Topbar
+            title={meta.title}
+            subtitle={meta.subtitle}
+            onRefresh={fetchStats}
+            isLoading={isLoading}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
 
-          {activeTab === 'societies' && <Societies />}
+          <div className="sa-page-body">
+            {activeTab === 'dashboard' && (
+              <Dashboard
+                stats={stats}
+                onNavigate={(tab) => setActiveTab(tab)}
+                onOpenProvisionModal={(demo) => setProvisioningDemo(demo)}
+              />
+            )}
 
-          {activeTab === 'demos' && (
-            <DemoRequests onDemosUpdated={fetchStats} />
-          )}
+            {activeTab === 'societies' && <Societies />}
 
-          {activeTab === 'managers' && <Managers />}
+            {activeTab === 'demos' && (
+              <DemoRequests onDemosUpdated={fetchStats} />
+            )}
 
-          {activeTab === 'subscriptions' && <Subscriptions />}
+            {activeTab === 'managers' && <Managers />}
 
-          {activeTab === 'audit' && <AuditLogs />}
+            {activeTab === 'subscriptions' && <Subscriptions />}
 
-          {activeTab === 'settings' && <Settings />}
-        </div>
-      </main>
+            {activeTab === 'audit' && <AuditLogs />}
 
-      {/* Global Provisioning Modal Triggerable from anywhere */}
-      {provisioningDemo && (
-        <ProvisionSocietyModal
-          isOpen={!!provisioningDemo}
-          onClose={() => setProvisioningDemo(null)}
-          demoRequest={provisioningDemo}
-          onSuccess={() => {
-            fetchStats();
-            setProvisioningDemo(null);
-          }}
-        />
-      )}
+            {activeTab === 'settings' && <Settings />}
+          </div>
+        </main>
+
+        {/* Global Provisioning Modal Triggerable from anywhere */}
+        {provisioningDemo && (
+          <ProvisionSocietyModal
+            isOpen={!!provisioningDemo}
+            onClose={() => setProvisioningDemo(null)}
+            demoRequest={provisioningDemo}
+            onSuccess={() => {
+              fetchStats();
+              setProvisioningDemo(null);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 };

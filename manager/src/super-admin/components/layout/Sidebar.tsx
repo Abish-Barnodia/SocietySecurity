@@ -55,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className="sa-sidebar">
       {/* Brand Header */}
       <div style={{
         padding: '18px 20px',

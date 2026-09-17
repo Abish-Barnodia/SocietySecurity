@@ -265,7 +265,6 @@
 
 /* Sharp Border-Lined Sidebar */
 .super-admin-portal-root .sa-sidebar {
-  width: 260px;
   background: var(--sa-bg-sidebar);
   border-right: 1px solid var(--sa-border-color);
   display: flex;
@@ -275,15 +274,15 @@
   bottom: 0;
   left: 0;
   z-index: 40;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .super-admin-portal-root .sa-main-content {
   flex: 1;
-  margin-left: 260px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Clean Line-Bordered Topbar */

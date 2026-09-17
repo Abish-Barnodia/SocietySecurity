@@ -22,6 +22,7 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
   const [stats, setStats] = useState<PlatformStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [provisioningDemo, setProvisioningDemo] = useState<DemoRequest | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('superadmin_theme') as 'light' | 'dark') || 'light';
   });
@@ -82,9 +83,11 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
           setActiveTab={setActiveTab}
           pendingDemosCount={stats?.metrics.pendingDemos}
           onLogout={onLogout}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         />
 
-        <main className="sa-main-content">
+        <main className="sa-main-content" style={{ marginLeft: isSidebarCollapsed ? 72 : 260 }}>
           <Topbar
             title={meta.title}
             subtitle={meta.subtitle}

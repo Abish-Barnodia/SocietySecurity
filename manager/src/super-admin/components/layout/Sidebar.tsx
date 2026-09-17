@@ -7,15 +7,23 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   pendingDemosCount?: number;
   onLogout?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendingDemosCount = 0, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  activeTab,
+  setActiveTab,
+  pendingDemosCount = 0,
+  onLogout,
+  isCollapsed = false,
+  onToggleCollapse,
+}) => {
   const user = authService.getCurrentUser();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    // ponytail: smooth visual logout loading feedback
     await new Promise((resolve) => setTimeout(resolve, 350));
     if (onLogout) {
       onLogout();
@@ -55,68 +63,135 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
   ];
 
   return (
-    <aside className="sa-sidebar">
+    <aside
+      className="sa-sidebar"
+      style={{
+        width: isCollapsed ? 72 : 260,
+        transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
       {/* Brand Header */}
-      <div style={{
-        padding: '18px 20px',
-        borderBottom: '1px solid var(--border-color)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: '64px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{
-            width: '34px',
-            height: '34px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #00C896 0%, #008764 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0, 200, 150, 0.3)',
-            flexShrink: 0,
-          }}>
+      <div
+        style={{
+          padding: isCollapsed ? '16px 12px' : '18px 20px',
+          borderBottom: '1px solid var(--sa-border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'space-between',
+          height: '64px',
+          gap: 10,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+          <div
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, #00C896 0%, #008764 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0, 200, 150, 0.3)',
+              flexShrink: 0,
+            }}
+          >
             <Icon icon="solar:shield-star-bold" width="20" color="#ffffff" />
           </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '0.975rem', letterSpacing: '-0.02em', color: 'var(--text-primary)', lineHeight: 1.1 }}>
-              SecureGate
+
+          {!isCollapsed && (
+            <div style={{ overflow: 'hidden' }}>
+              <div
+                style={{
+                  fontWeight: 800,
+                  fontSize: '0.975rem',
+                  letterSpacing: '-0.02em',
+                  color: 'var(--sa-text-primary)',
+                  lineHeight: 1.1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                SecureGate
+              </div>
+              <div
+                style={{
+                  fontSize: '0.65rem',
+                  color: '#008764',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Super Admin
+              </div>
             </div>
-            <div style={{ fontSize: '0.65rem', color: '#008764', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Super Admin
-            </div>
-          </div>
+          )}
         </div>
 
-        <span style={{
-          fontSize: '0.65rem',
-          fontWeight: 700,
-          background: 'var(--primary-light)',
-          color: 'var(--primary-dark)',
-          border: '1px solid var(--primary-border)',
-          padding: '2px 6px',
-          borderRadius: 'var(--radius-xs)',
-          letterSpacing: '0.04em'
-        }}>
-          v2.4
-        </span>
+        {/* Toggle Collapse Button */}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--sa-text-dim)',
+              cursor: 'pointer',
+              padding: 6,
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'color 0.15s, background 0.15s',
+              marginLeft: isCollapsed ? 0 : 'auto',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#00C896';
+              e.currentTarget.style.background = 'rgba(0,200,150,0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--sa-text-dim)';
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <Icon icon="solar:hamburger-menu-linear" width="20" />
+          </button>
+        )}
       </div>
 
       {/* Navigation Sections */}
-      <div style={{ padding: '16px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
+      <div
+        style={{
+          padding: isCollapsed ? '16px 8px' : '16px 12px',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: isCollapsed ? '12px' : '20px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+        }}
+      >
         {sections.map((sec, secIdx) => (
           <div key={secIdx}>
-            <div style={{
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              color: 'var(--text-dim)',
-              letterSpacing: '0.08em',
-              padding: '0 10px 8px 10px',
-              textTransform: 'uppercase',
-            }}>
-              {sec.title}
-            </div>
+            {!isCollapsed ? (
+              <div
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
+                  color: 'var(--sa-text-dim)',
+                  letterSpacing: '0.08em',
+                  padding: '0 10px 8px 10px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {sec.title}
+              </div>
+            ) : (
+              <div style={{ height: secIdx === 0 ? 0 : 8, borderTop: secIdx === 0 ? 'none' : '1px solid var(--sa-border-color)', margin: '4px 6px' }} />
+            )}
 
             <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
               {sec.items.map((item) => {
@@ -125,58 +200,77 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
                   <button
                     key={item.id}
                     onClick={() => setActiveTab(item.id)}
+                    title={isCollapsed ? item.label : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
+                      justifyContent: isCollapsed ? 'center' : 'space-between',
                       width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-sm)',
+                      padding: isCollapsed ? '10px 0' : '8px 12px',
+                      borderRadius: 'var(--sa-radius-sm)',
                       border: '1px solid',
-                      borderColor: isActive ? 'var(--primary-border)' : 'transparent',
+                      borderColor: isActive ? 'var(--sa-primary-border)' : 'transparent',
                       cursor: 'pointer',
-                      background: isActive ? 'var(--primary-light)' : 'transparent',
-                      color: isActive ? 'var(--primary-dark)' : 'var(--text-secondary)',
+                      background: isActive ? 'var(--sa-primary-light)' : 'transparent',
+                      color: isActive ? 'var(--sa-primary-dark)' : 'var(--sa-text-secondary)',
                       fontWeight: isActive ? 700 : 500,
                       fontSize: '0.825rem',
                       transition: 'all 0.12s ease',
                       textAlign: 'left',
+                      position: 'relative',
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) {
-                        e.currentTarget.style.background = 'var(--bg-hover)';
-                        e.currentTarget.style.color = 'var(--text-primary)';
+                        e.currentTarget.style.background = 'var(--sa-bg-hover)';
+                        e.currentTarget.style.color = 'var(--sa-text-primary)';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isActive) {
                         e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-secondary)';
+                        e.currentTarget.style.color = 'var(--sa-text-secondary)';
                       }
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
                       <Icon
                         icon={item.icon}
                         width="18"
-                        style={{ color: isActive ? 'var(--primary-dark)' : 'var(--text-muted)' }}
+                        style={{ color: isActive ? 'var(--sa-primary-dark)' : 'var(--sa-text-muted)', flexShrink: 0 }}
                       />
-                      <span>{item.label}</span>
+                      {!isCollapsed && <span>{item.label}</span>}
                     </div>
 
                     {item.badge !== undefined && (
-                      <span style={{
-                        background: 'var(--rose)',
-                        color: '#ffffff',
-                        fontSize: '0.675rem',
-                        fontWeight: 700,
-                        padding: '1px 6px',
-                        borderRadius: 'var(--radius-full)',
-                        minWidth: '18px',
-                        textAlign: 'center',
-                      }}>
-                        {item.badge}
-                      </span>
+                      !isCollapsed ? (
+                        <span
+                          style={{
+                            background: 'var(--sa-rose)',
+                            color: '#ffffff',
+                            fontSize: '0.675rem',
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: 'var(--sa-radius-full)',
+                            minWidth: '18px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {item.badge}
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: 6,
+                            right: 8,
+                            width: 7,
+                            height: 7,
+                            borderRadius: '50%',
+                            background: 'var(--sa-rose)',
+                            border: '1.5px solid var(--sa-bg-sidebar)',
+                          }}
+                        />
+                      )
                     )}
                   </button>
                 );
@@ -187,37 +281,55 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
       </div>
 
       {/* User Footer Profile */}
-      <div style={{
-        padding: '12px 16px',
-        borderTop: '1px solid var(--border-color)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--bg-card-subtle)',
-      }}>
+      <div
+        style={{
+          padding: isCollapsed ? '12px 8px' : '12px 16px',
+          borderTop: '1px solid var(--sa-border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'space-between',
+          background: 'var(--sa-bg-card-subtle)',
+          flexDirection: isCollapsed ? 'column' : 'row',
+          gap: isCollapsed ? 8 : 10,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'var(--emerald-bg)',
-            border: '1px solid var(--emerald-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: '0.75rem',
-            color: 'var(--primary-dark)',
-            flexShrink: 0,
-          }}>
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: 'var(--sa-radius-sm)',
+              background: 'var(--sa-emerald-bg)',
+              border: '1px solid var(--sa-emerald-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              color: 'var(--sa-primary-dark)',
+              flexShrink: 0,
+            }}
+            title={isCollapsed ? (user?.email || 'Platform Owner') : undefined}
+          >
             SA
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user?.email || 'Platform Owner'}
+          {!isCollapsed && (
+            <div style={{ overflow: 'hidden' }}>
+              <div
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: 'var(--sa-text-primary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {user?.email || 'Platform Owner'}
+              </div>
+              <div style={{ fontSize: '0.675rem', color: 'var(--sa-text-muted)' }}>Super Admin</div>
             </div>
-            <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Super Admin</div>
-          </div>
+          )}
         </div>
 
         <button
@@ -225,29 +337,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
           disabled={isLoggingOut}
           title={isLoggingOut ? 'Signing Out...' : 'Sign Out'}
           style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            color: isLoggingOut ? 'var(--primary-dark)' : 'var(--text-muted)',
+            background: 'var(--sa-bg-card)',
+            border: '1px solid var(--sa-border-color)',
+            color: isLoggingOut ? 'var(--sa-primary-dark)' : 'var(--sa-text-muted)',
             cursor: isLoggingOut ? 'wait' : 'pointer',
             padding: '6px',
-            borderRadius: 'var(--radius-xs)',
+            borderRadius: 'var(--sa-radius-xs)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'all 0.15s ease',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             if (!isLoggingOut) {
-              e.currentTarget.style.borderColor = 'var(--rose-border)';
-              e.currentTarget.style.color = 'var(--rose)';
-              e.currentTarget.style.background = 'var(--rose-bg)';
+              e.currentTarget.style.borderColor = 'var(--sa-rose-border)';
+              e.currentTarget.style.color = 'var(--sa-rose)';
+              e.currentTarget.style.background = 'var(--sa-rose-bg)';
             }
           }}
           onMouseLeave={(e) => {
             if (!isLoggingOut) {
-              e.currentTarget.style.borderColor = 'var(--border-color)';
-              e.currentTarget.style.color = 'var(--text-muted)';
-              e.currentTarget.style.background = 'var(--bg-card)';
+              e.currentTarget.style.borderColor = 'var(--sa-border-color)';
+              e.currentTarget.style.color = 'var(--sa-text-muted)';
+              e.currentTarget.style.background = 'var(--sa-bg-card)';
             }
           }}
         >

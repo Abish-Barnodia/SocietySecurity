@@ -431,18 +431,18 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
         {/* Background image */}
         <div style={{
           position: 'absolute', inset: 0,
-          backgroundImage: 'url(/hero_apartment.jpg)',
-          backgroundSize: 'cover', backgroundPosition: 'center 30%',
+          backgroundImage: 'url(/hero_apartment.jpg), url(https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=2000&q=80)',
+          backgroundSize: 'cover', backgroundPosition: 'center 35%',
         }} />
         {/* Gradient overlay */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(105deg, rgba(0,28,17,0.93) 0%, rgba(0,45,28,0.88) 35%, rgba(0,35,22,0.72) 60%, rgba(0,15,10,0.45) 100%)',
+          background: 'linear-gradient(105deg, rgba(0,28,17,0.88) 0%, rgba(0,38,24,0.75) 40%, rgba(0,25,16,0.45) 75%, rgba(0,15,10,0.25) 100%)',
         }} />
         {/* Subtle green grid texture */}
         <div style={{
           position: 'absolute', inset: 0,
-          backgroundImage: 'linear-gradient(rgba(0,200,150,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,150,0.05) 1px,transparent 1px)',
+          backgroundImage: 'linear-gradient(rgba(0,200,150,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,150,0.06) 1px,transparent 1px)',
           backgroundSize: '48px 48px', pointerEvents: 'none',
         }} />
 
@@ -845,7 +845,7 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
 
       {/* ── FINAL CTA ── */}
       <section style={{ position: 'relative', overflow: 'hidden', padding: '120px 24px' }}>
-        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/hero_apartment.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        <div style={{ position: 'absolute', inset: 0, backgroundImage: 'url(/hero_apartment.jpg), url(https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=2000&q=80)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(0,50,30,0.92) 0%, rgba(0,100,60,0.85) 100%)' }} />
         <div ref={ref7} className="lp-fade-in" style={{ position: 'relative', maxWidth: 700, margin: '0 auto', textAlign: 'center', color: 'white' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(0,200,150,0.2)', color: '#a7f3d0', padding: '6px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 24, border: '1px solid rgba(0,200,150,0.3)' }}>

@@ -108,6 +108,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         localStorage.setItem('accessToken', data.data.accessToken);
         localStorage.setItem('refreshToken', data.data.refreshToken);
         localStorage.setItem('user', JSON.stringify(data.data.user));
+        if (data.data.user.role === 'SUPER_ADMIN') {
+          localStorage.setItem('superadmin_token', data.data.accessToken);
+          localStorage.setItem('superadmin_user', JSON.stringify(data.data.user));
+        }
         onLogin(data.data.accessToken, data.data.user);
       } else {
         setError(data.message || 'Invalid email or password');
@@ -160,7 +164,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             Welcome Back
           </h2>
           <p style={{ margin: '0 0 28px 0', color: 'var(--text-muted)', fontSize: 15 }}>
-            Please enter your manager credentials to sign in.
+            Please enter your manager or super admin credentials to sign in.
           </p>
 
           {error && (
@@ -182,9 +186,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             
             {/* Choose Society Autocomplete Dropdown */}
             <div ref={dropdownRef} style={{ position: 'relative' }}>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
-                Choose Society
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                  Choose Society
+                </label>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Optional for Super Admin</span>
+              </div>
               
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <div style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none', display: 'flex', alignItems: 'center' }}>

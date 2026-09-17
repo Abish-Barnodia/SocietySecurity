@@ -18,6 +18,7 @@ import LandingPage from './LandingPage';
 import ManagerProfile from './ManagerProfile';
 import Settings, { applyManagerTheme } from './Settings';
 import CCTVMonitoring from './CCTVMonitoring';
+import { SuperAdminPortal } from './super-admin/App';
 import Icon from './Icon';
 import { io as connectSocket } from 'socket.io-client';
 
@@ -218,6 +219,19 @@ const App: React.FC = () => {
       history.replaceState({ returnTo: path }, '', '/login');
     }
     return <Login onLogin={handleLoginWithReturn} />;
+  }
+
+  // ─── RBAC: If authenticated as Super Admin, render the Super Admin Portal ───
+  const userRole = fullProfile?.role || (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}')?.role;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (userRole === 'SUPER_ADMIN') {
+    return <SuperAdminPortal onLogout={handleLogout} />;
   }
 
   const operationsNav = [

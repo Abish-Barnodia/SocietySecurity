@@ -11,6 +11,12 @@ exports.createPassSchema = zod_1.z.object({
         validFrom: zod_1.z.string().datetime(), // ISO string expected
         validUntil: zod_1.z.string().datetime(),
         entryPointIds: zod_1.z.array(zod_1.z.string()).optional(),
+        // Only sent by MANAGER/COMMITTEE (a resident's own unit is resolved from
+        // their own context instead) - without declaring it here, Zod silently
+        // strips it as an unrecognized key, so createPass's "unitId is required
+        // for managers creating passes" check always fired even when the client
+        // sent it correctly.
+        unitId: zod_1.z.string().optional(),
         // For RECURRING type
         recurringRule: zod_1.z.object({
             allowedDays: zod_1.z.array(zod_1.z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'])),

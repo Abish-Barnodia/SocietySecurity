@@ -24,6 +24,7 @@ const envSchema = zod_1.z.object({
     FIREBASE_STORAGE_BUCKET: zod_1.z.string().optional(),
     SUPABASE_URL: zod_1.z.string().url().optional(),
     SUPABASE_SERVICE_ROLE_KEY: zod_1.z.string().optional(),
+    SUPABASE_ANON_KEY: zod_1.z.string().optional(),
     SUPABASE_STORAGE_BUCKET: zod_1.z.string().default('uploads'),
     TWILIO_ACCOUNT_SID: zod_1.z.string().optional(),
     TWILIO_AUTH_TOKEN: zod_1.z.string().optional(),
@@ -33,12 +34,15 @@ const envSchema = zod_1.z.object({
     WHATSAPP_API_URL: zod_1.z.string().url().optional(),
     WHATSAPP_TOKEN: zod_1.z.string().optional(),
     WHATSAPP_PHONE_ID: zod_1.z.string().optional(),
+    RAZORPAY_KEY_ID: zod_1.z.string().optional(),
+    RAZORPAY_KEY_SECRET: zod_1.z.string().optional(),
     QR_HMAC_SECRET: zod_1.z.string().min(32, { message: 'QR_HMAC_SECRET must be at least 32 characters — set it in .env' }),
     OTP_EXPIRY_MINUTES: zod_1.z.string().default('10').transform(Number),
     EMERGENCY_SMS_NUMBER: zod_1.z.string().optional(),
     CLIENT_RESIDENT_APP_URL: zod_1.z.string().url().default('http://localhost:3000'),
     CLIENT_GUARD_APP_URL: zod_1.z.string().url().default('http://localhost:3001'),
     CLIENT_MANAGER_URL: zod_1.z.string().url().default('http://localhost:3002'),
+    API_URL: zod_1.z.string().url().optional(),
 });
 const parsed = envSchema.safeParse(process.env);
 if (!parsed.success) {

@@ -7,33 +7,40 @@ datasource db {
 }
 
 model Property {
-  id               String            @id @default(cuid())
-  name             String
-  address          String
-  city             String
-  pincode          String
-  totalUnits       Int
-  totalTowers      Int               @default(1)
-  residentParkingSlots Int           @default(0)
-  visitorParkingSlots  Int           @default(0)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  amenities        Amenity[]
-  parkingSlots     ParkingSlot[]
-  broadcasts       Broadcast[]
-  chatMessages     ChatMessage[]
-  complaints       Complaint[]
-  entryPoints      EntryPoint[]
-  escalationChains EscalationChain[]
-  guards           Guard[]
-  incidents        Incident[]
-  invoices         Invoice[]
-  managers         Manager[]
-  units            Unit[]
-  events           Event[]
-  fundTransactions FundTransaction[]
-  settings         PropertySetting[]
-  managerPortalLock ManagerPortalLock?
+  id                   String            @id @default(cuid())
+  name                 String
+  slug                 String?           @unique
+  address              String
+  city                 String
+  pincode              String
+  email                String?
+  phone                String?
+  status               SocietyStatus     @default(ACTIVE)
+  subscriptionPlan     String            @default("STANDARD")
+  subscriptionExpiresAt DateTime?
+  totalUnits           Int
+  totalTowers          Int               @default(1)
+  residentParkingSlots Int               @default(0)
+  visitorParkingSlots  Int               @default(0)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  amenities            Amenity[]
+  parkingSlots         ParkingSlot[]
+  broadcasts           Broadcast[]
+  chatMessages         ChatMessage[]
+  complaints           Complaint[]
+  entryPoints          EntryPoint[]
+  escalationChains     EscalationChain[]
+  guards               Guard[]
+  incidents            Incident[]
+  invoices             Invoice[]
+  managers             Manager[]
+  units                Unit[]
+  events               Event[]
+  fundTransactions     FundTransaction[]
+  settings             PropertySetting[]
+  managerPortalLock    ManagerPortalLock?
+  demoRequests         DemoRequest[]
 }
 
 model EntryPoint {
@@ -717,6 +724,7 @@ enum ReportStatus {
 }
 
 enum Role {
+  SUPER_ADMIN
   RESIDENT
   GUARD
   MANAGER
@@ -944,3 +952,57 @@ model PropertySetting {
 
   @@unique([propertyId, key])
 }
+
+enum SocietyStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+}
+
+enum DemoRequestStatus {
+  PENDING
+  CONTACTED
+  APPROVED
+  REJECTED
+  CONVERTED
+}
+
+model DemoRequest {
+  id                String            @id @default(cuid())
+  contactName       String
+  email             String
+  phone             String
+  societyName       String
+  city              String?
+  numberOfUnits     Int?
+  message           String?
+  status            DemoRequestStatus @default(PENDING)
+  notes             String?
+  createdPropertyId String?
+  createdProperty   Property?         @relation(fields: [createdPropertyId], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model PlatformAuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  actorEmail  String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model PlatformSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+

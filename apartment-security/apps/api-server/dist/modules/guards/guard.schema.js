@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createGuardSchema = exports.checkInPostSchema = exports.endShiftSchema = exports.startShiftSchema = void 0;
+exports.updateGuardSchema = exports.createGuardSchema = exports.checkInPostSchema = exports.endShiftSchema = exports.startShiftSchema = void 0;
 const zod_1 = require("zod");
 exports.startShiftSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -26,12 +26,20 @@ exports.createGuardSchema = zod_1.z.object({
     body: zod_1.z.object({
         name: zod_1.z.string().min(2),
         phone: zod_1.z.string().min(10),
+        email: zod_1.z.string().email(),
+        password: zod_1.z.string().min(6),
         badgeNumber: zod_1.z.string().min(2),
         status: zod_1.z.string().optional(),
         shift: zod_1.z.string().optional(),
         post: zod_1.z.string().optional(),
         dateOfJoining: zod_1.z.string().optional(),
         photoUrl: zod_1.z.string().optional()
+    })
+});
+exports.updateGuardSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        name: zod_1.z.string().min(2).optional(),
+        phone: zod_1.z.string().min(10).optional(),
     })
 });
 //# sourceMappingURL=guard.schema.js.map

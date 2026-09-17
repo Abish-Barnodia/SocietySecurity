@@ -9,6 +9,7 @@ const app_1 = __importDefault(require("./app"));
 const env_1 = require("./config/env");
 const logger_util_1 = require("./utils/logger.util");
 const socket_io_1 = require("socket.io");
+const corsOrigin_util_1 = require("./utils/corsOrigin.util");
 const server = http_1.default.createServer(app_1.default);
 // Attach Socket.io for Real-time alerts
 exports.io = new socket_io_1.Server(server, {
@@ -17,12 +18,7 @@ exports.io = new socket_io_1.Server(server, {
         origin: (origin, callback) => {
             if (!origin)
                 return callback(null, true); // mobile / server-to-server
-            const allowed = [
-                env_1.env.CLIENT_RESIDENT_APP_URL,
-                env_1.env.CLIENT_GUARD_APP_URL,
-                env_1.env.CLIENT_MANAGER_URL,
-            ];
-            if (allowed.includes(origin))
+            if ((0, corsOrigin_util_1.isKnownOrigin)(origin))
                 return callback(null, true);
             callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
         },

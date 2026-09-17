@@ -4,13 +4,18 @@ exports.authRouter = void 0;
 const express_1 = require("express");
 const auth_controller_1 = require("./auth.controller");
 const auth_schema_1 = require("./auth.schema");
+const resident_schema_1 = require("../residents/resident.schema");
 const validate_middleware_1 = require("../../middlewares/validate.middleware");
 const auth_middleware_1 = require("../../middlewares/auth.middleware");
+const role_middleware_1 = require("../../middlewares/role.middleware");
 const rateLimiter_middleware_1 = require("../../middlewares/rateLimiter.middleware");
 const router = (0, express_1.Router)();
 exports.authRouter = router;
+router.get('/societies', auth_controller_1.getPublicSocieties);
 router.post('/signup', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.signupEmailSchema), auth_controller_1.signupEmail);
 router.post('/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.loginEmailSchema), auth_controller_1.loginEmail);
+router.post('/forgot-password', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.forgotPasswordSchema), auth_controller_1.forgotPassword);
+router.post('/reset-password', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.resetPasswordSchema), auth_controller_1.resetPassword);
 router.post('/otp/request', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.requestOtpSchema), auth_controller_1.requestOtp);
 router.post('/otp/verify', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.verifyOtpSchema), auth_controller_1.verifyOtp);
 router.post('/refresh', (0, validate_middleware_1.validate)(auth_schema_1.refreshTokenSchema), auth_controller_1.refreshToken);
@@ -18,4 +23,6 @@ router.post('/logout', auth_middleware_1.authenticate, auth_controller_1.logout)
 router.post('/logout-all', auth_middleware_1.authenticate, auth_controller_1.logoutAllDevices);
 router.post('/fcm-token', auth_middleware_1.authenticate, (0, validate_middleware_1.validate)(auth_schema_1.registerFcmTokenSchema), auth_controller_1.registerFcmToken);
 router.get('/me', auth_middleware_1.authenticate, auth_controller_1.getMe);
+router.put('/me/alerts', auth_middleware_1.authenticate, (0, role_middleware_1.requireRole)('MANAGER'), (0, validate_middleware_1.validate)(resident_schema_1.alertPreferencesSchema), auth_controller_1.updateManagerAlertPreferences);
+router.put('/me/profile', auth_middleware_1.authenticate, (0, role_middleware_1.requireRole)('MANAGER'), (0, validate_middleware_1.validate)(auth_schema_1.updateManagerProfileSchema), auth_controller_1.updateMyManagerProfile);
 //# sourceMappingURL=auth.routes.js.map

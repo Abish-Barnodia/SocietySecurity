@@ -41,41 +41,43 @@ const createPass = async (req, res, next) => {
             otpPlaintext = Math.floor(100000 + Math.random() * 900000).toString();
             otpHash = await bcryptjs_1.default.hash(otpPlaintext, 10);
         }
-        const pass = await prisma_1.prisma.pass.create({
-            data: {
-                residentId,
-                unitId: finalUnitId,
-                type,
-                visitorName,
-                visitorPhone,
-                purpose,
-                validFrom: new Date(validFrom),
-                validUntil: new Date(validUntil),
-                entryPointIds: entryPointIds || [],
-                otpCode: otpHash,
-                ...(recurringRule && {
-                    recurringRule: {
-                        create: recurringRule
-                    }
-                })
-            },
-            include: {
-                recurringRule: true
-            }
+        const updatedPass = await prisma_1.prisma.$transaction(async (tx) => {
+            const pass = await tx.pass.create({
+                data: {
+                    residentId,
+                    unitId: finalUnitId,
+                    type,
+                    visitorName,
+                    visitorPhone,
+                    purpose,
+                    validFrom: new Date(validFrom),
+                    validUntil: new Date(validUntil),
+                    entryPointIds: entryPointIds || [],
+                    otpCode: otpHash,
+                    ...(recurringRule && {
+                        recurringRule: {
+                            create: recurringRule
+                        }
+                    })
+                },
+                include: {
+                    recurringRule: true
+                }
+            });
+            // Generate QR payload now that we have the pass ID
+            const qrPayloadString = (0, qr_util_1.generateSignedQRPayload)({
+                passId: pass.id,
+                visitorName: pass.visitorName,
+                validFrom: new Date(validFrom).getTime(),
+                validUntil: new Date(validUntil).getTime()
+            });
+            return await tx.pass.update({
+                where: { id: pass.id },
+                data: { qrPayload: qrPayloadString },
+                include: { recurringRule: true }
+            });
         });
-        // Generate QR payload now that we have the pass ID
-        const qrPayloadString = (0, qr_util_1.generateSignedQRPayload)({
-            passId: pass.id,
-            visitorName: pass.visitorName,
-            validFrom: new Date(validFrom).getTime(),
-            validUntil: new Date(validUntil).getTime()
-        });
-        const updatedPass = await prisma_1.prisma.pass.update({
-            where: { id: pass.id },
-            data: { qrPayload: qrPayloadString },
-            include: { recurringRule: true }
-        });
-        await (0, audit_util_1.auditLog)(req.user.userId, 'CREATE_PASS', 'Pass', pass.id);
+        await (0, audit_util_1.auditLog)(req.user.userId, 'CREATE_PASS', 'Pass', updatedPass.id);
         return (0, response_util_1.sendSuccess)(res, 201, 'Pass created successfully', {
             pass: updatedPass,
             otpCode: otpPlaintext // Only returned once to the creator
@@ -88,15 +90,14 @@ const createPass = async (req, res, next) => {
 exports.createPass = createPass;
 const getMyPasses = async (req, res, next) => {
     try {
-        const currentResident = await prisma_1.prisma.resident.findUnique({
-            where: { userId: req.user.userId }
-        });
-        if (!currentResident)
+        const unitId = req.user.unitId;
+        if (!unitId)
             return next(new error_middleware_1.AppError('Resident context not found', 404));
         const passes = await prisma_1.prisma.pass.findMany({
-            where: { unitId: currentResident.unitId },
+            where: { unitId },
             include: { recurringRule: true },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
+            take: 100
         });
         return (0, response_util_1.sendSuccess)(res, 200, 'Passes fetched', passes);
     }
@@ -168,7 +169,14 @@ const deletePass = async (req, res, next) => {
         if (!isExpired) {
             return next(new error_middleware_1.AppError('Only expired passes can be deleted', 400));
         }
-        await prisma_1.prisma.pass.delete({ where: { id } });
+        await prisma_1.prisma.pass.update({
+            where: { id },
+            data: {
+                status: 'REVOKED',
+                revokedAt: new Date(),
+                revokedBy: req.user.userId
+            }
+        });
         await (0, audit_util_1.auditLog)(req.user.userId, 'DELETE_PASS', 'Pass', id);
         return (0, response_util_1.sendSuccess)(res, 200, 'Pass deleted');
     }
@@ -183,7 +191,12 @@ const verifyPass = async (req, res, next) => {
         const pass = await prisma_1.prisma.pass.findUnique({
             where: { id },
             include: {
-                resident: { select: { name: true, phone: true } },
+                resident: {
+                    select: {
+                        name: true,
+                        user: { select: { phone: true } }
+                    }
+                },
                 unit: { select: { unitNumber: true, tower: true } },
             }
         });

@@ -4,6 +4,7 @@ exports.entryRouter = void 0;
 const express_1 = require("express");
 const auth_middleware_1 = require("../../middlewares/auth.middleware");
 const role_middleware_1 = require("../../middlewares/role.middleware");
+const managerPermission_middleware_1 = require("../../middlewares/managerPermission.middleware");
 const validate_middleware_1 = require("../../middlewares/validate.middleware");
 const entry_controller_1 = require("./entry.controller");
 const entry_schema_1 = require("./entry.schema");
@@ -21,5 +22,5 @@ router.put('/:id/exit', (0, role_middleware_1.requireRole)('GUARD'), (0, validat
 // Resident viewing
 router.get('/', (0, role_middleware_1.requireRole)('RESIDENT'), entry_controller_1.getUnitEntries);
 // Manager / Committee viewing
-router.get('/all', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), entry_controller_1.getAllEntries);
+router.get('/all', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('timeline'), entry_controller_1.getAllEntries);
 //# sourceMappingURL=entry.routes.js.map

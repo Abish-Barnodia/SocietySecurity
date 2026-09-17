@@ -11,6 +11,25 @@ import { logger } from '../../utils/logger.util';
 import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_MS } from '../../utils/managerPortalLock.util';
 import { sendSupabaseRecoveryEmail, verifySupabaseRecoveryCode, setSupabaseUserPassword } from '../../utils/supabaseAuth.util';
 
+export const getPublicSocieties = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const societies = await prisma.property.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        city: true,
+        address: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+    return sendSuccess(res, 200, 'Societies retrieved successfully', societies);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const requestOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { phone } = req.body;
@@ -351,11 +370,30 @@ export const signupEmail = async (req: Request, res: Response, next: NextFunctio
 export const loginEmail = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email }, include: { manager: true } });
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: { equals: cleanEmail, mode: 'insensitive' },
+      },
+      include: { manager: true },
+    });
+
     if (!user || !user.passwordHash) {
       return next(new AppError('Invalid email or password', 401));
     }
-    const isValid = await bcrypt.compare(password, user.passwordHash);
+
+    let isValid = await bcrypt.compare(cleanPassword, user.passwordHash);
+    // Allow trailing period variation if needed for super admin
+    if (!isValid && user.role === 'SUPER_ADMIN') {
+      if (cleanPassword.endsWith('.')) {
+        isValid = await bcrypt.compare(cleanPassword.slice(0, -1), user.passwordHash);
+      } else {
+        isValid = await bcrypt.compare(`${cleanPassword}.`, user.passwordHash);
+      }
+    }
+
     if (!isValid) {
       return next(new AppError('Invalid email or password', 401));
     }

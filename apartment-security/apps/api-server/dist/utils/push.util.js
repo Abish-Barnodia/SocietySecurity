@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendPush = void 0;
 const app_1 = require("firebase-admin/app");
 const messaging_1 = require("firebase-admin/messaging");
+const expo_server_sdk_1 = require("expo-server-sdk");
 const env_1 = require("../config/env");
 const logger_util_1 = require("./logger.util");
 // Only initialize if we have the credentials (prevents crash in local dev without keys)
@@ -48,37 +49,96 @@ if (env_1.env.FIREBASE_PROJECT_ID && env_1.env.FIREBASE_CLIENT_EMAIL && env_1.en
         }),
     });
 }
+// ponytail: one Expo client instance shared across all sendPush calls
+const expo = new expo_server_sdk_1.Expo();
 const sendPush = async (tokens, payload) => {
     if (!tokens.length)
         return;
-    if (!(0, app_1.getApps)().length) {
-        logger_util_1.logger.warn('Firebase admin not initialized, skipping push notification', payload);
-        return;
-    }
-    // FCM allows max 500 tokens per multicast
-    const chunks = chunkArray(tokens, 500);
-    for (const chunk of chunks) {
-        try {
-            const response = await (0, messaging_1.getMessaging)().sendEachForMulticast({
-                tokens: chunk,
-                notification: { title: payload.title, body: payload.body },
-                data: payload.data ?? {},
-                android: { priority: 'high' },
-                apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-            });
-            // Remove invalid tokens from DB
-            const invalidTokens = [];
-            response.responses.forEach((r, i) => {
-                if (!r.success && r.error?.code === 'messaging/registration-token-not-registered') {
-                    invalidTokens.push(chunk[i]);
-                }
-            });
-            if (invalidTokens.length) {
-                await cleanInvalidTokens(invalidTokens);
+    // The resident-app uses getExpoPushTokenAsync → ExponentPushToken[...] format.
+    // Those tokens must go through Expo's push service, not Firebase directly.
+    // Native FCM tokens (plain hex strings) go through Firebase Admin as before.
+    const expoTokens = tokens.filter(t => expo_server_sdk_1.Expo.isExpoPushToken(t));
+    const fcmTokens = tokens.filter(t => !expo_server_sdk_1.Expo.isExpoPushToken(t));
+    // --- Expo push ---
+    if (expoTokens.length) {
+        const messages = expoTokens.map(to => {
+            const isVisitorApproval = payload.data?.type === 'VISITOR_APPROVAL';
+            return {
+                to,
+                title: payload.dataOnly ? undefined : payload.title,
+                body: payload.dataOnly ? undefined : payload.body,
+                data: { ...(payload.data ?? {}), title: payload.title, body: payload.body },
+                sound: (isVisitorApproval ? 'visitor_ring.wav' : 'default'),
+                priority: 'high',
+                channelId: isVisitorApproval ? 'visitor-ring-2' : 'default',
+                categoryId: isVisitorApproval ? 'VISITOR_APPROVAL' : undefined,
+            };
+        });
+        // expo-server-sdk handles chunking (100 per request) internally
+        const chunks = expo.chunkPushNotifications(messages);
+        for (const chunk of chunks) {
+            try {
+                const tickets = await expo.sendPushNotificationsAsync(chunk);
+                // Log errors for visibility — we don't clean Expo tokens the same way
+                // as FCM (Expo manages token lifecycle separately).
+                tickets.forEach((ticket, i) => {
+                    if (ticket.status === 'error') {
+                        logger_util_1.logger.warn('Expo push error', { token: chunk[i]?.to, error: ticket.message });
+                    }
+                });
+            }
+            catch (err) {
+                logger_util_1.logger.error('Expo push send error', { err });
             }
         }
-        catch (err) {
-            logger_util_1.logger.error('FCM send error', { err });
+    }
+    // --- Firebase FCM push (native FCM tokens only) ---
+    if (fcmTokens.length) {
+        if (!(0, app_1.getApps)().length) {
+            logger_util_1.logger.warn('Firebase admin not initialized, skipping FCM push', payload);
+        }
+        else {
+            const fcmChunks = chunkArray(fcmTokens, 500);
+            for (const chunk of fcmChunks) {
+                try {
+                    const isVisitorApproval = payload.data?.type === 'VISITOR_APPROVAL';
+                    const response = await (0, messaging_1.getMessaging)().sendEachForMulticast({
+                        tokens: chunk,
+                        ...(payload.dataOnly
+                            ? {}
+                            : { notification: { title: payload.title, body: payload.body } }),
+                        data: payload.dataOnly
+                            ? { ...(payload.data ?? {}), title: payload.title, body: payload.body }
+                            : (payload.data ?? {}),
+                        android: {
+                            priority: 'high',
+                            ...(isVisitorApproval && !payload.dataOnly ? { notification: { channelId: 'visitor-ring-2', sound: 'visitor_ring.wav' } } : {})
+                        },
+                        apns: {
+                            payload: {
+                                aps: {
+                                    sound: isVisitorApproval ? 'visitor_ring.wav' : 'default',
+                                    badge: 1,
+                                    category: isVisitorApproval ? 'VISITOR_APPROVAL' : undefined,
+                                    ...(payload.dataOnly ? { 'content-available': 1 } : {})
+                                }
+                            }
+                        },
+                    });
+                    const invalidTokens = [];
+                    response.responses.forEach((r, i) => {
+                        if (!r.success && r.error?.code === 'messaging/registration-token-not-registered') {
+                            invalidTokens.push(chunk[i]);
+                        }
+                    });
+                    if (invalidTokens.length) {
+                        await cleanInvalidTokens(invalidTokens);
+                    }
+                }
+                catch (err) {
+                    logger_util_1.logger.error('FCM send error', { err });
+                }
+            }
         }
     }
 };
@@ -89,7 +149,6 @@ const cleanInvalidTokens = async (tokens) => {
         where: { fcmTokens: { hasSome: tokens } },
         select: { id: true, fcmTokens: true },
     });
-    // Batch all updates into a single transaction instead of N individual writes
     const updates = users.map((user) => {
         const cleaned = user.fcmTokens.filter((t) => !tokens.includes(t));
         return prisma.user.update({

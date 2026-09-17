@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences, updateMyManagerProfile } from './auth.controller';
+import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences, updateMyManagerProfile, getPublicSocieties } from './auth.controller';
 import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema, updateManagerProfileSchema } from './auth.schema';
 import { alertPreferencesSchema } from '../residents/resident.schema';
 import { validate } from '../../middlewares/validate.middleware';
@@ -9,6 +9,7 @@ import { authRateLimiter } from '../../middlewares/rateLimiter.middleware';
 
 const router = Router();
 
+router.get('/societies', getPublicSocieties);
 router.post('/signup', authRateLimiter, validate(signupEmailSchema), signupEmail);
 router.post('/login', authRateLimiter, validate(loginEmailSchema), loginEmail);
 router.post('/forgot-password', authRateLimiter, validate(forgotPasswordSchema), forgotPassword);

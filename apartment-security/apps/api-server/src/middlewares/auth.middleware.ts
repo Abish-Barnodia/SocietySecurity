@@ -70,6 +70,21 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     const decoded = verifyAccessToken(token);
 
+    // Super Admin platform owner - bypasses property tenant context
+    if (decoded.role === 'SUPER_ADMIN') {
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, email: true, isActive: true, role: true },
+      });
+      if (!user || !user.isActive || user.role !== 'SUPER_ADMIN') {
+        return next(new AppError('The super admin account no longer exists or is deactivated.', 401));
+      }
+      req.user = {
+        ...decoded,
+      };
+      return next();
+    }
+
     // Managers get exactly one active Manager Portal session per property, checked
     // live on every request (not cached — see note above).
     if (decoded.role === 'MANAGER') {

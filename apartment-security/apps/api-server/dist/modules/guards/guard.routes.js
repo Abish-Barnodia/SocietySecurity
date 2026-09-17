@@ -4,6 +4,7 @@ exports.guardRouter = void 0;
 const express_1 = require("express");
 const auth_middleware_1 = require("../../middlewares/auth.middleware");
 const role_middleware_1 = require("../../middlewares/role.middleware");
+const managerPermission_middleware_1 = require("../../middlewares/managerPermission.middleware");
 const validate_middleware_1 = require("../../middlewares/validate.middleware");
 const guard_controller_1 = require("./guard.controller");
 const guard_schema_1 = require("./guard.schema");
@@ -16,9 +17,21 @@ router.get('/shift/summary', (0, role_middleware_1.requireRole)('GUARD'), guard_
 router.post('/post/checkin', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(guard_schema_1.checkInPostSchema), guard_controller_1.checkInPost);
 router.get('/roster', (0, role_middleware_1.requireRole)('GUARD'), guard_controller_1.getRoster);
 router.get('/me', (0, role_middleware_1.requireRole)('GUARD'), guard_controller_1.getMyProfile);
-router.get('/directory', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getDirectory);
-router.get('/active', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getActiveGuards);
-router.post('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, validate_middleware_1.validate)(guard_schema_1.createGuardSchema), guard_controller_1.createGuard);
-router.post('/:id/assign', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.assignGuardToPost);
-router.get('/:id/profile', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), guard_controller_1.getGuardProfile);
+router.get('/directory', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.getDirectory);
+router.get('/active', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.getActiveGuards);
+// Leave management (manager only) — surfaced on the Workforce Mgmt page
+router.get('/leaves', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.getLeaves);
+router.post('/leaves', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.createLeave);
+router.patch('/leaves/:id/cancel', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.cancelLeave);
+// Salary management (manager only) — also Workforce Mgmt
+router.get('/salaries', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.listSalaries);
+router.post('/salary/:id/create-order', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.createSalaryOrder);
+router.post('/salary/:id/verify', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.verifySalaryPayment);
+router.post('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), (0, validate_middleware_1.validate)(guard_schema_1.createGuardSchema), guard_controller_1.createGuard);
+router.post('/:id/credential-share', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.shareGuardCredential);
+router.post('/:id/assign', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.assignGuardToPost);
+router.put('/:id', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), (0, validate_middleware_1.validate)(guard_schema_1.updateGuardSchema), guard_controller_1.updateGuard);
+router.delete('/:id', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.deleteGuard);
+router.get('/:id/salary', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('workforce'), guard_controller_1.getSalarySlip);
+router.get('/:id/profile', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('guards'), guard_controller_1.getGuardProfile);
 //# sourceMappingURL=guard.routes.js.map

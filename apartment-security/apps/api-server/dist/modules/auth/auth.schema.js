@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.emailSignupSchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
+exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.updateManagerProfileSchema = exports.emailSignupSchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
 const zod_1 = require("zod");
 exports.requestOtpSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -19,6 +19,12 @@ exports.emailSignupSchema = zod_1.z.object({
         password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
         name: zod_1.z.string().min(1, 'Name is required'),
         phone: zod_1.z.string().regex(/^\+[1-9]\d{7,14}$/, 'Invalid phone number format').optional(),
+    }),
+});
+exports.updateManagerProfileSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        name: zod_1.z.string().min(2).optional(),
+        phone: zod_1.z.string().regex(/^\+[1-9]\d{7,14}$/, 'Invalid phone number format').optional().or(zod_1.z.literal('')),
     }),
 });
 exports.verifyEmailOtpSchema = zod_1.z.object({
@@ -60,6 +66,18 @@ exports.loginEmailSchema = zod_1.z.object({
     body: zod_1.z.object({
         email: zod_1.z.string().email(),
         password: zod_1.z.string().min(1),
+    })
+});
+exports.forgotPasswordSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        email: zod_1.z.string().email('Invalid email format'),
+    })
+});
+exports.resetPasswordSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        email: zod_1.z.string().email('Invalid email format'),
+        code: zod_1.z.string().length(6, 'OTP must be 6 characters'),
+        password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
     })
 });
 //# sourceMappingURL=auth.schema.js.map

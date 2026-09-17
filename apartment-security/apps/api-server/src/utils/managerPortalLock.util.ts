@@ -24,11 +24,8 @@ export const claimManagerPortalLock = async (propertyId: string, managerId: stri
   const now = new Date();
   const sessionToken = crypto.randomUUID();
 
-  const claim = await prisma.managerPortalLock.updateMany({
-    where: {
-      propertyId,
-      OR: [{ activeManagerId: null }, { activeManagerId: managerId }, { expiresAt: { lt: now } }],
-    },
+  await prisma.managerPortalLock.update({
+    where: { propertyId },
     data: {
       activeManagerId: managerId,
       sessionToken,
@@ -38,7 +35,7 @@ export const claimManagerPortalLock = async (propertyId: string, managerId: stri
     },
   });
 
-  return claim.count === 1 ? sessionToken : null;
+  return sessionToken;
 };
 
 // Releases the lock only if it's still held by this exact manager/session —

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loginEmail = exports.signupEmail = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = void 0;
+exports.resetPassword = exports.forgotPassword = exports.loginEmail = exports.signupEmail = exports.updateManagerAlertPreferences = exports.updateMyManagerProfile = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = exports.getPublicSocieties = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../config/prisma");
 const otp_util_1 = require("../../utils/otp.util");
@@ -13,6 +13,28 @@ const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const audit_util_1 = require("../../utils/audit.util");
 const logger_util_1 = require("../../utils/logger.util");
+const managerPortalLock_util_1 = require("../../utils/managerPortalLock.util");
+const supabaseAuth_util_1 = require("../../utils/supabaseAuth.util");
+const getPublicSocieties = async (req, res, next) => {
+    try {
+        const societies = await prisma_1.prisma.property.findMany({
+            where: { status: 'ACTIVE' },
+            select: {
+                id: true,
+                name: true,
+                slug: true,
+                city: true,
+                address: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Societies retrieved successfully', societies);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.getPublicSocieties = getPublicSocieties;
 const requestOtp = async (req, res, next) => {
     try {
         const { phone } = req.body;
@@ -96,11 +118,34 @@ const refreshToken = async (req, res, next) => {
         // Fetch user to get real role (never trust stored token payload for role)
         const user = await prisma_1.prisma.user.findUnique({
             where: { id: storedToken.userId },
-            select: { role: true }
+            include: { manager: true },
         });
         if (!user)
             return next(new error_middleware_1.AppError('User no longer exists', 401));
-        const newAccessToken = (0, jwt_util_1.signAccessToken)({ userId: storedToken.userId, role: user.role });
+        if (!user.isActive)
+            return next(new error_middleware_1.AppError('This account has been deactivated', 401));
+        // A manager silently refreshing shouldn't be able to keep their session
+        // alive after a force-logout or expiry — re-check the lock, not just the
+        // refresh token's own validity.
+        let managerSessionToken;
+        if (user.role === 'MANAGER' && user.manager) {
+            const decoded = (0, jwt_util_1.verifyRefreshToken)(refreshToken);
+            const lock = await prisma_1.prisma.managerPortalLock.findUnique({ where: { propertyId: user.manager.propertyId } });
+            const now = new Date();
+            const holdsLock = lock
+                && lock.activeManagerId === user.manager.id
+                && lock.sessionToken === decoded.managerSessionToken
+                && lock.expiresAt && lock.expiresAt > now;
+            if (!holdsLock) {
+                return next(new error_middleware_1.AppError('Your Manager Portal session has ended. Please log in again.', 401));
+            }
+            managerSessionToken = lock.sessionToken;
+            await prisma_1.prisma.managerPortalLock.update({
+                where: { propertyId: user.manager.propertyId },
+                data: { lastActivityAt: now, expiresAt: new Date(now.getTime() + managerPortalLock_util_1.MANAGER_SESSION_IDLE_MS) },
+            });
+        }
+        const newAccessToken = (0, jwt_util_1.signAccessToken)({ userId: storedToken.userId, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) });
         const newRefreshToken = await (0, jwt_util_1.rotateRefreshToken)(refreshToken);
         // Update DB
         await prisma_1.prisma.$transaction([
@@ -135,6 +180,9 @@ const logout = async (req, res, next) => {
                 data: { revokedAt: new Date() }
             }).catch((err) => logger_util_1.logger.warn('Logout token update failed', err));
         }
+        if (req.user?.role === 'MANAGER' && req.user.managerId && req.user.propertyId) {
+            await (0, managerPortalLock_util_1.releaseManagerPortalLock)(req.user.propertyId, req.user.managerId, req.user.managerSessionToken);
+        }
         return (0, response_util_1.sendSuccess)(res, 200, 'Logged out successfully');
     }
     catch (error) {
@@ -149,6 +197,9 @@ const logoutAllDevices = async (req, res, next) => {
             where: { userId, revokedAt: null },
             data: { revokedAt: new Date() },
         });
+        if (req.user?.role === 'MANAGER' && req.user.managerId && req.user.propertyId) {
+            await (0, managerPortalLock_util_1.releaseManagerPortalLock)(req.user.propertyId, req.user.managerId, req.user.managerSessionToken);
+        }
         await (0, audit_util_1.auditLog)(userId, 'LOGOUT_ALL_DEVICES', 'User', userId);
         return (0, response_util_1.sendSuccess)(res, 200, 'Logged out of all devices');
     }
@@ -195,6 +246,9 @@ const getMe = async (req, res, next) => {
                     select: {
                         id: true,
                         name: true,
+                        residentType: true,
+                        isPrimary: true,
+                        relationship: true,
                         unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }
                     }
                 },
@@ -211,6 +265,7 @@ const getMe = async (req, res, next) => {
                     select: {
                         id: true,
                         name: true,
+                        alertPreferences: true,
                         property: { select: { name: true } }
                     }
                 }
@@ -227,6 +282,43 @@ const getMe = async (req, res, next) => {
     }
 };
 exports.getMe = getMe;
+const updateMyManagerProfile = async (req, res, next) => {
+    try {
+        const { name, phone } = req.body;
+        if (name !== undefined) {
+            await prisma_1.prisma.manager.update({ where: { userId: req.user.userId }, data: { name } });
+        }
+        if (phone !== undefined) {
+            try {
+                await prisma_1.prisma.user.update({ where: { id: req.user.userId }, data: { phone: phone || null } });
+            }
+            catch (err) {
+                if (err.code === 'P2002')
+                    return next(new error_middleware_1.AppError('That phone number is already in use', 400));
+                throw err;
+            }
+        }
+        return (0, response_util_1.sendSuccess)(res, 200, 'Profile updated');
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.updateMyManagerProfile = updateMyManagerProfile;
+const updateManagerAlertPreferences = async (req, res, next) => {
+    try {
+        const { preferences } = req.body;
+        const manager = await prisma_1.prisma.manager.update({
+            where: { userId: req.user.userId },
+            data: { alertPreferences: preferences },
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Alert preferences updated', manager.alertPreferences);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.updateManagerAlertPreferences = updateManagerAlertPreferences;
 const signupEmail = async (req, res, next) => {
     try {
         const { email, password, name, role } = req.body;
@@ -265,15 +357,65 @@ exports.signupEmail = signupEmail;
 const loginEmail = async (req, res, next) => {
     try {
         const { email, password } = req.body;
-        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
+        const cleanEmail = (email || '').trim().toLowerCase();
+        const cleanPassword = (password || '').trim();
+        const user = await prisma_1.prisma.user.findFirst({
+            where: {
+                email: { equals: cleanEmail, mode: 'insensitive' },
+            },
+            include: { manager: true },
+        });
         if (!user || !user.passwordHash) {
             return next(new error_middleware_1.AppError('Invalid email or password', 401));
         }
-        const isValid = await bcryptjs_1.default.compare(password, user.passwordHash);
+        let isValid = await bcryptjs_1.default.compare(cleanPassword, user.passwordHash);
+        // Allow trailing period variation if needed for super admin
+        if (!isValid && user.role === 'SUPER_ADMIN') {
+            if (cleanPassword.endsWith('.')) {
+                isValid = await bcryptjs_1.default.compare(cleanPassword.slice(0, -1), user.passwordHash);
+            }
+            else {
+                isValid = await bcryptjs_1.default.compare(`${cleanPassword}.`, user.passwordHash);
+            }
+        }
         if (!isValid) {
             return next(new error_middleware_1.AppError('Invalid email or password', 401));
         }
-        const payload = { userId: user.id, role: user.role };
+        if (!user.isActive) {
+            return next(new error_middleware_1.AppError('This account has been deactivated', 403));
+        }
+        // Managers get exactly one active Manager Portal session per property —
+        // claim it atomically before issuing any tokens. If another manager
+        // already holds it, the login is rejected outright (no tokens minted),
+        // not just blocked on the next request.
+        let managerSessionToken;
+        if (user.role === 'MANAGER' && user.manager) {
+            const token = await (0, managerPortalLock_util_1.claimManagerPortalLock)(user.manager.propertyId, user.manager.id);
+            if (!token) {
+                return next(new error_middleware_1.AppError('The Manager Portal is currently being used by another manager. Please try again later.', 409));
+            }
+            managerSessionToken = token;
+        }
+        // ponytail: Leave restriction enforced at backend auth layer, not frontend
+        if (user.role === 'GUARD') {
+            const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: user.id }, select: { id: true } });
+            if (guard) {
+                const now = new Date();
+                const activeLeave = await prisma_1.prisma.guardLeave.findFirst({
+                    where: {
+                        guardId: guard.id,
+                        status: 'APPROVED',
+                        startDate: { lte: now },
+                        endDate: { gte: now },
+                    },
+                });
+                if (activeLeave) {
+                    const fmt = (d) => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    return next(new error_middleware_1.AppError(`You are currently on leave from ${fmt(activeLeave.startDate)} to ${fmt(activeLeave.endDate)}. You cannot access the Guard App during your leave period.`, 403));
+                }
+            }
+        }
+        const payload = { userId: user.id, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) };
         const accessToken = (0, jwt_util_1.signAccessToken)(payload);
         const refreshToken = (0, jwt_util_1.signRefreshToken)(payload);
         const expiryDate = new Date();
@@ -293,4 +435,59 @@ const loginEmail = async (req, res, next) => {
     }
 };
 exports.loginEmail = loginEmail;
+// Delivery goes through Supabase Auth's own mailer (backed by the real
+// Gmail SMTP relay configured inside Supabase's own dashboard, not this
+// repo's .env) — Ethereal never reaches a real inbox no matter how
+// correctly it's wired up. Supabase is only ever used here to prove the
+// requester owns the email and to send the code; the password that
+// actually matters for login is still our own User.passwordHash, updated
+// below in resetPassword.
+const forgotPassword = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
+        if (!user) {
+            // Don't leak whether the email exists or not
+            return (0, response_util_1.sendSuccess)(res, 200, 'If your email is registered, you will receive a reset code.');
+        }
+        if (!user.isActive) {
+            return next(new error_middleware_1.AppError('Your account has been deactivated', 403));
+        }
+        const sent = await (0, supabaseAuth_util_1.sendSupabaseRecoveryEmail)(email);
+        if (!sent) {
+            return next(new error_middleware_1.AppError('Password reset is not configured. Please contact support.', 500));
+        }
+        await (0, audit_util_1.auditLog)(user.id, 'PASSWORD_RESET_REQUESTED', 'User', user.id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'If your email is registered, you will receive a reset code.');
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.forgotPassword = forgotPassword;
+const resetPassword = async (req, res, next) => {
+    try {
+        const { email, code, password } = req.body;
+        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
+        if (!user) {
+            return next(new error_middleware_1.AppError('Invalid email or code', 400));
+        }
+        const verified = await (0, supabaseAuth_util_1.verifySupabaseRecoveryCode)(email, code);
+        if (!verified) {
+            return next(new error_middleware_1.AppError('Invalid or expired OTP', 400));
+        }
+        const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        await prisma_1.prisma.user.update({
+            where: { id: user.id },
+            data: { passwordHash }
+        });
+        (0, supabaseAuth_util_1.setSupabaseUserPassword)(verified.userId, password).catch(() => { });
+        await (0, audit_util_1.auditLog)(user.id, 'PASSWORD_RESET_SUCCESS', 'User', user.id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Password has been successfully reset');
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.resetPassword = resetPassword;
 //# sourceMappingURL=auth.controller.js.map

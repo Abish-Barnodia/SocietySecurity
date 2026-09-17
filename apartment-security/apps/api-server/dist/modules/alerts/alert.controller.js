@@ -45,15 +45,7 @@ const alert_util_1 = require("../../utils/alert.util");
 const broadcastAlert = async (req, res, next) => {
     try {
         const { type, severity, title, message, targetRoles } = req.body;
-        let propertyId = undefined;
-        const user = await prisma_1.prisma.user.findUnique({
-            where: { id: req.user.userId },
-            include: { manager: true, committee: true, guard: true }
-        });
-        if (user?.manager)
-            propertyId = user.manager.propertyId;
-        else if (user?.guard)
-            propertyId = user.guard.propertyId;
+        const propertyId = req.user.propertyId;
         if (!propertyId)
             return next(new error_middleware_1.AppError('No property context found for alert broadcast', 400));
         if (severity === 'CRITICAL' && req.user.role !== 'MANAGER') {
@@ -131,7 +123,8 @@ const triggerDuress = async (req, res, next) => {
                 title: 'SILENT DURESS ALARM',
                 body: `${senderName} has triggered a silent duress alarm. Immediate assistance required.`,
                 channel: 'PUSH',
-                targetRoles: ['GUARD', 'MANAGER']
+                targetRoles: ['GUARD', 'MANAGER'],
+                triggeredByUserId: user.id
             }
         });
         // Notify Guards and Managers immediately via sockets — scoped to this property
@@ -155,20 +148,17 @@ const triggerDuress = async (req, res, next) => {
 exports.triggerDuress = triggerDuress;
 const getAlerts = async (req, res, next) => {
     try {
-        // Resolve the caller's propertyId to scope alerts — prevents cross-tenant data exposure
-        const user = await prisma_1.prisma.user.findUnique({
-            where: { id: req.user.userId },
-            include: {
-                manager: true,
-                guard: true,
-                resident: { include: { unit: true } },
-            },
-        });
-        const propertyId = user?.manager?.propertyId ??
-            user?.guard?.propertyId ??
-            user?.resident?.unit.propertyId;
+        // Caller's propertyId — already resolved by auth middleware — scopes alerts
+        // to prevent cross-tenant data exposure.
+        const propertyId = req.user.propertyId;
         if (!propertyId)
             return next(new error_middleware_1.AppError('No property context found', 403));
+        // Managers/committee run the property's Alerts & Escalation dashboard —
+        // they need oversight of everything happening on the property (a
+        // resident's own broadcast, a guard's vehicle alert), not just alerts
+        // some triggerAlert() call happened to target at their role. Guards and
+        // residents keep the narrower "alerts addressed to me" feed.
+        const isOversightRole = req.user.role === 'MANAGER' || req.user.role === 'COMMITTEE';
         const alerts = await prisma_1.prisma.alert.findMany({
             where: {
                 propertyId,
@@ -177,10 +167,12 @@ const getAlerts = async (req, res, next) => {
                 // resident) are both valid ways an alert can be "for" this caller;
                 // matching only targetRoles meant any targetUserIds-only alert
                 // (walk-in requests, visitor QR approvals) was never fetchable here.
-                OR: [
-                    { targetRoles: { has: req.user.role } },
-                    { targetUserIds: { has: req.user.userId } },
-                ],
+                ...(isOversightRole ? {} : {
+                    OR: [
+                        { targetRoles: { has: req.user.role } },
+                        { targetUserIds: { has: req.user.userId } },
+                    ],
+                }),
             },
             orderBy: { createdAt: 'desc' },
             take: 50
@@ -195,8 +187,8 @@ exports.getAlerts = getAlerts;
 const broadcastVehicleAlert = async (req, res, next) => {
     try {
         const { photoBase64, plateNumber, vehicleDetails, location, notes } = req.body;
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
+        const propertyId = req.user.propertyId;
+        if (!propertyId)
             return next(new error_middleware_1.AppError('Guard profile not found', 404));
         const { uploadBuffer } = await Promise.resolve().then(() => __importStar(require('../../utils/objectStorage.util')));
         const buffer = Buffer.from(photoBase64, 'base64');
@@ -208,10 +200,10 @@ const broadcastVehicleAlert = async (req, res, next) => {
             title: 'Unknown Vehicle Alert',
             body,
             targetRoles: ['RESIDENT'],
-            propertyId: guard.propertyId,
+            propertyId,
             imageUrl,
         });
-        server_1.io?.to(`property:${guard.propertyId}`).emit('new_alert', alert);
+        server_1.io?.to(`property:${propertyId}`).emit('new_alert', alert);
         await (0, audit_util_1.auditLog)(req.user.userId, 'BROADCAST_VEHICLE_ALERT', 'Alert', alert.id);
         return (0, response_util_1.sendSuccess)(res, 201, 'Vehicle alert sent to all residents', alert);
     }
@@ -267,18 +259,19 @@ exports.claimVehicleAlert = claimVehicleAlert;
 const acknowledgeAlertRoute = async (req, res, next) => {
     try {
         const id = req.params.id;
-        const alert = await prisma_1.prisma.alert.findUnique({ where: { id } });
+        const alert = await prisma_1.prisma.alert.findFirst({
+            where: {
+                OR: [
+                    { id },
+                    { entryId: id }
+                ]
+            }
+        });
         if (!alert)
             return next(new error_middleware_1.AppError('Alert not found', 404));
         // Same propertyId-scoping as getAlerts — a caller can only acknowledge
         // an alert that belongs to their own property.
-        const user = await prisma_1.prisma.user.findUnique({
-            where: { id: req.user.userId },
-            include: { manager: true, guard: true, resident: { include: { unit: true } } },
-        });
-        const propertyId = user?.manager?.propertyId ??
-            user?.guard?.propertyId ??
-            user?.resident?.unit.propertyId;
+        const propertyId = req.user.propertyId;
         if (!propertyId || alert.propertyId !== propertyId) {
             return next(new error_middleware_1.AppError('Unauthorized', 403));
         }

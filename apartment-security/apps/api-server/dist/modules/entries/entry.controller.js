@@ -42,6 +42,7 @@ const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const audit_util_1 = require("../../utils/audit.util");
 const qr_util_1 = require("../../utils/qr.util");
+const parking_util_1 = require("../../utils/parking.util");
 const server_1 = require("../../server");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const logEntry = async (req, res, next) => {
@@ -73,7 +74,10 @@ const logEntry = async (req, res, next) => {
             const pass = parsedQr
                 ? await prisma_1.prisma.pass.findUnique({
                     where: { id: parsedQr.passId },
-                    include: { unit: true, resident: { include: { user: true } } },
+                    include: {
+                        unit: { include: { residents: { include: { user: true } } } },
+                        resident: { include: { user: true } },
+                    },
                 })
                 : null;
             // No signature, or the signed passId doesn't correspond to any real
@@ -135,40 +139,48 @@ const logEntry = async (req, res, next) => {
             // We will handle walk-in flows in another module, but here we just log it as pending.
             status = 'PENDING_APPROVAL';
         }
-        const entry = await prisma_1.prisma.entry.create({
-            data: {
-                unitId,
-                guardId: guard.id,
-                entryPointId,
-                method,
-                visitorName,
-                visitorPhone,
-                vehicleNumber,
-                passId: resolvedPassId,
-                status: status,
-                notes,
-                gatePhotoUrl
-            }
-        });
-        if (resolvedPassId) {
-            const outcome = status === 'PENDING_APPROVAL' ? 'PENDING' : (status === 'APPROVED' ? 'CLEARED' : 'DENIED');
-            await prisma_1.prisma.passUsageHistory.create({
-                data: { passId: resolvedPassId, entryId: entry.id, outcome }
+        const { entry, walkinCreated } = await prisma_1.prisma.$transaction(async (tx) => {
+            const createdEntry = await tx.entry.create({
+                data: {
+                    unitId,
+                    guardId: guard.id,
+                    entryPointId,
+                    method,
+                    visitorName,
+                    visitorPhone,
+                    vehicleNumber,
+                    passId: resolvedPassId,
+                    status: status,
+                    notes,
+                    gatePhotoUrl
+                }
             });
-        }
+            if (resolvedPassId) {
+                const outcome = status === 'PENDING_APPROVAL' ? 'PENDING' : (status === 'APPROVED' ? 'CLEARED' : 'DENIED');
+                await tx.passUsageHistory.create({
+                    data: { passId: resolvedPassId, entryId: createdEntry.id, outcome }
+                });
+            }
+            let walkinTicket = null;
+            if (qrApproval) {
+                const { pass } = qrApproval;
+                const timeoutAt = new Date(Date.now() + 120000);
+                walkinTicket = await tx.walkinApproval.create({
+                    data: {
+                        entryId: createdEntry.id,
+                        residentId: pass.residentId,
+                        visitorName,
+                        purpose: pass.purpose ?? '',
+                        timeoutAt,
+                    }
+                });
+            }
+            return { entry: createdEntry, walkinCreated: walkinTicket };
+        });
         let enriched = denialReason ? { reason: denialReason } : {};
         if (qrApproval) {
             const { pass, unit, entryPoint } = qrApproval;
-            const timeoutAt = new Date(Date.now() + 120000);
-            await prisma_1.prisma.walkinApproval.create({
-                data: {
-                    entryId: entry.id,
-                    residentId: pass.residentId,
-                    visitorName,
-                    purpose: pass.purpose ?? '',
-                    timeoutAt,
-                }
-            });
+            const timeoutAt = walkinCreated.timeoutAt;
             server_1.io?.to(`unit_${unitId}`).emit('visitor_approval_request', {
                 entryId: entry.id,
                 visitorName,
@@ -183,13 +195,26 @@ const logEntry = async (req, res, next) => {
                 timeoutAt,
             });
             const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+            // Every household member gets the ringing alert, not just the resident
+            // the pass happens to be booked under — whoever's phone is in hand
+            // should be able to answer the door.
             await triggerAlert({
                 priority: 'P2',
                 title: 'Visitor at your gate',
                 body: `${visitorName} scanned in — approve or deny within 2 minutes.`,
-                targetUserIds: [pass.resident.userId],
+                targetUserIds: unit.residents.map((r) => r.userId),
                 propertyId: guard.propertyId,
                 entryId: entry.id,
+                imageUrl: pass.visitorPhoto ?? undefined,
+                dataOnly: true,
+                extraData: {
+                    type: 'VISITOR_APPROVAL',
+                    visitorName,
+                    timeoutAt: timeoutAt.toISOString(),
+                    gateName: entryPoint.name,
+                    apartment: unit.unitNumber,
+                    tower: unit.tower ?? '',
+                },
             });
             enriched = {
                 visitorPhoto: pass.visitorPhoto,
@@ -199,6 +224,10 @@ const logEntry = async (req, res, next) => {
                 timeoutAt,
             };
         }
+        // Runs after the resident-facing notification (above) rather than before —
+        // parking assignment is a bonus on top of entry logging, never a reason
+        // to delay telling the resident someone's waiting at the gate.
+        await (0, parking_util_1.assignParkingSlot)(entry.id, guard.propertyId, vehicleNumber);
         await (0, audit_util_1.auditLog)(req.user.userId, 'LOG_ENTRY', 'Entry', entry.id);
         return (0, response_util_1.sendSuccess)(res, 201, `Entry logged as ${status}`, { ...entry, ...enriched });
     }
@@ -218,6 +247,7 @@ const logExit = async (req, res, next) => {
             where: { id },
             data: { exitAt: exitAt ? new Date(exitAt) : new Date() }
         });
+        await (0, parking_util_1.releaseParkingSlot)(id);
         await (0, audit_util_1.auditLog)(req.user.userId, 'LOG_EXIT', 'Entry', id);
         return (0, response_util_1.sendSuccess)(res, 200, 'Exit logged', updated);
     }
@@ -228,18 +258,7 @@ const logExit = async (req, res, next) => {
 exports.logExit = logExit;
 const getEntryPoints = async (req, res, next) => {
     try {
-        let propertyId;
-        if (req.user.role === 'GUARD') {
-            const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-            propertyId = guard?.propertyId;
-        }
-        else {
-            const resident = await prisma_1.prisma.resident.findUnique({
-                where: { userId: req.user.userId },
-                select: { unit: { select: { propertyId: true } } },
-            });
-            propertyId = resident?.unit.propertyId;
-        }
+        const propertyId = req.user.propertyId;
         if (!propertyId)
             return next(new error_middleware_1.AppError('Property context not found', 404));
         const entryPoints = await prisma_1.prisma.entryPoint.findMany({
@@ -255,11 +274,11 @@ const getEntryPoints = async (req, res, next) => {
 exports.getEntryPoints = getEntryPoints;
 const getRecentEntries = async (req, res, next) => {
     try {
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
-            return next(new error_middleware_1.AppError('Guard profile not found', 404));
+        const propertyId = req.user.propertyId;
+        if (!propertyId)
+            return next(new error_middleware_1.AppError('Property context not found', 404));
         const entries = await prisma_1.prisma.entry.findMany({
-            where: { unit: { propertyId: guard.propertyId }, status: 'APPROVED' },
+            where: { unit: { propertyId }, status: 'APPROVED' },
             include: {
                 unit: { select: { unitNumber: true, tower: true } },
                 entryPoint: { select: { name: true } },
@@ -276,13 +295,13 @@ const getRecentEntries = async (req, res, next) => {
 exports.getRecentEntries = getRecentEntries;
 const getFrequentVisitors = async (req, res, next) => {
     try {
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
-            return next(new error_middleware_1.AppError('Guard profile not found', 404));
+        const propertyId = req.user.propertyId;
+        if (!propertyId)
+            return next(new error_middleware_1.AppError('Property context not found', 404));
         // Get recent distinct visitors (using group by or distinct on entry table)
         // Prisma distinct is applied after where.
         const entries = await prisma_1.prisma.entry.findMany({
-            where: { unit: { propertyId: guard.propertyId }, method: 'MANUAL_GUARD' },
+            where: { unit: { propertyId }, method: 'MANUAL_GUARD' },
             select: { visitorName: true, vehicleNumber: true, entryAt: true },
             distinct: ['visitorName'],
             orderBy: { entryAt: 'desc' },
@@ -297,12 +316,12 @@ const getFrequentVisitors = async (req, res, next) => {
 exports.getFrequentVisitors = getFrequentVisitors;
 const getUnitsForGuard = async (req, res, next) => {
     try {
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
-            return next(new error_middleware_1.AppError('Guard profile not found', 404));
+        const propertyId = req.user.propertyId;
+        if (!propertyId)
+            return next(new error_middleware_1.AppError('Property context not found', 404));
         const units = await prisma_1.prisma.unit.findMany({
             where: {
-                propertyId: guard.propertyId,
+                propertyId,
                 residents: { some: {} }
             },
             select: { id: true, unitNumber: true, tower: true, _count: { select: { residents: true } } },
@@ -317,17 +336,14 @@ const getUnitsForGuard = async (req, res, next) => {
 exports.getUnitsForGuard = getUnitsForGuard;
 const getUnitEntries = async (req, res, next) => {
     try {
-        // For Resident
-        const currentResident = await prisma_1.prisma.resident.findUnique({
-            where: { userId: req.user.userId }
-        });
-        if (!currentResident)
+        const unitId = req.user.unitId;
+        if (!unitId)
             return next(new error_middleware_1.AppError('Resident context not found', 404));
         const entries = await prisma_1.prisma.entry.findMany({
-            where: { unitId: currentResident.unitId },
+            where: { unitId },
             include: { entryPoint: { select: { name: true } } },
             orderBy: { entryAt: 'desc' },
-            take: 100
+            take: 30
         });
         return (0, response_util_1.sendSuccess)(res, 200, 'Entries fetched', entries);
     }

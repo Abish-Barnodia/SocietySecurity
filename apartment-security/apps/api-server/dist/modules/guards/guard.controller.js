@@ -1,7 +1,47 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getGuardProfile = exports.assignGuardToPost = exports.createGuard = exports.checkInPost = exports.endShift = exports.getRoster = exports.getShiftSummary = exports.startShift = exports.getActiveGuards = exports.getDirectory = exports.getMyProfile = void 0;
+exports.verifySalaryPayment = exports.createSalaryOrder = exports.getSalarySlip = exports.listSalaries = exports.cancelLeave = exports.getLeaves = exports.createLeave = exports.getGuardProfile = exports.assignGuardToPost = exports.deleteGuard = exports.updateGuard = exports.shareGuardCredential = exports.createGuard = exports.checkInPost = exports.endShift = exports.getRoster = exports.getShiftSummary = exports.startShift = exports.getActiveGuards = exports.getDirectory = exports.getMyProfile = void 0;
+const crypto_1 = __importDefault(require("crypto"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../config/prisma");
+const razorpay_1 = require("../../config/razorpay");
+const env_1 = require("../../config/env");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const audit_util_1 = require("../../utils/audit.util");
@@ -45,7 +85,13 @@ const getMyProfile = async (req, res, next) => {
 exports.getMyProfile = getMyProfile;
 const getDirectory = async (req, res, next) => {
     try {
+        const dateQuery = req.query.date;
+        const startOfDay = dateQuery ? new Date(dateQuery) : new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setHours(23, 59, 59, 999);
         const guards = await prisma_1.prisma.guard.findMany({
+            where: { propertyId: req.user.propertyId, user: { isActive: true } },
             include: {
                 user: { select: { phone: true } },
                 shifts: {
@@ -56,6 +102,25 @@ const getDirectory = async (req, res, next) => {
                     orderBy: { checkedInAt: 'desc' },
                     take: 1,
                     include: { entryPoint: true }
+                },
+                // Overlaps the same date window as the entries count below, so
+                // "on leave" reflects whichever date the roster is currently
+                // viewing, not always literally today.
+                leaves: {
+                    where: { status: 'APPROVED', startDate: { lte: endOfDay }, endDate: { gte: startOfDay } },
+                    take: 1,
+                },
+                _count: {
+                    select: {
+                        entries: {
+                            where: {
+                                entryAt: {
+                                    gte: startOfDay,
+                                    lte: endOfDay
+                                }
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -65,8 +130,10 @@ const getDirectory = async (req, res, next) => {
             phone: g.user.phone,
             badgeNumber: g.badgeNumber,
             isOnDuty: g.isOnDuty,
+            onLeave: g.leaves.length > 0,
             lastShift: g.shifts[0] || null,
-            lastPost: g.postCheckIns[0] || null
+            lastPost: g.postCheckIns[0] || null,
+            entriesCount: g._count?.entries || 0
         }));
         return (0, response_util_1.sendSuccess)(res, 200, 'Guard directory', formatted);
     }
@@ -78,7 +145,7 @@ exports.getDirectory = getDirectory;
 const getActiveGuards = async (req, res, next) => {
     try {
         const guards = await prisma_1.prisma.guard.findMany({
-            where: { isOnDuty: true },
+            where: { isOnDuty: true, propertyId: req.user.propertyId },
             include: {
                 user: { select: { phone: true } },
                 postCheckIns: {
@@ -165,16 +232,16 @@ const buildShiftStats = async (guardId, since) => {
 };
 const getShiftSummary = async (req, res, next) => {
     try {
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
+        const guardId = req.user.guardId;
+        if (!guardId)
             return next(new error_middleware_1.AppError('Guard profile not found', 404));
         const activeShift = await prisma_1.prisma.shift.findFirst({
-            where: { guardId: guard.id, endedAt: null },
+            where: { guardId, endedAt: null },
             orderBy: { startedAt: 'desc' },
         });
         if (!activeShift)
             return next(new error_middleware_1.AppError('You are not on an active shift', 400));
-        const stats = await buildShiftStats(guard.id, activeShift.startedAt);
+        const stats = await buildShiftStats(guardId, activeShift.startedAt);
         return (0, response_util_1.sendSuccess)(res, 200, 'Shift summary', { startedAt: activeShift.startedAt, ...stats });
     }
     catch (err) {
@@ -184,11 +251,12 @@ const getShiftSummary = async (req, res, next) => {
 exports.getShiftSummary = getShiftSummary;
 const getRoster = async (req, res, next) => {
     try {
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
+        const guardId = req.user.guardId;
+        const propertyId = req.user.propertyId;
+        if (!guardId || !propertyId)
             return next(new error_middleware_1.AppError('Guard profile not found', 404));
         const guards = await prisma_1.prisma.guard.findMany({
-            where: { propertyId: guard.propertyId, id: { not: guard.id } },
+            where: { propertyId, id: { not: guardId } },
             select: { id: true, name: true, badgeNumber: true, isOnDuty: true },
             orderBy: { name: 'asc' },
         });
@@ -222,8 +290,15 @@ const endShift = async (req, res, next) => {
         if (!activeShift)
             return next(new error_middleware_1.AppError('Active shift record not found', 404));
         const { totalEntries, totalIncidents } = await buildShiftStats(guard.id, activeShift.startedAt);
-        await prisma_1.prisma.$transaction([
-            prisma_1.prisma.shift.update({
+        // The outgoing guard's current post, carried over to the incoming guard
+        // below — a handover means the post stays continuously covered, not
+        // "guard A stops, and separately at some point guard B may start."
+        const outgoingPost = await prisma_1.prisma.guardPost.findFirst({
+            where: { shiftId: activeShift.id },
+            orderBy: { checkedInAt: 'desc' },
+        });
+        await prisma_1.prisma.$transaction(async (tx) => {
+            await tx.shift.update({
                 where: { id: activeShift.id },
                 data: {
                     endedAt: new Date(),
@@ -234,12 +309,30 @@ const endShift = async (req, res, next) => {
                     totalEntries,
                     totalIncidents,
                 }
-            }),
-            prisma_1.prisma.guard.update({
+            });
+            await tx.guard.update({
                 where: { id: guard.id },
                 data: { isOnDuty: false }
-            })
-        ]);
+            });
+            // Skip if the incoming guard is already on another active shift —
+            // don't stomp on whatever post they're already covering.
+            if (!handoverTarget.isOnDuty) {
+                const newShift = await tx.shift.create({ data: { guardId: handoverTarget.id } });
+                if (outgoingPost) {
+                    await tx.guardPost.create({
+                        data: {
+                            guardId: handoverTarget.id,
+                            shiftId: newShift.id,
+                            entryPointId: outgoingPost.entryPointId,
+                        }
+                    });
+                }
+                await tx.guard.update({
+                    where: { id: handoverTarget.id },
+                    data: { isOnDuty: true }
+                });
+            }
+        });
         await (0, audit_util_1.auditLog)(req.user.userId, 'END_SHIFT', 'Shift', activeShift.id);
         return (0, response_util_1.sendSuccess)(res, 200, 'Shift ended successfully');
     }
@@ -278,40 +371,47 @@ const checkInPost = async (req, res, next) => {
 exports.checkInPost = checkInPost;
 const createGuard = async (req, res, next) => {
     try {
-        const { name, phone, badgeNumber, status, shift, post, dateOfJoining, photoUrl } = req.body;
+        const { name, phone, email, password, status, shift, post, dateOfJoining, photoUrl } = req.body;
+        const badgeNumber = req.body.badgeNumber.toUpperCase();
+        const nameUpper = name.toUpperCase();
         // We assume the admin creating the guard belongs to a property
         const manager = await prisma_1.prisma.manager.findUnique({ where: { userId: req.user.userId } });
         const propertyId = manager ? manager.propertyId : (await prisma_1.prisma.property.findFirst())?.id;
         if (!propertyId)
             return next(new error_middleware_1.AppError('No property found to associate guard', 400));
-        // Check if badge is already in use
+        // Badge numbers are normalized to uppercase above so "SEC-005" and
+        // "sec-005" can't slip past this as two different guards.
         const existingBadge = await prisma_1.prisma.guard.findUnique({ where: { badgeNumber } });
         if (existingBadge)
             return next(new error_middleware_1.AppError('Badge number already in use', 400));
-        // Upsert User
-        let user = await prisma_1.prisma.user.findUnique({ where: { phone } });
-        if (!user) {
-            user = await prisma_1.prisma.user.create({
-                data: {
-                    phone,
-                    role: 'GUARD',
-                    passwordHash: '123456', // default password
-                    isActive: true
-                }
-            });
-        }
-        // Check if guard already exists for this user
-        const existingGuard = await prisma_1.prisma.guard.findUnique({ where: { userId: user.id } });
-        if (existingGuard)
-            return next(new error_middleware_1.AppError('A guard with this phone number already exists', 400));
+        const existingUser = await prisma_1.prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+        if (existingUser)
+            return next(new error_middleware_1.AppError('An account with this email or phone already exists', 400));
+        // Create the login credential the guard uses in the guard app
+        const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        const user = await prisma_1.prisma.user.create({
+            data: {
+                phone,
+                email,
+                role: 'GUARD',
+                passwordHash,
+                isActive: true
+            }
+        });
         // Create Guard
+        // isOnDuty is never set true here — the dashboard's "Post Assignment"
+        // dropdown isn't backed by real EntryPoint records, so there's no valid
+        // post to pair with a Shift/GuardPost. A guard marked on-duty with no
+        // real shift could never scan or hand over (both require an active
+        // Shift row). They start a real shift themselves via the guard app's
+        // start-duty screen on first login instead.
         const guard = await prisma_1.prisma.guard.create({
             data: {
                 userId: user.id,
                 propertyId,
-                name,
+                name: nameUpper,
                 badgeNumber,
-                isOnDuty: status === 'On Post'
+                isOnDuty: false
             }
         });
         await (0, audit_util_1.auditLog)(req.user.userId, 'CREATE_GUARD', 'Guard', guard.id);
@@ -322,6 +422,78 @@ const createGuard = async (req, res, next) => {
     }
 };
 exports.createGuard = createGuard;
+// Gate for sharing a guard's plaintext login credentials (PDF via
+// WhatsApp/email) — caps how many times a manager can re-send the same
+// account's password. Doesn't send anything itself, just claims one of the
+// limited shares; the frontend generates/shares the PDF only if this succeeds.
+const shareGuardCredential = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { id }, select: { userId: true, propertyId: true } });
+        if (!guard || guard.propertyId !== req.user.propertyId) {
+            return next(new error_middleware_1.AppError('Guard not found', 404));
+        }
+        const { tryConsumeCredentialShare, MAX_CREDENTIAL_SHARES } = await Promise.resolve().then(() => __importStar(require('../../utils/credentialShare.util')));
+        const allowed = await tryConsumeCredentialShare(guard.userId);
+        if (!allowed) {
+            return next(new error_middleware_1.AppError(`This guard's credentials have already been shared the maximum of ${MAX_CREDENTIAL_SHARES} times.`, 403));
+        }
+        await (0, audit_util_1.auditLog)(req.user.userId, 'SHARE_GUARD_CREDENTIAL', 'Guard', id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Credential share allowed');
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.shareGuardCredential = shareGuardCredential;
+const updateGuard = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const { name, phone } = req.body;
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { id } });
+        if (!guard || guard.propertyId !== req.user.propertyId) {
+            return next(new error_middleware_1.AppError('Guard not found', 404));
+        }
+        const updated = await prisma_1.prisma.guard.update({
+            where: { id },
+            // Guard names are stored upper-case for consistent display/search
+            // across the roster - enforced here rather than trusting the client.
+            data: { name: name ? name.toUpperCase() : undefined },
+        });
+        if (phone) {
+            await prisma_1.prisma.user.update({ where: { id: guard.userId }, data: { phone } });
+        }
+        await (0, audit_util_1.auditLog)(req.user.userId, 'UPDATE_GUARD', 'Guard', guard.id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Guard updated', updated);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.updateGuard = updateGuard;
+const deleteGuard = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { id } });
+        if (!guard || guard.propertyId !== req.user.propertyId) {
+            return next(new error_middleware_1.AppError('Guard not found', 404));
+        }
+        const activeShift = await prisma_1.prisma.shift.findFirst({ where: { guardId: guard.id, endedAt: null } });
+        if (activeShift) {
+            await prisma_1.prisma.shift.update({ where: { id: activeShift.id }, data: { endedAt: new Date(), signedOffAt: new Date() } });
+        }
+        await prisma_1.prisma.$transaction([
+            prisma_1.prisma.guard.update({ where: { id: guard.id }, data: { isOnDuty: false } }),
+            prisma_1.prisma.user.update({ where: { id: guard.userId }, data: { isActive: false } }),
+        ]);
+        await (0, audit_util_1.auditLog)(req.user.userId, 'DELETE_GUARD', 'Guard', guard.id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Guard removed');
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.deleteGuard = deleteGuard;
 const assignGuardToPost = async (req, res, next) => {
     try {
         const id = req.params.id;
@@ -401,6 +573,10 @@ const getGuardProfile = async (req, res, next) => {
         });
         if (!guard)
             return next(new error_middleware_1.AppError('Guard not found', 404));
+        const now = new Date();
+        const activeLeave = await prisma_1.prisma.guardLeave.findFirst({
+            where: { guardId: id, status: 'APPROVED', startDate: { lte: now }, endDate: { gte: now } },
+        });
         // Compute basic timeline from post check-ins and entries
         const timeline = [
             ...guard.postCheckIns.map(p => ({
@@ -427,7 +603,9 @@ const getGuardProfile = async (req, res, next) => {
             name: guard.name,
             badgeNumber: guard.badgeNumber,
             isOnDuty: guard.isOnDuty,
+            onLeave: !!activeLeave,
             phone: guard.user.phone,
+            email: guard.user.email,
             createdAt: guard.createdAt,
             lastPost: guard.postCheckIns[0] || null,
             lastShift: guard.shifts[0] || null,
@@ -447,4 +625,255 @@ const getGuardProfile = async (req, res, next) => {
     }
 };
 exports.getGuardProfile = getGuardProfile;
+// ── Leave Management ─────────────────────────────────────────────────────────
+const createLeave = async (req, res, next) => {
+    try {
+        const { guardId, startDate, endDate, reason } = req.body;
+        if (!guardId || !startDate || !endDate || !reason) {
+            return next(new error_middleware_1.AppError('guardId, startDate, endDate, and reason are required', 400));
+        }
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return next(new error_middleware_1.AppError('Invalid date format', 400));
+        }
+        if (start > end) {
+            return next(new error_middleware_1.AppError('startDate cannot be after endDate', 400));
+        }
+        const guard = await prisma_1.prisma.guard.findUnique({ where: { id: guardId } });
+        if (!guard)
+            return next(new error_middleware_1.AppError('Guard not found', 404));
+        // Conflict check: no overlapping APPROVED leaves
+        const conflict = await prisma_1.prisma.guardLeave.findFirst({
+            where: {
+                guardId,
+                status: 'APPROVED',
+                startDate: { lte: end },
+                endDate: { gte: start },
+            },
+        });
+        if (conflict)
+            return next(new error_middleware_1.AppError('Guard already has an approved leave overlapping these dates', 409));
+        const leave = await prisma_1.prisma.guardLeave.create({
+            data: { guardId, startDate: start, endDate: end, reason, createdById: req.user.userId },
+        });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'CREATE_GUARD_LEAVE', 'GuardLeave', leave.id);
+        return (0, response_util_1.sendSuccess)(res, 201, 'Leave assigned successfully', leave);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.createLeave = createLeave;
+const getLeaves = async (req, res, next) => {
+    try {
+        const guardId = typeof req.query.guardId === 'string' ? req.query.guardId : undefined;
+        const where = guardId ? { guardId } : {};
+        const leaves = await prisma_1.prisma.guardLeave.findMany({
+            where,
+            include: { guard: { select: { name: true, badgeNumber: true } } },
+            orderBy: { startDate: 'desc' },
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Guard leaves', leaves);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getLeaves = getLeaves;
+const cancelLeave = async (req, res, next) => {
+    try {
+        const id = req.params.id;
+        const leave = await prisma_1.prisma.guardLeave.findUnique({ where: { id } });
+        if (!leave)
+            return next(new error_middleware_1.AppError('Leave record not found', 404));
+        if (leave.status === 'CANCELLED')
+            return next(new error_middleware_1.AppError('Leave is already cancelled', 400));
+        const updated = await prisma_1.prisma.guardLeave.update({
+            where: { id },
+            data: { status: 'CANCELLED' },
+        });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'CANCEL_GUARD_LEAVE', 'GuardLeave', id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Leave cancelled', updated);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.cancelLeave = cancelLeave;
+// ── Salary Management ────────────────────────────────────────────────────────
+const BASE_SALARY = 15000; // ₹ per month
+const LEAVE_DEDUCTION_PER_DAY = 500; // ₹ per approved leave day
+// Calculates overlap days between a leave and the given month
+const overlapDays = (leaveStart, leaveEnd, monthStart, monthEnd) => {
+    const start = leaveStart < monthStart ? monthStart : leaveStart;
+    const end = leaveEnd > monthEnd ? monthEnd : leaveEnd;
+    if (start > end)
+        return 0;
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+};
+// Manager-facing history across all guards. With no month filter this is a
+// pure browse of whatever GuardSalary rows already exist (past months are
+// fixed, nothing to generate). With a month filter, every active guard in
+// the property is guaranteed a row for that month - mirroring getSalarySlip's
+// per-guard upsert but applied to the whole roster - so the manager sees
+// every guard's paid/pending status for "this month" even before anyone
+// has opened their individual slip.
+const listSalaries = async (req, res, next) => {
+    try {
+        const month = typeof req.query.month === 'string' ? req.query.month : undefined;
+        if (!month) {
+            const salaries = await prisma_1.prisma.guardSalary.findMany({
+                where: { guard: { propertyId: req.user.propertyId } },
+                include: { guard: { select: { id: true, name: true, badgeNumber: true } } },
+                orderBy: [{ monthYear: 'desc' }, { createdAt: 'desc' }],
+            });
+            return (0, response_util_1.sendSuccess)(res, 200, 'Salary history', salaries);
+        }
+        const [year, mon] = month.split('-').map(Number);
+        const monthStart = new Date(year, mon - 1, 1);
+        const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999);
+        const guards = await prisma_1.prisma.guard.findMany({
+            where: { propertyId: req.user.propertyId, user: { isActive: true } },
+            select: { id: true, name: true, badgeNumber: true },
+            orderBy: { name: 'asc' },
+        });
+        const salaries = await Promise.all(guards.map(async (guard) => {
+            const existing = await prisma_1.prisma.guardSalary.findUnique({ where: { guardId_monthYear: { guardId: guard.id, monthYear: month } } });
+            if (existing)
+                return { ...existing, guard };
+            const leaves = await prisma_1.prisma.guardLeave.findMany({
+                where: { guardId: guard.id, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+            });
+            const leaveDays = leaves.reduce((sum, l) => sum + overlapDays(l.startDate, l.endDate, monthStart, monthEnd), 0);
+            const deductions = Math.min(leaveDays * LEAVE_DEDUCTION_PER_DAY, BASE_SALARY);
+            const netAmount = BASE_SALARY - deductions;
+            const created = await prisma_1.prisma.guardSalary.upsert({
+                where: { guardId_monthYear: { guardId: guard.id, monthYear: month } },
+                update: {},
+                create: { guardId: guard.id, monthYear: month, baseSalary: BASE_SALARY, deductions, netAmount },
+            });
+            return { ...created, guard };
+        }));
+        return (0, response_util_1.sendSuccess)(res, 200, 'Salary history', salaries);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.listSalaries = listSalaries;
+const getSalarySlip = async (req, res, next) => {
+    try {
+        const id = req.params.id; // guard id
+        const month = typeof req.query.month === 'string' ? req.query.month : undefined; // e.g. "2026-08", defaults to current month
+        const guard = await prisma_1.prisma.guard.findUnique({
+            where: { id },
+            select: { id: true, name: true, badgeNumber: true },
+        });
+        if (!guard)
+            return next(new error_middleware_1.AppError('Guard not found', 404));
+        const monthYear = month || new Date().toISOString().slice(0, 7);
+        const [year, mon] = monthYear.split('-').map(Number);
+        const monthStart = new Date(year, mon - 1, 1);
+        const monthEnd = new Date(year, mon, 0, 23, 59, 59, 999); // last ms of month
+        // Find any existing PAID record — don't recalculate if already paid
+        const existing = await prisma_1.prisma.guardSalary.findUnique({ where: { guardId_monthYear: { guardId: id, monthYear } } });
+        if (existing?.status === 'PAID') {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Salary slip', { ...existing, guard });
+        }
+        // Calculate leave deductions for this month
+        const leaves = await prisma_1.prisma.guardLeave.findMany({
+            where: { guardId: id, status: 'APPROVED', startDate: { lte: monthEnd }, endDate: { gte: monthStart } },
+        });
+        const leaveDays = leaves.reduce((sum, l) => sum + overlapDays(l.startDate, l.endDate, monthStart, monthEnd), 0);
+        const deductions = Math.min(leaveDays * LEAVE_DEDUCTION_PER_DAY, BASE_SALARY);
+        const netAmount = BASE_SALARY - deductions;
+        // Upsert a PENDING record so we have a stable ID for payment
+        const salary = await prisma_1.prisma.guardSalary.upsert({
+            where: { guardId_monthYear: { guardId: id, monthYear } },
+            update: { baseSalary: BASE_SALARY, deductions, netAmount },
+            create: { guardId: id, monthYear, baseSalary: BASE_SALARY, deductions, netAmount },
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Salary slip', {
+            ...salary,
+            guard,
+            leaveDays,
+            deductionPerDay: LEAVE_DEDUCTION_PER_DAY,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getSalarySlip = getSalarySlip;
+const createSalaryOrder = async (req, res, next) => {
+    try {
+        if (!razorpay_1.razorpay)
+            return next(new error_middleware_1.AppError('Payment gateway not configured', 500));
+        const id = req.params.id; // guardSalary id
+        const salary = await prisma_1.prisma.guardSalary.findUnique({ where: { id }, include: { guard: { select: { name: true } } } });
+        if (!salary)
+            return next(new error_middleware_1.AppError('Salary record not found', 404));
+        if (salary.status === 'PAID')
+            return next(new error_middleware_1.AppError('Salary already paid', 400));
+        // ponytail: use UI-edited amount if provided, else fall back to stored netAmount
+        const finalAmount = (req.body?.overrideAmount && Number(req.body.overrideAmount) > 0)
+            ? Number(req.body.overrideAmount)
+            : salary.netAmount;
+        const amountPaise = Math.round(finalAmount * 100);
+        const order = await razorpay_1.razorpay.orders.create({
+            amount: amountPaise,
+            currency: 'INR',
+            receipt: salary.id,
+            notes: { guardSalaryId: salary.id, guard: salary.guard?.name || 'Guard' },
+        });
+        await prisma_1.prisma.guardSalary.update({ where: { id }, data: { razorpayOrderId: order.id } });
+        return (0, response_util_1.sendSuccess)(res, 201, 'Order created', {
+            orderId: order.id,
+            amount: amountPaise,
+            currency: 'INR',
+            keyId: env_1.env.RAZORPAY_KEY_ID,
+            salaryId: salary.id,
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.createSalaryOrder = createSalaryOrder;
+const verifySalaryPayment = async (req, res, next) => {
+    try {
+        if (!env_1.env.RAZORPAY_KEY_SECRET)
+            return next(new error_middleware_1.AppError('Payment gateway not configured', 500));
+        const id = req.params.id; // guardSalary id
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return next(new error_middleware_1.AppError('Missing Razorpay payment fields', 400));
+        }
+        const salary = await prisma_1.prisma.guardSalary.findUnique({ where: { id } });
+        if (!salary)
+            return next(new error_middleware_1.AppError('Salary record not found', 404));
+        if (salary.razorpayOrderId !== razorpay_order_id)
+            return next(new error_middleware_1.AppError('Order ID mismatch', 400));
+        if (salary.status === 'PAID')
+            return (0, response_util_1.sendSuccess)(res, 200, 'Already paid', salary);
+        const expectedSig = crypto_1.default
+            .createHmac('sha256', env_1.env.RAZORPAY_KEY_SECRET)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+        if (expectedSig !== razorpay_signature) {
+            return next(new error_middleware_1.AppError('Payment signature verification failed', 400));
+        }
+        const updated = await prisma_1.prisma.guardSalary.update({
+            where: { id },
+            data: { status: 'PAID', transactionId: razorpay_payment_id, paidAt: new Date() },
+        });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'PAY_GUARD_SALARY', 'GuardSalary', id);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Salary payment verified', updated);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.verifySalaryPayment = verifySalaryPayment;
 //# sourceMappingURL=guard.controller.js.map

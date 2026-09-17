@@ -12,13 +12,16 @@ if (!connectionString) {
 const pool = new pg_1.Pool({
     connectionString,
     ssl: connectionString.includes('supabase.com') ? { rejectUnauthorized: false } : undefined,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
 });
 const adapter = new adapter_pg_1.PrismaPg(pool);
 const globalForPrisma = globalThis;
 exports.prisma = globalForPrisma.prisma ??
     new client_1.PrismaClient({
         adapter,
-        log: ['query', 'error', 'warn'],
+        log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error', 'warn'],
     });
 if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.prisma = exports.prisma;

@@ -28,13 +28,22 @@ const errorHandler = (err, req, res, next) => {
     if (err.name === 'PrismaClientKnownRequestError') {
         // Handle specific Prisma errors like unique constraint violations
         if (err.code === 'P2002') {
-            return (0, response_util_1.sendError)(res, 409, 'Duplicate record found');
+            const target = err.meta?.target;
+            let message = 'Duplicate record found';
+            if (target && Array.isArray(target)) {
+                message = `A record with this ${target.join(', ')} already exists.`;
+            }
+            return (0, response_util_1.sendError)(res, 409, message);
         }
     }
     if (err.isOperational) {
         return (0, response_util_1.sendError)(res, err.statusCode, err.message);
     }
-    // Programming or other unknown error: don't leak error details in prod, but we're debugging
+    // Programming or other unknown error: never leak internals (stack traces, file
+    // paths, Prisma query fragments) to the client in production.
+    if (process.env.NODE_ENV === 'production') {
+        return (0, response_util_1.sendError)(res, 500, 'Internal Server Error');
+    }
     return (0, response_util_1.sendError)(res, 500, `Internal Server Error: ${err.message}`, { stack: err.stack, name: err.name });
 };
 exports.errorHandler = errorHandler;

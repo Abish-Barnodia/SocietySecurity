@@ -38,6 +38,7 @@ const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const audit_util_1 = require("../../utils/audit.util");
+const parking_util_1 = require("../../utils/parking.util");
 const requestWalkin = async (req, res, next) => {
     try {
         const { unitId, entryPointId, visitorName, visitorPhone, purpose, gatePhotoUrl, gatePhotoBase64, vehicleNumber } = req.body;
@@ -73,26 +74,31 @@ const requestWalkin = async (req, res, next) => {
                 status: 'PENDING_APPROVAL',
                 visitorName,
                 visitorPhone,
-                notes: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
+                vehicleNumber,
+                notes: purpose,
                 gatePhotoUrl: finalPhotoUrl
             }
         });
-        await (0, audit_util_1.auditLog)(req.user.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
         // Broadcast to unit room via Socket.io
         const io = req.app.get('io');
         io?.to(`unit_${unitId}`).emit('walkin_request', {
             entryId: entry.id,
             visitorName,
-            purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : purpose,
+            purpose,
+            vehicleNumber,
             gatePhotoUrl: finalPhotoUrl
         });
+        // Both run after the resident-facing notification (above), not before —
+        // neither is needed for it, and auditLog already swallows its own errors.
+        await (0, parking_util_1.assignParkingSlot)(entry.id, targetUnit.propertyId, vehicleNumber);
+        (0, audit_util_1.auditLog)(req.user.userId, 'REQUEST_WALKIN', 'Entry', entry.id);
         // Notify all residents in the unit via push using the shared alert utility
         await prisma_1.prisma.walkinApproval.create({
             data: {
                 entryId: entry.id,
                 residentId: targetUnit.residents[0].id, // Assign to the first resident (usually primary)
                 visitorName,
-                purpose: vehicleNumber ? `${purpose || ''} (Vehicle: ${vehicleNumber})`.trim() : (purpose || ''),
+                purpose: purpose || '',
                 timeoutAt: new Date(Date.now() + 2 * 60 * 1000) // 2 minutes timeout
             }
         });
@@ -104,6 +110,13 @@ const requestWalkin = async (req, res, next) => {
             targetUserIds: targetUnit.residents.map((r) => r.userId),
             propertyId: targetUnit.propertyId,
             entryId: entry.id,
+            imageUrl: finalPhotoUrl,
+            dataOnly: false,
+            extraData: {
+                type: 'VISITOR_APPROVAL',
+                visitorName,
+                timeoutAt: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+            },
         });
         return (0, response_util_1.sendSuccess)(res, 201, 'Walk-in request sent to residents', entry);
     }
@@ -141,33 +154,32 @@ const respondWalkin = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { status, notes } = req.body;
-        const currentResident = await prisma_1.prisma.resident.findUnique({
-            where: { userId: req.user.userId }
-        });
-        if (!currentResident)
+        if (!req.user.unitId)
             return next(new error_middleware_1.AppError('Resident context not found', 404));
         const entry = await prisma_1.prisma.entry.findUnique({ where: { id }, include: { walkinApproval: true } });
         if (!entry)
             return next(new error_middleware_1.AppError('Entry not found', 404));
-        if (entry.unitId !== currentResident.unitId) {
+        if (entry.unitId !== req.user.unitId) {
             return next(new error_middleware_1.AppError('Unauthorized to respond to this request', 403));
         }
         if (entry.status !== 'PENDING_APPROVAL') {
             return next(new error_middleware_1.AppError(`Request already ${entry.status.toLowerCase()}`, 400));
         }
-        // A QR-scan approval ticket can still show Entry.status === 'PENDING_APPROVAL'
-        // in the brief window between its deadline passing and the next timeout-job
-        // tick — this closes that race, independent of the job's polling interval.
         if (entry.walkinApproval && (entry.walkinApproval.decision || entry.walkinApproval.timeoutAt < new Date())) {
             return next(new error_middleware_1.AppError('Request already resolved or timed out', 400));
         }
-        const updatedEntry = await prisma_1.prisma.entry.update({
-            where: { id },
+        // Atomic update: ensure we only update if it's still PENDING_APPROVAL
+        const updateResult = await prisma_1.prisma.entry.updateMany({
+            where: { id, status: 'PENDING_APPROVAL' },
             data: {
                 status, // 'APPROVED' or 'DENIED'
                 notes: notes ? `${entry.notes || ''} | Res: ${notes}` : entry.notes
             }
         });
+        if (updateResult.count === 0) {
+            return next(new error_middleware_1.AppError('Request already resolved by another family member', 400));
+        }
+        const updatedEntry = await prisma_1.prisma.entry.findUnique({ where: { id } });
         if (entry.walkinApproval) {
             await prisma_1.prisma.walkinApproval.update({
                 where: { entryId: id },
@@ -178,11 +190,32 @@ const respondWalkin = async (req, res, next) => {
                 data: { outcome: status === 'APPROVED' ? 'CLEARED' : 'DENIED' }
             });
         }
-        await (0, audit_util_1.auditLog)(req.user.userId, 'RESPOND_WALKIN', 'Entry', id);
         // Notify Guard App — room is `guard:${id}` (colon), matching what
         // socket.handler.ts actually joins guards to on connect.
         const io = req.app.get('io');
         io?.to(`guard:${entry.guardId}`).emit(entry.walkinApproval ? 'visitor_approval_response' : 'walkin_response', { entryId: entry.id, status });
+        // Whichever household member responds first needs to silence the ringing
+        // alert on every other family member's phone — mirrors the same
+        // unit-room broadcast visitorApprovalTimeout.job.ts already uses for the
+        // timeout case, which this endpoint was missing entirely.
+        io?.to(`unit_${entry.unitId}`).emit('walkin_resolved', { entryId: entry.id, status });
+        const householdUsers = await prisma_1.prisma.user.findMany({
+            where: { resident: { unitId: entry.unitId } },
+            select: { fcmTokens: true },
+        });
+        const resolveTokens = householdUsers.flatMap((u) => u.fcmTokens);
+        if (resolveTokens.length) {
+            const { sendPush } = await Promise.resolve().then(() => __importStar(require('../../utils/push.util')));
+            sendPush(resolveTokens, {
+                title: '',
+                body: '',
+                dataOnly: true,
+                data: { type: 'VISITOR_APPROVAL_RESOLVED', entryId: entry.id, status },
+            }).catch(() => { });
+        }
+        // auditLog swallows its own errors and never affects the outcome — no
+        // reason to make the guard/resident wait on it after the decision is in.
+        (0, audit_util_1.auditLog)(req.user.userId, 'RESPOND_WALKIN', 'Entry', id);
         return (0, response_util_1.sendSuccess)(res, 200, `Walk-in ${status.toLowerCase()}`, updatedEntry);
     }
     catch (err) {
@@ -193,13 +226,13 @@ exports.respondWalkin = respondWalkin;
 const callResident = async (req, res, next) => {
     try {
         const id = req.params.id;
-        const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-        if (!guard)
+        const guardId = req.user.guardId;
+        if (!guardId)
             return next(new error_middleware_1.AppError('Guard profile not found', 404));
         const entry = await prisma_1.prisma.entry.findUnique({ where: { id }, include: { walkinApproval: true } });
         if (!entry)
             return next(new error_middleware_1.AppError('Entry not found', 404));
-        if (entry.guardId !== guard.id)
+        if (entry.guardId !== guardId)
             return next(new error_middleware_1.AppError('Unauthorized: not your entry', 403));
         if (!entry.walkinApproval || entry.walkinApproval.decision !== 'TIMEOUT') {
             return next(new error_middleware_1.AppError('Call Resident is only available after the approval window times out', 400));
@@ -216,19 +249,7 @@ const callResident = async (req, res, next) => {
 exports.callResident = callResident;
 const getPendingWalkins = async (req, res, next) => {
     try {
-        let propertyId;
-        if (req.user.role === 'GUARD') {
-            const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
-            if (guard)
-                propertyId = guard.propertyId;
-        }
-        else {
-            const user = await prisma_1.prisma.user.findUnique({
-                where: { id: req.user.userId },
-                include: { manager: true, committee: true }
-            });
-            propertyId = user?.manager?.propertyId;
-        }
+        const propertyId = req.user.propertyId;
         if (!propertyId && req.user.role !== 'COMMITTEE') {
             return next(new error_middleware_1.AppError('No property context found', 400));
         }

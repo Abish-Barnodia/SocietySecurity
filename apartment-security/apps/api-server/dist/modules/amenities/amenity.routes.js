@@ -10,8 +10,10 @@ const amenity_schema_1 = require("./amenity.schema");
 const router = (0, express_1.Router)();
 exports.amenityRouter = router;
 router.use(auth_middleware_1.authenticate);
-// Residents can view amenities
-router.get('/', (0, role_middleware_1.requireRole)('RESIDENT'), amenity_controller_1.getAmenities);
+// Residents view bookable amenities; managers view/manage the full list
+router.get('/', (0, role_middleware_1.requireRole)('RESIDENT', 'MANAGER', 'COMMITTEE'), amenity_controller_1.getAmenities);
+router.post('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, validate_middleware_1.validate)(amenity_schema_1.createAmenitySchema), amenity_controller_1.createAmenity);
+router.put('/:id', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, validate_middleware_1.validate)(amenity_schema_1.updateAmenitySchema), amenity_controller_1.updateAmenity);
 // Residents can book
 router.post('/book', (0, role_middleware_1.requireRole)('RESIDENT'), (0, validate_middleware_1.validate)(amenity_schema_1.bookAmenitySchema), amenity_controller_1.bookAmenity);
 // Residents can cancel their own booking

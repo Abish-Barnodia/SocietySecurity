@@ -8,16 +8,13 @@ const audit_util_1 = require("../../utils/audit.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const residentContext_util_1 = require("../../utils/residentContext.util");
 const alertEscalation_job_1 = require("../../jobs/alertEscalation.job");
+const redis_1 = require("../../config/redis");
 const getOperationsOverview = async (req, res, next) => {
     try {
-        const user = await prisma_1.prisma.user.findUnique({
-            where: { id: req.user.userId },
-            include: { manager: true, committee: true }
-        });
         // Quick fix: For now we assume Manager
-        if (!user?.manager)
+        if (!req.user.managerId || !req.user.propertyId)
             return next(new error_middleware_1.AppError('Only managers can access this', 403));
-        const pId = user.manager.propertyId;
+        const pId = req.user.propertyId;
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const [totalEntriesToday, activeVisitors, guardsOnDuty, openIncidents, unacknowledgedAlerts, pendingWalkins,] = await Promise.all([
@@ -87,7 +84,29 @@ const getAuditLogs = async (req, res, next) => {
     }
 };
 exports.getAuditLogs = getAuditLogs;
+// A past month's report data is immutable once the month has ended, so it's cached
+// for a full day; the current (still-accumulating) month gets a short TTL so numbers
+// stay reasonably fresh without recomputing this whole aggregation on every request.
+// ponytail: flat TTL, no explicit invalidation — matches the pattern already used
+// elsewhere in this codebase (offline.controller.ts, auth.middleware.ts).
 const computeMonthlyReportData = async (propertyId, month, year) => {
+    const cacheKey = `monthlyReport:${propertyId}:${year}-${month}`;
+    try {
+        const cached = await redis_1.redis.get(cacheKey);
+        if (cached)
+            return { ...JSON.parse(cached), generatedAt: new Date() };
+    }
+    catch {
+        // Redis unavailable — fall through to computing it fresh below.
+    }
+    const reportData = await computeMonthlyReportDataUncached(propertyId, month, year);
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === parseInt(year) && now.getMonth() + 1 === parseInt(month);
+    const ttlSeconds = isCurrentMonth ? 5 * 60 : 24 * 60 * 60;
+    redis_1.redis.setex(cacheKey, ttlSeconds, JSON.stringify(reportData)).catch(() => { });
+    return reportData;
+};
+const computeMonthlyReportDataUncached = async (propertyId, month, year) => {
     const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
     const [property, totalEntries, digitalEntries, incidents, guardCompliance, activePassCount, anomalyFlags,] = await Promise.all([
@@ -158,13 +177,9 @@ const generateMonthlyReport = async (req, res, next) => {
         const { month, year } = req.query;
         if (!month || !year)
             return next(new error_middleware_1.AppError('month and year are required', 400));
-        const user = await prisma_1.prisma.user.findUnique({
-            where: { id: req.user.userId },
-            include: { manager: true }
-        });
-        if (!user?.manager)
+        if (!req.user.managerId || !req.user.propertyId)
             return next(new error_middleware_1.AppError('Only managers can generate reports', 403));
-        const reportData = await computeMonthlyReportData(user.manager.propertyId, month, year);
+        const reportData = await computeMonthlyReportData(req.user.propertyId, month, year);
         await (0, audit_util_1.auditLog)(req.user.userId, 'GENERATE_REPORT', 'Report', `${year}-${month}`);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=security-report-${year}-${month}.pdf`);

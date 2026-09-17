@@ -35,6 +35,8 @@ import { maintenanceRouter } from './modules/maintenance/maintenance.routes';
 import { fundRouter } from './modules/funds/fund.routes';
 import { settingsRouter } from './modules/settings/settings.routes';
 import { managerAccountsRouter } from './modules/managerAccounts/managerAccounts.routes';
+import demoRequestRouter from './modules/demoRequests/demoRequest.routes';
+import superAdminRouter from './modules/superAdmin/superAdmin.routes';
 
 const app = express();
 
@@ -115,6 +117,8 @@ app.use('/api/v1/maintenance', maintenanceRouter);
 app.use('/api/v1/funds', fundRouter);
 app.use('/api/v1/settings', settingsRouter);
 app.use('/api/v1/manager-accounts', managerAccountsRouter);
+app.use('/api/v1/demo-requests', demoRequestRouter);
+app.use('/api/v1/super-admin', superAdminRouter);
 
 // 404 handler
 app.use(notFoundHandler);

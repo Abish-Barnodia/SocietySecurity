@@ -14,6 +14,7 @@ import EventsManagement from './EventsManagement';
 import MaintenanceManagement from './MaintenanceManagement';
 import FundManagement from './FundManagement';
 import Login from './Login';
+import LandingPage from './LandingPage';
 import ManagerProfile from './ManagerProfile';
 import Settings, { applyManagerTheme } from './Settings';
 import CCTVMonitoring from './CCTVMonitoring';
@@ -48,7 +49,9 @@ window.fetch = async (...args: Parameters<typeof fetch>) => {
 };
 
 const App: React.FC = () => {
-  // ponytail: derive initial tab from URL path so deep-links and refreshes land on the right page.
+  // ponytail: capture path at construction time — before the URL-sync effect
+  // can rewrite '/' to '/dashboard', so the landing page check below is reliable.
+  const [initialPath] = useState(() => window.location.pathname);
   const tabFromPath = () => {
     const p = window.location.pathname.replace(/^\//, '');
     return p === '' || p === 'dashboard' ? 'dashboard' : p;
@@ -71,6 +74,8 @@ const App: React.FC = () => {
   // instant an alert is raised or acknowledged, by this manager or another
   // one — not just on the next 15s poll some other page happens to run.
   const [alertStatuses, setAlertStatuses] = useState<Record<string, string>>({});
+  // ponytail: drives the Sign-In transition from the landing page.
+  const [showLogin, setShowLogin] = useState(false);
   const unreadAlertCount = Object.values(alertStatuses).filter((s) => s !== 'ACKNOWLEDGED').length;
 
   useEffect(() => {
@@ -85,11 +90,13 @@ const App: React.FC = () => {
     return () => window.removeEventListener('manager-session-expired', onSessionExpired);
   }, []);
 
-  // Sync URL when tab changes, and listen for back/forward navigation.
+  // Sync URL when tab changes — only when authenticated so we don't clobber
+  // '/' → '/dashboard' before the landing page check can run.
   useEffect(() => {
+    if (!isAuthenticated) return;
     const path = `/${activeTab}`;
     if (window.location.pathname !== path) history.pushState(null, '', path);
-  }, [activeTab]);
+  }, [activeTab, isAuthenticated]);
 
   useEffect(() => {
     const onPop = () => setActiveTab(tabFromPath());
@@ -186,19 +193,30 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    // ponytail: redirect URL to /login so the address bar matches what's shown.
-    // Save the originally requested path to restore it after login.
-    if (window.location.pathname !== '/login') {
-      history.replaceState({ returnTo: window.location.pathname }, '', '/login');
-    }
+    // ponytail: show landing page at '/', login at '/login'.
+    const path = window.location.pathname;
     const returnTo = (history.state?.returnTo && history.state.returnTo !== '/login')
       ? history.state.returnTo
       : '/dashboard';
     const handleLoginWithReturn = (token: string, user: any) => {
       handleLogin(token, user);
-      const path = returnTo === '/dashboard' ? '/' : returnTo;
-      history.replaceState(null, '', path);
+      const dest = returnTo === '/dashboard' ? '/' : returnTo;
+      history.replaceState(null, '', dest);
     };
+    // Landing page at root (and user hasn't clicked Sign In yet)
+    if ((initialPath === '/' || initialPath === '') && !showLogin) {
+      return (
+        <LandingPage
+          onGoToLogin={() => {
+            history.pushState({ returnTo: '/dashboard' }, '', '/login');
+            setShowLogin(true);
+          }}
+        />
+      );
+    }
+    if (path !== '/login') {
+      history.replaceState({ returnTo: path }, '', '/login');
+    }
     return <Login onLogin={handleLoginWithReturn} />;
   }
 

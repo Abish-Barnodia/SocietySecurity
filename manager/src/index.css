@@ -939,3 +939,77 @@ body {
   }
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   LANDING PAGE STYLES — appended; do not touch app styles
+   ═══════════════════════════════════════════════════════ */
+
+/* Animations */
+@keyframes lpSlideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes lpFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes lpModalIn {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes lpFloat {
+  0%,100% { transform: translateY(0px); }
+  50%     { transform: translateY(-10px); }
+}
+@keyframes lpDropdownIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Fade-in on scroll */
+.lp-fade-in {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.65s ease, transform 0.65s ease;
+}
+.lp-fade-in.lp-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Nav: hide hamburger on desktop, hide nav links on mobile */
+.lp-hamburger { display: none; }
+.lp-hide-mobile { display: flex; }
+
+/* Hero responsive */
+.lp-hero-grid { grid-template-columns: 1fr 1fr; }
+
+/* ── Tablet (≤ 1024px) ── */
+@media (max-width: 1024px) {
+  .lp-hero-grid       { grid-template-columns: 1fr; gap: 40px; }
+  .lp-hero-img-wrap   { display: none; }
+  .lp-cards-grid      { grid-template-columns: 1fr 1fr !important; }
+  .lp-steps-grid      { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
+  .lp-step-connector  { display: none; }
+  .lp-stats-grid      { grid-template-columns: 1fr 1fr !important; }
+  .lp-footer-grid     { grid-template-columns: 1fr 1fr !important; }
+  .lp-flow-grid       { grid-template-columns: 1fr !important; }
+}
+
+/* ── Mobile (≤ 768px) ── */
+@media (max-width: 768px) {
+  .lp-nav-links    { display: none; }
+  .lp-hamburger    { display: flex; }
+  .lp-hide-mobile  { display: none !important; }
+  .lp-cards-grid   { grid-template-columns: 1fr !important; }
+  .lp-steps-grid   { grid-template-columns: 1fr !important; gap: 28px !important; }
+  .lp-stats-grid   { grid-template-columns: 1fr 1fr !important; }
+  .lp-footer-grid  { grid-template-columns: 1fr !important; }
+  .lp-form-grid    { grid-template-columns: 1fr !important; }
+}
+
+/* ── Small mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+  .lp-stats-grid { grid-template-columns: 1fr 1fr !important; }
+  .lp-float-card { display: none !important; }
+}

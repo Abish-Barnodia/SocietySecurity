@@ -5,6 +5,7 @@
   "scripts": {
     "dev:api": "npm run dev --prefix apps/api-server",
     "dev:resident": "npm run start --prefix apps/resident-app",
+    "dev:super-admin": "npm run dev --prefix apps/super-admin",
     "test:api": "npm run test --prefix apps/api-server"
   }
 }

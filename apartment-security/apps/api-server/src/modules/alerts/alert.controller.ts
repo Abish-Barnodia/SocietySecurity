@@ -10,64 +10,44 @@ import { acknowledgeAlert } from '../../utils/alert.util';
 
 export const broadcastAlert = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { type, severity, title, message, targetRoles } = req.body;
+    const { type, severity, priority: explicitPriority, title, message, targetRoles, location, photoBase64 } = req.body;
 
     const propertyId = req.user!.propertyId;
 
     if (!propertyId) return next(new AppError('No property context found for alert broadcast', 400));
 
-    if (severity === 'CRITICAL' && req.user!.role !== 'MANAGER') {
-      return next(new AppError('Only managers can broadcast critical alerts', 403));
+    // Map severity or explicit priority to AlertPriority
+    let priority: any = explicitPriority || 'P3';
+    if (severity === 'CRITICAL' || explicitPriority === 'P1') priority = 'P1';
+    else if (severity === 'HIGH' || explicitPriority === 'P2') priority = 'P2';
+    else if (severity === 'LOW' || severity === 'MEDIUM' || explicitPriority === 'P3') priority = 'P3';
+
+    let imageUrl: string | undefined = undefined;
+    if (photoBase64) {
+      try {
+        const { uploadBuffer } = await import('../../utils/objectStorage.util');
+        const buffer = Buffer.from(photoBase64, 'base64');
+        imageUrl = await uploadBuffer(buffer, `incident-alerts/${Date.now()}.jpg`, 'image/jpeg');
+      } catch (uploadErr) {
+        console.warn('Failed to upload incident alert image:', uploadErr);
+      }
     }
 
-    // Map severity to AlertPriority
-    let priority: any = 'P3';
-    if (severity === 'CRITICAL') priority = 'P1';
-    else if (severity === 'HIGH') priority = 'P2';
+    const fullBody = location ? `${message}\n📍 Location: ${location}` : message;
+    const resolvedTitle = type ? `[${type}] ${title}` : title;
+    const resolvedRoles: any[] = (targetRoles && targetRoles.length > 0)
+      ? targetRoles
+      : ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'];
 
-    const alert = await prisma.alert.create({
-      data: {
-        propertyId,
-        priority,
-        title: `[${type}] ${title}`,
-        body: message,
-        channel: 'PUSH',
-        targetRoles: targetRoles || ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE']
-      }
+    const { triggerAlert } = await import('../../utils/alert.util');
+    const alert = await triggerAlert({
+      priority,
+      title: resolvedTitle,
+      body: fullBody,
+      targetRoles: resolvedRoles,
+      propertyId,
+      imageUrl,
     });
-
-    // 1. Broadcast via WebSocket scoped to this property only
-    io?.to(`property:${propertyId}`).emit('new_alert', alert);
-
-    // 2. Fetch users scoped to this property only to prevent cross-tenant notification
-    const targetUsers = await prisma.user.findMany({
-      where: {
-        role: { in: targetRoles || ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'] },
-        isActive: true,
-        OR: [
-          { guard: { propertyId } },
-          { manager: { propertyId } },
-          { resident: { unit: { propertyId } } },
-        ],
-      }
-    });
-
-    // 3. Send SMS if Critical
-    if (severity === 'CRITICAL') {
-      const phones = targetUsers.map(u => u.phone);
-      // In production, we'd batch these SMS calls or send to an SNS topic.
-      // For now, we simulate sending critical SMS.
-      if (env.NODE_ENV !== 'test') {
-         // await Promise.all(phones.map(p => sendSMS(p, `[URGENT] ${title}: ${message}`)));
-      }
-    }
-
-    // 4. Send Firebase FCM Pushes via the sendPush utility (batches 500 tokens, cleans invalid ones)
-    const fcmTokens = targetUsers.flatMap(u => u.fcmTokens);
-    if (fcmTokens.length > 0) {
-      const { sendPush } = await import('../../utils/push.util');
-      await sendPush(fcmTokens, { title: `[${type}] ${title}`, body: message });
-    }
 
     await auditLog(req.user!.userId, 'BROADCAST_ALERT', 'Alert', alert.id);
     return sendSuccess(res, 201, 'Alert broadcasted successfully', alert);

@@ -44,58 +44,43 @@ const env_1 = require("../../config/env");
 const alert_util_1 = require("../../utils/alert.util");
 const broadcastAlert = async (req, res, next) => {
     try {
-        const { type, severity, title, message, targetRoles } = req.body;
+        const { type, severity, priority: explicitPriority, title, message, targetRoles, location, photoBase64 } = req.body;
         const propertyId = req.user.propertyId;
         if (!propertyId)
             return next(new error_middleware_1.AppError('No property context found for alert broadcast', 400));
-        if (severity === 'CRITICAL' && req.user.role !== 'MANAGER') {
-            return next(new error_middleware_1.AppError('Only managers can broadcast critical alerts', 403));
-        }
-        // Map severity to AlertPriority
-        let priority = 'P3';
-        if (severity === 'CRITICAL')
+        // Map severity or explicit priority to AlertPriority
+        let priority = explicitPriority || 'P3';
+        if (severity === 'CRITICAL' || explicitPriority === 'P1')
             priority = 'P1';
-        else if (severity === 'HIGH')
+        else if (severity === 'HIGH' || explicitPriority === 'P2')
             priority = 'P2';
-        const alert = await prisma_1.prisma.alert.create({
-            data: {
-                propertyId,
-                priority,
-                title: `[${type}] ${title}`,
-                body: message,
-                channel: 'PUSH',
-                targetRoles: targetRoles || ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE']
+        else if (severity === 'LOW' || severity === 'MEDIUM' || explicitPriority === 'P3')
+            priority = 'P3';
+        let imageUrl = undefined;
+        if (photoBase64) {
+            try {
+                const { uploadBuffer } = await Promise.resolve().then(() => __importStar(require('../../utils/objectStorage.util')));
+                const buffer = Buffer.from(photoBase64, 'base64');
+                imageUrl = await uploadBuffer(buffer, `incident-alerts/${Date.now()}.jpg`, 'image/jpeg');
             }
-        });
-        // 1. Broadcast via WebSocket scoped to this property only
-        server_1.io?.to(`property:${propertyId}`).emit('new_alert', alert);
-        // 2. Fetch users scoped to this property only to prevent cross-tenant notification
-        const targetUsers = await prisma_1.prisma.user.findMany({
-            where: {
-                role: { in: targetRoles || ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'] },
-                isActive: true,
-                OR: [
-                    { guard: { propertyId } },
-                    { manager: { propertyId } },
-                    { resident: { unit: { propertyId } } },
-                ],
-            }
-        });
-        // 3. Send SMS if Critical
-        if (severity === 'CRITICAL') {
-            const phones = targetUsers.map(u => u.phone);
-            // In production, we'd batch these SMS calls or send to an SNS topic.
-            // For now, we simulate sending critical SMS.
-            if (env_1.env.NODE_ENV !== 'test') {
-                // await Promise.all(phones.map(p => sendSMS(p, `[URGENT] ${title}: ${message}`)));
+            catch (uploadErr) {
+                console.warn('Failed to upload incident alert image:', uploadErr);
             }
         }
-        // 4. Send Firebase FCM Pushes via the sendPush utility (batches 500 tokens, cleans invalid ones)
-        const fcmTokens = targetUsers.flatMap(u => u.fcmTokens);
-        if (fcmTokens.length > 0) {
-            const { sendPush } = await Promise.resolve().then(() => __importStar(require('../../utils/push.util')));
-            await sendPush(fcmTokens, { title: `[${type}] ${title}`, body: message });
-        }
+        const fullBody = location ? `${message}\n📍 Location: ${location}` : message;
+        const resolvedTitle = type ? `[${type}] ${title}` : title;
+        const resolvedRoles = (targetRoles && targetRoles.length > 0)
+            ? targetRoles
+            : ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'];
+        const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+        const alert = await triggerAlert({
+            priority,
+            title: resolvedTitle,
+            body: fullBody,
+            targetRoles: resolvedRoles,
+            propertyId,
+            imageUrl,
+        });
         await (0, audit_util_1.auditLog)(req.user.userId, 'BROADCAST_ALERT', 'Alert', alert.id);
         return (0, response_util_1.sendSuccess)(res, 201, 'Alert broadcasted successfully', alert);
     }

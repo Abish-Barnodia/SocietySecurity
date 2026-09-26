@@ -2,10 +2,13 @@ import { z } from 'zod';
 
 export const createAlertSchema = z.object({
   body: z.object({
-    type: z.enum(['SECURITY_BREACH', 'FIRE', 'MEDICAL', 'GENERAL_NOTICE', 'DURESS', 'MAINTENANCE']),
-    severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
-    title: z.string().min(3),
-    message: z.string().min(5),
+    type: z.enum(['SECURITY_BREACH', 'FIRE', 'MEDICAL', 'GENERAL_NOTICE', 'DURESS', 'MAINTENANCE', 'ACCIDENT', 'COMPLAINT']).or(z.string()),
+    severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+    priority: z.enum(['P1', 'P2', 'P3']).optional(),
+    title: z.string().min(2),
+    message: z.string().min(2),
+    location: z.string().optional(),
+    photoBase64: z.string().optional(),
     targetRoles: z.array(z.enum(['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'])).optional(), // Empty means all
   })
 });

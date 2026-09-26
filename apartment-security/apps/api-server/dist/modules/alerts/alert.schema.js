@@ -4,10 +4,13 @@ exports.vehicleAlertSchema = exports.triggerDuressSchema = exports.createAlertSc
 const zod_1 = require("zod");
 exports.createAlertSchema = zod_1.z.object({
     body: zod_1.z.object({
-        type: zod_1.z.enum(['SECURITY_BREACH', 'FIRE', 'MEDICAL', 'GENERAL_NOTICE', 'DURESS', 'MAINTENANCE']),
-        severity: zod_1.z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
-        title: zod_1.z.string().min(3),
-        message: zod_1.z.string().min(5),
+        type: zod_1.z.enum(['SECURITY_BREACH', 'FIRE', 'MEDICAL', 'GENERAL_NOTICE', 'DURESS', 'MAINTENANCE', 'ACCIDENT', 'COMPLAINT']).or(zod_1.z.string()),
+        severity: zod_1.z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+        priority: zod_1.z.enum(['P1', 'P2', 'P3']).optional(),
+        title: zod_1.z.string().min(2),
+        message: zod_1.z.string().min(2),
+        location: zod_1.z.string().optional(),
+        photoBase64: zod_1.z.string().optional(),
         targetRoles: zod_1.z.array(zod_1.z.enum(['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'])).optional(), // Empty means all
     })
 });

@@ -11,6 +11,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
 import { TranslationKey } from '../i18n/translations';
 import VehicleAlertModal from '../components/VehicleAlertModal';
+import IncidentAlertModal from '../components/IncidentAlertModal';
 
 type Priority = 'P1' | 'P2' | 'P3';
 
@@ -59,6 +60,7 @@ export default function AlertsScreen() {
   const [ackingId, setAckingId] = useState<string | null>(null);
 
   const [vehicleModalOpen, setVehicleModalOpen] = useState(false);
+  const [incidentModalOpen, setIncidentModalOpen] = useState(false);
 
   const loadAlerts = useCallback(async () => {
     try {
@@ -111,6 +113,12 @@ export default function AlertsScreen() {
   const handleVehicleAlertSent = () => {
     setVehicleModalOpen(false);
     Alert.alert(t('alerts_vehicleSentTitle'), t('alerts_vehicleSentMsg'));
+    loadAlerts();
+  };
+
+  const handleIncidentAlertSent = () => {
+    setIncidentModalOpen(false);
+    Alert.alert(t('incident_sent_title'), t('incident_sent_msg'));
     loadAlerts();
   };
 
@@ -211,10 +219,25 @@ export default function AlertsScreen() {
         )}
       </ScrollView>
 
+      {/* Floating Action Button (+) to Report Incident / Accident / Complaint */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.85}
+        onPress={() => setIncidentModalOpen(true)}
+      >
+        <Ionicons name="add" size={30} color={colors.white} />
+      </TouchableOpacity>
+
       <VehicleAlertModal
         visible={vehicleModalOpen}
         onClose={() => setVehicleModalOpen(false)}
         onSent={handleVehicleAlertSent}
+      />
+
+      <IncidentAlertModal
+        visible={incidentModalOpen}
+        onClose={() => setIncidentModalOpen(false)}
+        onSent={handleIncidentAlertSent}
       />
     </View>
   );
@@ -272,4 +295,22 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   ackButtonText: { fontSize: 14, fontWeight: '700' },
   acknowledgedRow: { flexDirection: 'row', alignItems: 'center' },
   acknowledgedText: { fontSize: 13, fontWeight: '600', color: colors.success },
+
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 99,
+  },
 });

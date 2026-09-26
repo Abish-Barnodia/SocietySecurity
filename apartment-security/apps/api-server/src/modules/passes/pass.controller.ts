@@ -3,7 +3,7 @@ import { prisma } from '../../config/prisma';
 import { sendSuccess, sendError } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
-import { generateSignedQRPayload } from '../../utils/qr.util';
+import { generateSignedQRPayload, verifySignedQRPayload } from '../../utils/qr.util';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 

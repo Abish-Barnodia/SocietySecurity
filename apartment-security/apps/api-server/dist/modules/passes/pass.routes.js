@@ -9,6 +9,8 @@ const pass_controller_1 = require("./pass.controller");
 const pass_schema_1 = require("./pass.schema");
 const router = (0, express_1.Router)();
 exports.passRouter = router;
+// Public pass verification for mobile QR code scan
+router.get('/public-verify', pass_controller_1.getPublicPassVerification);
 router.use(auth_middleware_1.authenticate);
 router.post('/', (0, role_middleware_1.requireRole)('RESIDENT', 'MANAGER', 'COMMITTEE'), (0, validate_middleware_1.validate)(pass_schema_1.createPassSchema), pass_controller_1.createPass);
 router.get('/', (0, role_middleware_1.requireRole)('RESIDENT'), pass_controller_1.getMyPasses);

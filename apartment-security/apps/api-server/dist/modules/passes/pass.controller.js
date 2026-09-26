@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllPasses = exports.verifyPass = exports.deletePass = exports.revokePass = exports.suspendPass = exports.getMyPasses = exports.createPass = void 0;
+exports.getPublicPassVerification = exports.getAllPasses = exports.verifyPass = exports.deletePass = exports.revokePass = exports.suspendPass = exports.getMyPasses = exports.createPass = void 0;
 const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
@@ -241,4 +241,114 @@ const getAllPasses = async (req, res, next) => {
     }
 };
 exports.getAllPasses = getAllPasses;
+// ponytail: Public pass verification for mobile QR code scans (HMAC cryptographically signed)
+const getPublicPassVerification = async (req, res, next) => {
+    try {
+        const token = req.query.token || req.query.qrPayload;
+        if (!token) {
+            return next(new error_middleware_1.AppError('Verification token is required', 400));
+        }
+        const parsedQr = (0, qr_util_1.verifySignedQRPayload)(token);
+        if (!parsedQr || !parsedQr.passId) {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Pass verification result', {
+                status: 'INVALID',
+                isValid: false,
+                reason: 'Invalid or tampered QR code token signature',
+                pass: null,
+            });
+        }
+        const pass = await prisma_1.prisma.pass.findUnique({
+            where: { id: parsedQr.passId },
+            include: {
+                resident: {
+                    select: {
+                        id: true,
+                        name: true,
+                        user: {
+                            select: {
+                                phone: true,
+                                email: true,
+                            },
+                        },
+                    },
+                },
+                unit: {
+                    select: {
+                        id: true,
+                        unitNumber: true,
+                        tower: true,
+                        property: {
+                            select: {
+                                id: true,
+                                name: true,
+                                city: true,
+                                address: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!pass) {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Pass verification result', {
+                status: 'NOT_FOUND',
+                isValid: false,
+                reason: 'Pass record not found in system',
+                pass: null,
+            });
+        }
+        const now = new Date();
+        const isExpired = now > pass.validUntil;
+        const isEarly = now < pass.validFrom;
+        const isActive = pass.status === 'ACTIVE' && !isExpired && !isEarly;
+        let statusText = 'ACTIVE';
+        let statusMessage = 'Pass is valid and clear for entry';
+        if (pass.status !== 'ACTIVE') {
+            statusText = pass.status;
+            statusMessage = `Pass has been ${pass.status.toLowerCase()}`;
+        }
+        else if (isExpired) {
+            statusText = 'EXPIRED';
+            statusMessage = 'Pass has expired';
+        }
+        else if (isEarly) {
+            statusText = 'NOT_YET_VALID';
+            statusMessage = 'Pass is not active yet';
+        }
+        return (0, response_util_1.sendSuccess)(res, 200, 'Pass verified successfully', {
+            status: statusText,
+            isValid: isActive,
+            message: statusMessage,
+            pass: {
+                id: pass.id,
+                visitorName: pass.visitorName,
+                visitorPhone: pass.visitorPhone,
+                type: pass.type,
+                validFrom: pass.validFrom,
+                validUntil: pass.validUntil,
+                purpose: pass.purpose,
+                status: pass.status,
+                createdAt: pass.createdAt,
+                hostResident: {
+                    name: pass.resident?.name || 'Resident',
+                    phone: pass.resident?.user?.phone || null,
+                },
+                unit: {
+                    unitNumber: pass.unit?.unitNumber || '',
+                    tower: pass.unit?.tower || '',
+                    formattedUnit: pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber,
+                },
+                society: {
+                    name: pass.unit?.property?.name || 'Apartment Society',
+                    city: pass.unit?.property?.city || '',
+                    address: pass.unit?.property?.address || '',
+                },
+            },
+        });
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getPublicPassVerification = getPublicPassVerification;
 //# sourceMappingURL=pass.controller.js.map

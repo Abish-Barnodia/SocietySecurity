@@ -17,8 +17,11 @@ const managerPortalLock_util_1 = require("../../utils/managerPortalLock.util");
 const supabaseAuth_util_1 = require("../../utils/supabaseAuth.util");
 const getPublicSocieties = async (req, res, next) => {
     try {
+        // Include ACTIVE and PENDING societies so newly provisioned societies
+        // appear in the login dropdown before their status is explicitly activated.
+        // Only SUSPENDED societies are excluded from the public list.
         const societies = await prisma_1.prisma.property.findMany({
-            where: { status: 'ACTIVE' },
+            where: { status: { in: ['ACTIVE', 'PENDING'] } },
             select: {
                 id: true,
                 name: true,

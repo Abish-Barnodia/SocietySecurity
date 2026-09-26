@@ -936,9 +936,15 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                 ✓ Payment Verified & Demo Activated
               </div>
               <h3 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginBottom: 10 }}>1-Month Demo Trial Active!</h3>
-              <p style={{ color: '#64748b', lineHeight: 1.7, marginBottom: 24, maxWidth: 500, margin: '0 auto 24px' }}>
-                Thank you! Your trial request for <strong style={{ color: '#0f172a' }}>{paymentSuccessInfo?.society || demoForm.societyName || 'your society'}</strong> has been registered. Our Super Admin team is setting up your manager portal credentials right now.
+              <p style={{ color: '#64748b', lineHeight: 1.7, marginBottom: 16, maxWidth: 500, margin: '0 auto 16px' }}>
+                Thank you! Your trial request for <strong style={{ color: '#0f172a' }}>{paymentSuccessInfo?.society || demoForm.societyName || 'your society'}</strong> has been registered.
               </p>
+
+              <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '12px 16px', marginBottom: 20, textAlign: 'center', color: '#065f46', fontSize: 13.5, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon icon="lucide:clock" size={17} color="#059669" />
+                <span>Within 24 hours, you will receive your manager portal login credentials and message.</span>
+              </div>
+
 
               {paymentSuccessInfo && (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '16px 20px', marginBottom: 28, textAlign: 'left' }}>

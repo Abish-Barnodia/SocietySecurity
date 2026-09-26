@@ -583,3 +583,44 @@
   overflow: hidden;
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ── Modern Skeleton Loading System ── */
+@keyframes sa-shimmer-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.sa-skeleton {
+  background: linear-gradient(
+    90deg,
+    #E2E8F0 0%,
+    #F8FAFC 50%,
+    #E2E8F0 100%
+  );
+  background-size: 200% 100%;
+  animation: sa-shimmer-pulse 1.6s infinite ease-in-out;
+  display: inline-block;
+  opacity: 0.85;
+}
+
+.super-admin-portal-root[data-theme="dark"] .sa-skeleton,
+[data-theme="dark"] .sa-skeleton {
+  background: linear-gradient(
+    90deg,
+    #1E293B 0%,
+    #334155 50%,
+    #1E293B 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0.9;
+}
+
+.sa-skeleton-row td {
+  background: transparent !important;
+  border-bottom: 1px solid var(--sa-border-color);
+}
+

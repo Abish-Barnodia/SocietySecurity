@@ -30,6 +30,9 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('superadmin_theme', theme);
+    return () => {
+      document.documentElement.removeAttribute('data-theme');
+    };
   }, [theme]);
 
   const toggleTheme = () => {

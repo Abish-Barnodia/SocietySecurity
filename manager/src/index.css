@@ -44,8 +44,7 @@
 [data-theme="dark"] .search-bar,
 [data-theme="dark"] .table-header-row,
 [data-theme="dark"] .table-row,
-[data-theme="dark"] .form-input,
-[data-theme="dark"] .login-right-side {
+[data-theme="dark"] .form-input {
   background-color: var(--bg-card);
 }
 
@@ -837,8 +836,8 @@ body {
 
 .login-left-side {
   flex: 1;
-  background: var(--bg-sidebar);
-  color: white;
+  background: #101312 !important;
+  color: white !important;
   padding: 48px;
   display: flex;
   flex-direction: column;
@@ -853,7 +852,33 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  background-color: white;
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.login-right-side h2 {
+  color: #0F172A !important;
+}
+
+.login-right-side p {
+  color: #64748B !important;
+}
+
+.login-right-side label {
+  color: #1E293B !important;
+}
+
+.login-right-side .form-input,
+.login-right-side input {
+  background-color: #F0F6FF !important;
+  border: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+.login-right-side .form-input:focus,
+.login-right-side input:focus {
+  background-color: #FFFFFF !important;
+  border-color: #00C896 !important;
 }
 
 /* ── Responsive: Tablet (≤ 1024px) ── */
@@ -938,6 +963,42 @@ body {
     padding: 32px 16px;
   }
 }
+
+/* ── Manager Dashboard Skeleton Loading System ── */
+@keyframes mgr-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.mgr-skeleton {
+  background: linear-gradient(
+    90deg,
+    #E2E8F0 0%,
+    #F1F5F9 50%,
+    #E2E8F0 100%
+  );
+  background-size: 200% 100%;
+  animation: mgr-shimmer 1.6s infinite ease-in-out;
+  border-radius: 6px;
+  display: inline-block;
+  opacity: 0.9;
+}
+
+[data-theme="dark"] .mgr-skeleton {
+  background: linear-gradient(
+    90deg,
+    #1E2624 0%,
+    #2B3532 50%,
+    #1E2624 100%
+  );
+  background-size: 200% 100%;
+  opacity: 0.95;
+}
+
 
 
 /* ═══════════════════════════════════════════════════════

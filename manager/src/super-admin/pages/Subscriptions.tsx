@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { Skeleton } from '../components/common/Skeleton';
 import { superAdminService } from '../services/superAdmin.service';
 import type { SubscriptionPlanItem } from '../types';
 
@@ -81,8 +82,23 @@ export const Subscriptions: React.FC = () => {
       )}
 
       {isLoading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px' }}>
-          <Icon icon="solar:restart-bold" className="animate-spin" width="32" style={{ color: 'var(--primary)' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <Skeleton width="120px" height="24px" />
+              <Skeleton width="220px" height="14px" />
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '12px 0' }}>
+                <Skeleton width="110px" height="36px" />
+                <Skeleton width="60px" height="14px" />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {Array.from({ length: 5 }).map((_, r) => (
+                  <Skeleton key={r} width={`${75 + (r * 7) % 20}%`} height="14px" />
+                ))}
+              </div>
+              <Skeleton width="100%" height="40px" borderRadius="8px" style={{ marginTop: '16px' }} />
+            </div>
+          ))}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>

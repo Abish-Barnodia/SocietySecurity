@@ -16,6 +16,7 @@ const EventTimeline = () => {
   const [selectedPass, setSelectedPass] = useState<string | null>(null);
 
   const [events, setEvents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [secondsAgo, setSecondsAgo] = useState(0);
 
@@ -54,8 +55,14 @@ const EventTimeline = () => {
 
   const fetchEvents = async () => {
     // Prevent fetching if selected ID is empty
-    if (viewType === 'unit' && !selectedUnit) return;
-    if (viewType === 'guard' && !selectedGuard) return;
+    if (viewType === 'unit' && !selectedUnit) {
+      setIsLoading(false);
+      return;
+    }
+    if (viewType === 'guard' && !selectedGuard) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const token = getAuthToken();
@@ -74,10 +81,13 @@ const EventTimeline = () => {
       }
     } catch (error) {
       console.error('Failed to fetch timeline events', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    setIsLoading(true);
     fetchEvents();
     const interval = setInterval(fetchEvents, 10000); // 10s polling
     return () => clearInterval(interval);
@@ -95,7 +105,7 @@ const EventTimeline = () => {
   const currentGuard = guardList.find(g => g.id === selectedGuard);
 
   return (
-    <div style={{ display: 'flex', width: '100%', height: '100%', backgroundColor: '#fff', position: 'relative' }}>
+    <div style={{ display: 'flex', width: '100%', height: '100%', backgroundColor: 'var(--bg-main, #fff)', position: 'relative' }}>
       <div style={{ padding: 24, flex: 1, overflowY: 'auto' }}>
         <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
@@ -142,7 +152,7 @@ const EventTimeline = () => {
             // ponytail: Show only first 5 units for UI simplicity instead of a huge list
             residentList.slice(0, 5).map(res => (
               <button
-                key={res.unitId}
+                key={res.unitId || res.id || res.apartmentNumber}
                 onClick={() => setSelectedUnit(res.apartmentNumber)}
                 style={{
                   padding: '6px 16px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
@@ -150,7 +160,7 @@ const EventTimeline = () => {
                   color: selectedUnit === res.apartmentNumber ? 'white' : '#4B5563'
                 }}
               >
-                Unit {res.apartmentNumber} — {res.primaryResident?.name}
+                Unit {res.apartmentNumber} {res.primaryResident?.name ? `— ${res.primaryResident.name}` : ''}
               </button>
             ))
           ) : (
@@ -165,72 +175,120 @@ const EventTimeline = () => {
                   color: selectedGuard === g.id ? 'white' : '#4B5563'
                 }}
               >
-                {g.name} ({g.badgeNumber})
+                {g.name} {g.badgeNumber ? `(${g.badgeNumber})` : ''}
               </button>
             ))
           )}
         </div>
 
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 24, borderBottom: '1px solid #E5E7EB', paddingBottom: 12 }}>
-          {viewType === 'unit' ? `Timeline for Unit ${selectedUnit}` : `Timeline for ${currentGuard?.name || 'Guard'}`} 
-          <span style={{ color: '#9CA3AF', fontWeight: 400 }}>
-            — {viewType === 'unit' ? (currentResident?.primaryResident?.name || '') : (currentGuard?.badgeNumber || '')}
-          </span>
+        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main, #374151)', marginBottom: 24, borderBottom: '1px solid #E5E7EB', paddingBottom: 12 }}>
+          {viewType === 'unit' ? `Timeline for Unit ${selectedUnit || '—'}` : `Timeline for ${currentGuard?.name || 'Guard'}`} 
+          {(viewType === 'unit' ? currentResident?.primaryResident?.name : currentGuard?.badgeNumber) && (
+            <span style={{ color: '#9CA3AF', fontWeight: 400 }}>
+              {' '}— {viewType === 'unit' ? currentResident?.primaryResident?.name : currentGuard?.badgeNumber}
+            </span>
+          )}
         </h3>
 
-        {/* Timeline Events */}
-        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <div style={{ position: 'absolute', left: 16, top: 0, bottom: 0, width: 2, backgroundColor: '#E5E7EB' }}></div>
-          {events.length === 0 ? (
-            <p style={{ color: '#6B7280', fontSize: 14, marginTop: 24 }}>No events found.</p>
-          ) : events.map((evt, idx) => (
-            <div key={evt.id || idx} style={{ display: 'flex', gap: 24, marginBottom: 32, position: 'relative' }}>
-              <div style={{ 
-                width: 32, height: 32, borderRadius: '50%', backgroundColor: evt.iconBg, 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 
-              }}>
-                {evt.iconType === 'ArrowRight' && <Icon name="arrow-right" size={16} color={evt.iconColor} />}
-                {evt.iconType === 'CheckCircle' && <Icon name="circle-check" size={16} color={evt.iconColor} />}
-                {evt.iconType === 'AlertTriangle' && <Icon name="alert-triangle" size={16} color={evt.iconColor} />}
-                {evt.iconType === 'XCircle' && <Icon name="x" size={16} color={evt.iconColor} />}
-                {evt.iconType === 'Key' && <Icon name="key" size={16} color={evt.iconColor} />}
-              </div>
-              <div style={{ flex: 1, backgroundColor: '#F9FAFB', borderRadius: 8, padding: 16, border: '1px solid #F3F4F6' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div>
-                    <h4 style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 600, color: '#111827' }}>{evt.title}</h4>
-                    <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>{evt.time}</p>
+        {/* Timeline Events Container */}
+        <div style={{ display: 'flex', flexDirection: 'column', position: 'relative', minHeight: '120px' }}>
+          {/* Vertical connecting line ONLY when there are active timeline events */}
+          {!isLoading && events.length > 0 && (
+            <div style={{ position: 'absolute', left: 16, top: 16, bottom: 16, width: 2, backgroundColor: '#E5E7EB', zIndex: 0 }} />
+          )}
+
+          {isLoading ? (
+            /* Shimmer Skeleton when Loading */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                  <div className="mgr-skeleton" style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0 }} />
+                  <div style={{ flex: 1, background: '#F9FAFB', borderRadius: 8, padding: 16, border: '1px solid #F3F4F6', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <div className="mgr-skeleton" style={{ width: 140, height: 16, borderRadius: 4 }} />
+                      <div className="mgr-skeleton" style={{ width: 60, height: 12, borderRadius: 4 }} />
+                    </div>
+                    <div className="mgr-skeleton" style={{ width: '80%', height: 13, borderRadius: 4 }} />
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <div className="mgr-skeleton" style={{ width: 80, height: 12, borderRadius: 4 }} />
+                      <div className="mgr-skeleton" style={{ width: 70, height: 12, borderRadius: 4 }} />
+                    </div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: '#6B7280' }}>{evt.type}</span>
                 </div>
-                <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{evt.description}</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#6B7280' }}>
-                  {evt.guard && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="shield-check" size={14} /> {evt.guard}</span>
-                  )}
-                  {evt.unit && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="building" size={14} /> {evt.unit}</span>
-                  )}
-                  {evt.gate && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="map-pin" size={14} /> {evt.gate}</span>
-                  )}
-                  {evt.pass && (
-                    <span 
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#008B8B', fontWeight: 500, cursor: 'pointer' }}
-                      onClick={() => setSelectedPass(evt.pass)}
-                    >
-                      <Icon name="key" size={14} /> {evt.pass}
-                    </span>
-                  )}
-                  {evt.linkedEvent && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#4F46E5', fontWeight: 500, cursor: 'pointer' }}>
-                      Linked Event
-                    </span>
-                  )}
+              ))}
+            </div>
+          ) : events.length === 0 ? (
+            /* Clean Empty State without awkward vertical lines */
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '48px 24px',
+              backgroundColor: '#F9FAFB',
+              borderRadius: 12,
+              border: '1px dashed #E5E7EB',
+              textAlign: 'center',
+              marginTop: 8,
+            }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Icon name="clock" size={22} color="#0284C7" />
+              </div>
+              <h4 style={{ fontSize: 15, fontWeight: 600, color: '#1F2937', margin: '0 0 6px 0' }}>No Events Recorded</h4>
+              <p style={{ color: '#6B7280', fontSize: 13, maxWidth: 360, margin: 0 }}>
+                No chronological access or security events found for {viewType === 'unit' ? `Unit ${selectedUnit || 'this unit'}` : (currentGuard?.name || 'this guard')}.
+              </p>
+            </div>
+          ) : (
+            events.map((evt, idx) => (
+              <div key={evt.id || idx} style={{ display: 'flex', gap: 24, marginBottom: 32, position: 'relative' }}>
+                <div style={{ 
+                  width: 32, height: 32, borderRadius: '50%', backgroundColor: evt.iconBg, 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 
+                }}>
+                  {evt.iconType === 'ArrowRight' && <Icon name="arrow-right" size={16} color={evt.iconColor} />}
+                  {evt.iconType === 'CheckCircle' && <Icon name="circle-check" size={16} color={evt.iconColor} />}
+                  {evt.iconType === 'AlertTriangle' && <Icon name="alert-triangle" size={16} color={evt.iconColor} />}
+                  {evt.iconType === 'XCircle' && <Icon name="x" size={16} color={evt.iconColor} />}
+                  {evt.iconType === 'Key' && <Icon name="key" size={16} color={evt.iconColor} />}
+                </div>
+                <div style={{ flex: 1, backgroundColor: '#F9FAFB', borderRadius: 8, padding: 16, border: '1px solid #F3F4F6' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: 14, fontWeight: 600, color: '#111827' }}>{evt.title}</h4>
+                      <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>{evt.time}</p>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#6B7280' }}>{evt.type}</span>
+                  </div>
+                  <p style={{ margin: '0 0 12px 0', fontSize: 13, color: '#374151', lineHeight: 1.5 }}>{evt.description}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#6B7280' }}>
+                    {evt.guard && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="shield-check" size={14} /> {evt.guard}</span>
+                    )}
+                    {evt.unit && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="building" size={14} /> {evt.unit}</span>
+                    )}
+                    {evt.gate && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="map-pin" size={14} /> {evt.gate}</span>
+                    )}
+                    {evt.pass && (
+                      <span 
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#008B8B', fontWeight: 500, cursor: 'pointer' }}
+                        onClick={() => setSelectedPass(evt.pass)}
+                      >
+                        <Icon name="key" size={14} /> {evt.pass}
+                      </span>
+                    )}
+                    {evt.linkedEvent && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#4F46E5', fontWeight: 500, cursor: 'pointer' }}>
+                        Linked Event
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 

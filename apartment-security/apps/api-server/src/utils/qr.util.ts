@@ -21,7 +21,22 @@ export const generateSignedQRPayload = (payload: QRPayload): string => {
 };
 
 export const verifySignedQRPayload = (signedPayload: string): QRPayload | null => {
-  const parts = signedPayload.split('.');
+  if (!signedPayload) return null;
+  let cleanPayload = signedPayload.trim();
+
+  // Extract token from URL if a full pass URL was provided
+  if (cleanPayload.includes('token=')) {
+    try {
+      const match = cleanPayload.match(/[?&]token=([^&]+)/);
+      if (match && match[1]) {
+        cleanPayload = decodeURIComponent(match[1]);
+      }
+    } catch {
+      // fallback to cleanPayload
+    }
+  }
+
+  const parts = cleanPayload.split('.');
   if (parts.length !== 2) return null;
 
   const [base64Data, signature] = parts;

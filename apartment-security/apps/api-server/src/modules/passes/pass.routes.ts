@@ -9,11 +9,16 @@ import {
   revokePass,
   getAllPasses,
   deletePass,
-  verifyPass
+  verifyPass,
+  getPublicPassVerification
 } from './pass.controller';
 import { createPassSchema } from './pass.schema';
 
 const router = Router();
+
+// Public pass verification for mobile QR code scan
+router.get('/public-verify', getPublicPassVerification);
+
 router.use(authenticate);
 
 router.post('/',           requireRole('RESIDENT', 'MANAGER', 'COMMITTEE'), validate(createPassSchema), createPass);

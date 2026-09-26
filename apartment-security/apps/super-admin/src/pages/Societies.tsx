@@ -3,6 +3,7 @@ import { Society, SocietyStatus } from '../types';
 import { superAdminService } from '../services/superAdmin.service';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 import { Pagination } from '../components/common/Pagination';
 import { Icon } from '@iconify/react';
 
@@ -13,6 +14,8 @@ export const Societies: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSociety, setSelectedSociety] = useState<Society | null>(null);
+  const [statusTarget, setStatusTarget] = useState<{ society: Society; nextStatus: SocietyStatus } | null>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const [newSociety, setNewSociety] = useState({
     name: '',
@@ -65,15 +68,22 @@ export const Societies: React.FC = () => {
     fetchSocieties();
   }, [statusFilter, search, page, pageSize]);
 
-  const handleStatusToggle = async (society: Society) => {
+  const handleStatusToggle = (society: Society) => {
     const nextStatus: SocietyStatus = society.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    if (!window.confirm(`Are you sure you want to change status of "${society.name}" to ${nextStatus}?`)) return;
+    setStatusTarget({ society, nextStatus });
+  };
 
+  const handleConfirmStatusChange = async () => {
+    if (!statusTarget) return;
+    setIsUpdatingStatus(true);
     try {
-      await superAdminService.updateSocietyStatus(society.id, nextStatus);
+      await superAdminService.updateSocietyStatus(statusTarget.society.id, statusTarget.nextStatus);
+      setStatusTarget(null);
       fetchSocieties();
     } catch (err: any) {
       alert(err.message || 'Failed to update society status');
+    } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
@@ -669,6 +679,84 @@ export const Societies: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Themed Centered Confirm Dialog for Suspend / Activate */}
+      <ConfirmModal
+        isOpen={Boolean(statusTarget)}
+        onClose={() => setStatusTarget(null)}
+        onConfirm={handleConfirmStatusChange}
+        isLoading={isUpdatingStatus}
+        variant={statusTarget?.nextStatus === 'SUSPENDED' ? 'danger' : 'success'}
+        title={statusTarget?.nextStatus === 'SUSPENDED' ? 'Suspend Society?' : 'Activate Society?'}
+        confirmLabel={statusTarget?.nextStatus === 'SUSPENDED' ? 'Yes, Suspend Society' : 'Yes, Activate Society'}
+        cancelLabel="Cancel"
+        message={
+          <div>
+            <div>
+              Are you sure you want to change the status of{' '}
+              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                "{statusTarget?.society.name}"
+              </strong>{' '}
+              to{' '}
+              <span
+                style={{
+                  fontWeight: 800,
+                  color: statusTarget?.nextStatus === 'SUSPENDED' ? '#F43F5E' : '#10B981',
+                }}
+              >
+                {statusTarget?.nextStatus}
+              </span>
+              ?
+            </div>
+            {statusTarget?.nextStatus === 'SUSPENDED' ? (
+              <div
+                style={{
+                  marginTop: '14px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(244, 63, 94, 0.08)',
+                  border: '1px solid rgba(244, 63, 94, 0.2)',
+                  fontSize: '0.8rem',
+                  color: '#F43F5E',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  lineHeight: 1.4,
+                }}
+              >
+                <Icon icon="solar:shield-warning-bold" width="18" style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>
+                  Managers, guards, and residents belonging to this society will temporarily lose access to the portal until reactivated.
+                </span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  marginTop: '14px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  fontSize: '0.8rem',
+                  color: '#10B981',
+                  textAlign: 'left',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  lineHeight: 1.4,
+                }}
+              >
+                <Icon icon="solar:check-circle-bold" width="18" style={{ flexShrink: 0, marginTop: '1px' }} />
+                <span>
+                  This society will immediately regain full access to all SecureGate portal services and features.
+                </span>
+              </div>
+            )}
+          </div>
+        }
+      />
     </div>
   );
 };
+

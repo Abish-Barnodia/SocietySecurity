@@ -19,6 +19,7 @@ import ManagerProfile from './ManagerProfile';
 import Settings, { applyManagerTheme } from './Settings';
 import CCTVMonitoring from './CCTVMonitoring';
 import { SuperAdminPortal } from './super-admin/App';
+import { PassVerificationView } from './PassVerificationView';
 import Icon from './Icon';
 import { io as connectSocket } from 'socket.io-client';
 
@@ -188,8 +189,15 @@ const App: React.FC = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    document.documentElement.removeAttribute('data-theme');
     setIsAuthenticated(false);
   };
+
+  // Public pass verification route for QR scans from any phone / camera browser
+  const currentPath = window.location.pathname.toLowerCase();
+  if (currentPath === '/verify-pass' || currentPath === '/pass-verify' || currentPath === '/verify') {
+    return <PassVerificationView />;
+  }
 
   if (!authChecked) {
     return (

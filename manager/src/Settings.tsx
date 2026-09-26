@@ -468,7 +468,11 @@ export const applyManagerTheme = (theme: string) => {
   const resolved = theme === 'system'
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
-  document.documentElement.setAttribute('data-theme', resolved);
+  if (resolved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
   localStorage.setItem('managerTheme', theme);
 };
 

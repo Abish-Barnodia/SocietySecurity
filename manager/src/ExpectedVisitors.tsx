@@ -89,13 +89,18 @@ const ExpectedVisitors = () => {
 
   const getPassCode = (pass: any) => `PASS-${pass.id.slice(-8).toUpperCase()}`;
   const passUnitLabel = (pass: any) => pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'the property';
+  const getPassVerificationUrl = (pass: any) => {
+    if (!pass?.qrPayload) return '';
+    return `${window.location.origin}/verify-pass?token=${encodeURIComponent(pass.qrPayload)}`;
+  };
 
   // Draws the same visitor-pass card the resident app generates (name, QR,
   // validity) onto a canvas so the actual scannable QR travels as an image -
   // sharing plain text meant the guard had nothing to point a scanner at.
   const buildPassImageBlob = async (pass: any): Promise<Blob | null> => {
-    if (!pass.qrPayload) return null;
-    const qrDataUrl = await QRCode.toDataURL(pass.qrPayload, { width: 300, margin: 1 });
+    const passUrl = getPassVerificationUrl(pass);
+    if (!passUrl) return null;
+    const qrDataUrl = await QRCode.toDataURL(passUrl, { width: 300, margin: 1 });
     const qrImg = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -146,7 +151,8 @@ const ExpectedVisitors = () => {
     const blob = await buildPassImageBlob(pass);
     if (!blob) { alert('This pass has no scannable QR code to share.'); return; }
     const file = new File([blob], `${getPassCode(pass)}.png`, { type: 'image/png' });
-    const shareText = `Hello ${pass.visitorName}, your visitor pass for ${passUnitLabel(pass)} is: ${getPassCode(pass)}. Valid ${new Date(pass.validFrom).toLocaleString()} - ${new Date(pass.validUntil).toLocaleString()}.`;
+    const passUrl = getPassVerificationUrl(pass);
+    const shareText = `Hello ${pass.visitorName}, your visitor pass for ${passUnitLabel(pass)} is: ${getPassCode(pass)}. Verify & view details: ${passUrl}. Valid ${new Date(pass.validFrom).toLocaleString()} - ${new Date(pass.validUntil).toLocaleString()}.`;
 
     // Web Share API with a file lets the OS's native share sheet hand the
     // actual image to WhatsApp/Mail/etc - supported on most mobile browsers,
@@ -438,7 +444,7 @@ const ExpectedVisitors = () => {
             {selectedPass.qrPayload && (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 20px' }}>
                 <div style={{ padding: 12, background: 'white', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-                  <QRCodeSVG value={selectedPass.qrPayload} size={180} />
+                  <QRCodeSVG value={getPassVerificationUrl(selectedPass)} size={180} />
                 </div>
               </div>
             )}

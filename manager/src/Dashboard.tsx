@@ -4,6 +4,7 @@ import Icon from './Icon';
 
 const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
+  const [initialLoading, setInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedFilter, setFeedFilter] = useState<'all' | 'guard' | 'resident'>('all');
 
@@ -71,6 +72,7 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
       console.error('Failed to fetch dashboard data', err);
     } finally {
       setIsRefreshing(false);
+      setInitialLoading(false);
     }
   };
 
@@ -124,6 +126,119 @@ const Dashboard: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigat
   };
 
   const todayActivity = activityFeed.slice(0, 5);
+
+  if (initialLoading) {
+    return (
+      <div>
+        {/* Page Header Skeleton */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="mgr-skeleton" style={{ width: 280, height: 26, borderRadius: 6 }} />
+            <div className="mgr-skeleton" style={{ width: 440, height: 14, borderRadius: 4 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div className="mgr-skeleton" style={{ width: 100, height: 24, borderRadius: 4 }} />
+            <div className="mgr-skeleton" style={{ width: 120, height: 34, borderRadius: 6 }} />
+          </div>
+        </div>
+
+        {/* 6 Stat Tiles Skeleton */}
+        <div className="stats-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="stat-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="mgr-skeleton" style={{ width: 40, height: 40, borderRadius: 10 }} />
+              <div className="mgr-skeleton" style={{ width: 50, height: 28, borderRadius: 6 }} />
+              <div className="mgr-skeleton" style={{ width: 110, height: 14, borderRadius: 4 }} />
+              <div className="mgr-skeleton" style={{ width: 70, height: 12, borderRadius: 4 }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Main Grid Skeleton */}
+        <div className="main-grid" style={{ gridTemplateColumns: '1.8fr 1.2fr' }}>
+          {/* Left Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Guard Post Status Card Skeleton */}
+            <div className="card" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="mgr-skeleton" style={{ width: 160, height: 18, borderRadius: 4 }} />
+                <div className="mgr-skeleton" style={{ width: 200, height: 14, borderRadius: 4 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {Array.from({ length: 3 }).map((_, r) => (
+                  <div key={r} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div className="mgr-skeleton" style={{ width: 36, height: 36, borderRadius: '50%' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="mgr-skeleton" style={{ width: 130, height: 14, borderRadius: 4 }} />
+                        <div className="mgr-skeleton" style={{ width: 90, height: 11, borderRadius: 4 }} />
+                      </div>
+                    </div>
+                    <div className="mgr-skeleton" style={{ width: 70, height: 22, borderRadius: 12 }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Activity Feed Card Skeleton */}
+            <div className="card" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="mgr-skeleton" style={{ width: 150, height: 18, borderRadius: 4 }} />
+                <div className="mgr-skeleton" style={{ width: 180, height: 26, borderRadius: 6 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {Array.from({ length: 4 }).map((_, r) => (
+                  <div key={r} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div className="mgr-skeleton" style={{ width: 32, height: 32, borderRadius: 8 }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="mgr-skeleton" style={{ width: 160, height: 14, borderRadius: 4 }} />
+                        <div className="mgr-skeleton" style={{ width: 100, height: 11, borderRadius: 4 }} />
+                      </div>
+                    </div>
+                    <div className="mgr-skeleton" style={{ width: 60, height: 12, borderRadius: 4 }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* Pending Approvals Card Skeleton */}
+            <div className="card" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="mgr-skeleton" style={{ width: 140, height: 18, borderRadius: 4 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {Array.from({ length: 2 }).map((_, r) => (
+                  <div key={r} style={{ padding: '12px', background: 'var(--bg-card-subtle, #F8FAFC)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div className="mgr-skeleton" style={{ width: 110, height: 14, borderRadius: 4 }} />
+                      <div className="mgr-skeleton" style={{ width: 70, height: 11, borderRadius: 4 }} />
+                    </div>
+                    <div className="mgr-skeleton" style={{ width: 60, height: 26, borderRadius: 6 }} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Active Alerts Card Skeleton */}
+            <div className="card" style={{ marginBottom: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div className="mgr-skeleton" style={{ width: 120, height: 18, borderRadius: 4 }} />
+                <div className="mgr-skeleton" style={{ width: 60, height: 14, borderRadius: 4 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="mgr-skeleton" style={{ width: '100%', height: 48, borderRadius: 8 }} />
+                <div className="mgr-skeleton" style={{ width: '100%', height: 48, borderRadius: 8 }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

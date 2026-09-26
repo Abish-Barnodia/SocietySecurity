@@ -7,6 +7,7 @@ import { AppError } from '../../middlewares/error.middleware';
 import { Role, SocietyStatus, DemoRequestStatus } from '@prisma/client';
 import { razorpay } from '../../config/razorpay';
 import { env } from '../../config/env';
+import { sendDemoRequestNotificationToSuperAdmin } from '../../utils/email.service';
 
 // Create ₹1.00 Razorpay order for 1-month demo trial
 export const createDemoPaymentOrder = async (req: Request, res: Response, next: NextFunction) => {
@@ -75,6 +76,20 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       },
     });
 
+    // ponytail: send email notification to Super Admin via SMTP
+    sendDemoRequestNotificationToSuperAdmin({
+      societyName,
+      contactName,
+      email,
+      phone,
+      city,
+      numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
+      selectedPlan: selectedPlan || 'Starter Tier',
+      paymentId: razorpay_payment_id,
+      amountPaid: '₹1.00',
+      message: combinedMessage,
+    }).catch((err) => console.error('Error sending superadmin notification email:', err));
+
     return sendSuccess(res, 201, 'Payment verified and demo trial activated successfully!', {
       demoRequest,
       paymentId: razorpay_payment_id,
@@ -103,6 +118,17 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
         status: DemoRequestStatus.PENDING,
       },
     });
+
+    // ponytail: send email notification to Super Admin via SMTP
+    sendDemoRequestNotificationToSuperAdmin({
+      societyName,
+      contactName,
+      email,
+      phone,
+      city,
+      numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
+      message: message || null,
+    }).catch((err) => console.error('Error sending superadmin notification email:', err));
 
     return sendSuccess(res, 201, 'Demo request submitted successfully. Our team will contact you soon.', demoRequest);
   } catch (error) {

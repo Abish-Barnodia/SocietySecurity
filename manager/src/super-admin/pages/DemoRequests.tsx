@@ -4,6 +4,7 @@ import { superAdminService } from '../services/superAdmin.service';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { ProvisionSocietyModal } from '../components/societies/ProvisionSocietyModal';
 import { Pagination } from '../components/common/Pagination';
+import { TableSkeleton } from '../components/common/Skeleton';
 import { Icon } from '@iconify/react';
 
 interface DemoRequestsProps {
@@ -105,11 +106,7 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '32px' }}>
-                    <Icon icon="solar:restart-bold" className="animate-spin" width="24" color="var(--primary)" />
-                  </td>
-                </tr>
+                <TableSkeleton rows={5} columns={7} />
               ) : demos.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>

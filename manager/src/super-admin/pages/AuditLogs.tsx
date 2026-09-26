@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { PlatformAuditLog } from '../types';
 import { superAdminService } from '../services/superAdmin.service';
 import { Pagination } from '../components/common/Pagination';
-import { Icon } from '@iconify/react';
+import { TableSkeleton } from '../components/common/Skeleton';
 
 export const AuditLogs: React.FC = () => {
   const [logs, setLogs] = useState<PlatformAuditLog[]>([]);
@@ -58,11 +58,7 @@ export const AuditLogs: React.FC = () => {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={5} style={{ textAlign: 'center', padding: '32px' }}>
-                    <Icon icon="solar:restart-bold" className="animate-spin" width="24" color="var(--primary)" />
-                  </td>
-                </tr>
+                <TableSkeleton rows={5} columns={5} />
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>

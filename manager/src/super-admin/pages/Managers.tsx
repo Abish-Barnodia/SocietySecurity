@@ -3,6 +3,7 @@ import type { Manager } from '../types';
 import { superAdminService } from '../services/superAdmin.service';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Pagination } from '../components/common/Pagination';
+import { TableSkeleton } from '../components/common/Skeleton';
 import { Icon } from '@iconify/react';
 
 export const Managers: React.FC = () => {
@@ -67,11 +68,7 @@ export const Managers: React.FC = () => {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '32px' }}>
-                    <Icon icon="solar:restart-bold" className="animate-spin" width="24" color="var(--primary)" />
-                  </td>
-                </tr>
+                <TableSkeleton rows={5} columns={6} />
               ) : managers.length === 0 ? (
                 <tr>
                   <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>

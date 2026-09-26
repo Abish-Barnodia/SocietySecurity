@@ -4,6 +4,7 @@ import { superAdminService } from '../services/superAdmin.service';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { Modal } from '../components/common/Modal';
 import { Pagination } from '../components/common/Pagination';
+import { TableSkeleton } from '../components/common/Skeleton';
 import { Icon } from '@iconify/react';
 
 export const Societies: React.FC = () => {
@@ -234,11 +235,7 @@ export const Societies: React.FC = () => {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '36px' }}>
-                  <Icon icon="solar:restart-bold" className="animate-spin" width="24" color="var(--primary)" />
-                </td>
-              </tr>
+              <TableSkeleton rows={6} columns={8} />
             ) : societies.length === 0 ? (
               <tr>
                 <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>

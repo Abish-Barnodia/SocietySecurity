@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { DashboardSkeleton } from '../components/common/Skeleton';
 import type { PlatformStatsResponse, DemoRequest } from '../types';
 import { Icon } from '@iconify/react';
 
@@ -14,11 +15,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, onNavigate, onOpenP
   const [chartMetric, setChartMetric] = useState<'traffic' | 'revenue' | 'units'>('traffic');
 
   if (!stats) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '360px' }}>
-        <Icon icon="solar:restart-bold" className="animate-spin" width="32" style={{ color: 'var(--primary)' }} />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const { metrics, recentDemos, recentSocieties, telemetry } = stats;

@@ -10,5 +10,6 @@ export default function Icon({ name, size = 16, color, className, style }: {
   className?: string;
   style?: React.CSSProperties;
 }) {
-  return <Iconify icon={`tabler:${name}`} width={size} height={size} color={color} className={className} style={style} />;
+  const iconName = name.includes(':') ? name : `tabler:${name}`;
+  return <Iconify icon={iconName} width={size} height={size} color={color} className={className} style={style} />;
 }

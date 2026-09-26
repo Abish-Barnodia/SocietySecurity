@@ -59,8 +59,9 @@ const broadcastAlert = async (req, res, next) => {
         let imageUrl = undefined;
         if (photoBase64) {
             try {
+                const cleanBase64 = photoBase64.replace(/^data:image\/\w+;base64,/, '');
                 const { uploadBuffer } = await Promise.resolve().then(() => __importStar(require('../../utils/objectStorage.util')));
-                const buffer = Buffer.from(photoBase64, 'base64');
+                const buffer = Buffer.from(cleanBase64, 'base64');
                 imageUrl = await uploadBuffer(buffer, `incident-alerts/${Date.now()}.jpg`, 'image/jpeg');
             }
             catch (uploadErr) {

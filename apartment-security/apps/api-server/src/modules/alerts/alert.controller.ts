@@ -25,8 +25,9 @@ export const broadcastAlert = async (req: Request, res: Response, next: NextFunc
     let imageUrl: string | undefined = undefined;
     if (photoBase64) {
       try {
+        const cleanBase64 = photoBase64.replace(/^data:image\/\w+;base64,/, '');
         const { uploadBuffer } = await import('../../utils/objectStorage.util');
-        const buffer = Buffer.from(photoBase64, 'base64');
+        const buffer = Buffer.from(cleanBase64, 'base64');
         imageUrl = await uploadBuffer(buffer, `incident-alerts/${Date.now()}.jpg`, 'image/jpeg');
       } catch (uploadErr) {
         console.warn('Failed to upload incident alert image:', uploadErr);

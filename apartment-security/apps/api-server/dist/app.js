@@ -54,13 +54,9 @@ app.use((0, compression_1.default)());
 // CORS — allow mobile apps (no Origin header) + known browser client origins
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        // Mobile apps (React Native / Expo) send no Origin header
-        // In production, this should ideally be locked behind an explicit ALLOW_NO_ORIGIN flag or API key middleware.
+        // Mobile apps (React Native / Expo) and API clients send no Origin header
         if (!origin) {
-            if (process.env.NODE_ENV === 'development' || process.env.ALLOW_NO_ORIGIN === 'true') {
-                return callback(null, true);
-            }
-            return callback(new Error('CORS: missing origin not allowed'));
+            return callback(null, true);
         }
         if ((0, corsOrigin_util_1.isKnownOrigin)(origin))
             return callback(null, true);

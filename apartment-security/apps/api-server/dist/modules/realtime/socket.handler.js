@@ -32,8 +32,10 @@ const registerSocketHandlers = (io) => {
                     select: { unitId: true, unit: { select: { propertyId: true } } },
                 });
                 resolvedPropertyId = resident?.unit.propertyId;
-                if (resolvedPropertyId)
+                if (resolvedPropertyId) {
                     socket.join(`property:${resolvedPropertyId}`);
+                    socket.join(`property:${resolvedPropertyId}:residents`);
+                }
                 if (resident?.unitId)
                     socket.join(`unit_${resident.unitId}`);
             }
@@ -43,8 +45,10 @@ const registerSocketHandlers = (io) => {
                     select: { id: true, propertyId: true },
                 });
                 resolvedPropertyId = guard?.propertyId;
-                if (resolvedPropertyId)
+                if (resolvedPropertyId) {
                     socket.join(`property:${resolvedPropertyId}`);
+                    socket.join(`property:${resolvedPropertyId}:guards`);
+                }
                 if (guard?.id)
                     socket.join(`guard:${guard.id}`);
             }
@@ -54,8 +58,10 @@ const registerSocketHandlers = (io) => {
                     select: { propertyId: true },
                 });
                 resolvedPropertyId = manager?.propertyId;
-                if (resolvedPropertyId)
+                if (resolvedPropertyId) {
                     socket.join(`property:${resolvedPropertyId}`);
+                    socket.join(`property:${resolvedPropertyId}:managers`);
+                }
             }
         }
         catch (err) {

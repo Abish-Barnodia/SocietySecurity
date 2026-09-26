@@ -21,7 +21,7 @@ export default function IncidentAlertModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onSent: () => void;
+  onSent: (audience?: string) => void;
 }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
@@ -82,11 +82,11 @@ export default function IncidentAlertModal({
       return;
     }
 
-    let targetRoles: string[] = ['RESIDENT', 'GUARD', 'MANAGER', 'COMMITTEE'];
+    let targetRoles: string[] = ['RESIDENT', 'MANAGER', 'COMMITTEE'];
     if (targetAudience === 'MANAGERS') {
-      targetRoles = ['MANAGER', 'COMMITTEE', 'GUARD'];
+      targetRoles = ['MANAGER', 'COMMITTEE'];
     } else if (targetAudience === 'RESIDENTS') {
-      targetRoles = ['RESIDENT', 'GUARD'];
+      targetRoles = ['RESIDENT'];
     }
 
     setSubmitting(true);
@@ -102,8 +102,9 @@ export default function IncidentAlertModal({
         targetRoles,
       });
 
+      const audience = targetAudience;
       reset();
-      onSent();
+      onSent(audience);
     } catch (error: any) {
       console.error('Failed to broadcast incident alert:', error);
       Alert.alert(t('common_error'), error.response?.data?.message ?? 'Failed to send incident alert.');

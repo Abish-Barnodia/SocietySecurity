@@ -116,9 +116,15 @@ export default function AlertsScreen() {
     loadAlerts();
   };
 
-  const handleIncidentAlertSent = () => {
+  const handleIncidentAlertSent = (audience?: string) => {
     setIncidentModalOpen(false);
-    Alert.alert(t('incident_sent_title'), t('incident_sent_msg'));
+    let msg = t('incident_sent_msg');
+    if (audience === 'MANAGERS') {
+      msg = 'The alert has been sent directly to the Manager Portal.';
+    } else if (audience === 'RESIDENTS') {
+      msg = 'The alert has been sent to all residents.';
+    }
+    Alert.alert(t('incident_sent_title'), msg);
     loadAlerts();
   };
 

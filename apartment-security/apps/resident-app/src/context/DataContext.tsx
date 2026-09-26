@@ -584,6 +584,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // This is the reliable path for walk-ins, vehicle alerts, and any other
     // server-side triggered alert — independent of whether the unit room event fired.
     const handleNewAlert = (raw: any) => {
+      // Ignore alerts not addressed to residents (e.g. manager-only alerts)
+      if (userRole === 'RESIDENT' && raw.targetRoles && raw.targetRoles.length > 0 && !raw.targetRoles.includes('RESIDENT')) {
+        return;
+      }
+
       const alert = mapAlert(raw);
       // Avoid duplicates if walkin_request already added it by the same entryId
       setAlerts((prev) => {

@@ -34,7 +34,10 @@ export const registerSocketHandlers = (io: Server) => {
           select: { unitId: true, unit: { select: { propertyId: true } } },
         });
         resolvedPropertyId = resident?.unit.propertyId;
-        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
+        if (resolvedPropertyId) {
+          socket.join(`property:${resolvedPropertyId}`);
+          socket.join(`property:${resolvedPropertyId}:residents`);
+        }
         if (resident?.unitId) socket.join(`unit_${resident.unitId}`);
       } else if (user.role === 'GUARD') {
         const guard = await prisma.guard.findUnique({
@@ -42,7 +45,10 @@ export const registerSocketHandlers = (io: Server) => {
           select: { id: true, propertyId: true },
         });
         resolvedPropertyId = guard?.propertyId;
-        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
+        if (resolvedPropertyId) {
+          socket.join(`property:${resolvedPropertyId}`);
+          socket.join(`property:${resolvedPropertyId}:guards`);
+        }
         if (guard?.id) socket.join(`guard:${guard.id}`);
       } else if (user.role === 'MANAGER' || user.role === 'COMMITTEE') {
         const manager = await prisma.manager.findUnique({
@@ -50,7 +56,10 @@ export const registerSocketHandlers = (io: Server) => {
           select: { propertyId: true },
         });
         resolvedPropertyId = manager?.propertyId;
-        if (resolvedPropertyId) socket.join(`property:${resolvedPropertyId}`);
+        if (resolvedPropertyId) {
+          socket.join(`property:${resolvedPropertyId}`);
+          socket.join(`property:${resolvedPropertyId}:managers`);
+        }
       }
     } catch (err) {
       logger.error('Failed to resolve context for socket room join', { err });

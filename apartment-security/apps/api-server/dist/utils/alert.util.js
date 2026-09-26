@@ -79,18 +79,16 @@ const triggerAlert = async (params) => {
             imageUrl,
         },
     });
-    // Emit live socket event to every target user's personal room so the
-    // resident app receives the alert instantly without relying on FCM push.
-    // Also broadcast to the whole property room — managers get oversight of
-    // every alert (see getAlerts), not just ones that happened to target
-    // their own user id, and their Alerts & Escalation badge count needs a
-    // live signal regardless of who the alert was actually for.
+    // Emit live socket event to every target user's personal room so their
+    // app receives the alert instantly without relying on FCM push.
+    // Also broadcast to the property managers room — managers get oversight of
+    // alerts on their Alerts & Escalation screen.
     try {
         const { io } = await Promise.resolve().then(() => __importStar(require('../server')));
         for (const uid of userIds) {
             io?.to(`user:${uid}`).emit('new_alert', alert);
         }
-        io?.to(`property:${propertyId}`).emit('new_alert', alert);
+        io?.to(`property:${propertyId}:managers`).emit('new_alert', alert);
     }
     catch { /* server not yet ready during tests */ }
     const allFcmTokens = users.flatMap((u) => u.fcmTokens);

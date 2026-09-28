@@ -20,6 +20,7 @@ import HouseholdScreen from '../screens/resident/HouseholdScreen';
 import AmenitiesScreen from '../screens/resident/AmenitiesScreen';
 import WalkInApprovalScreen from '../screens/resident/WalkInApprovalScreen';
 import ResidentOnboardingScreen from '../screens/resident/ResidentOnboardingScreen';
+import NotificationSetupScreen, { NOTIFICATION_ONBOARDING_KEY } from '../screens/resident/NotificationSetupScreen';
 import SecuritySettingsScreen from '../screens/resident/SecuritySettingsScreen';
 import PrivacyScreen from '../screens/resident/PrivacyScreen';
 import HelpSupportScreen from '../screens/resident/HelpSupportScreen';
@@ -40,6 +41,7 @@ import NotificationSettingsScreen from '../screens/shared/NotificationSettingsSc
 import GuardShell from '../screens/guard/GuardShell';
 import ScanPassScreen from '../screens/guard/ScanScreen';
 import GuardDetailsScreen from '../screens/guard/GuardDetailsScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -47,6 +49,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   GuardTabs: undefined;
   ResidentOnboarding: undefined;
+  NotificationSetup: undefined;
   CreatePass: undefined;
   PassDetail: { passId: string };
   Household: undefined;
@@ -128,9 +131,18 @@ export default function AppNavigator() {
   // via refreshProfile(), which re-evaluates this check on its own; Skip is
   // the only other way out of the prompt.
   const [guardOnboardingSkipped, setGuardOnboardingSkipped] = useState(false);
+  const [hasSeenNotificationPrompt, setHasSeenNotificationPrompt] = useState<boolean | null>(null);
+
   useEffect(() => {
-    if (isAuthenticated) setGuardOnboardingSkipped(false);
-  }, [isAuthenticated]);
+    if (isAuthenticated) {
+      setGuardOnboardingSkipped(false);
+      if (userRole !== 'GUARD') {
+        AsyncStorage.getItem(NOTIFICATION_ONBOARDING_KEY).then((val) => {
+          setHasSeenNotificationPrompt(val === 'true');
+        });
+      }
+    }
+  }, [isAuthenticated, userRole]);
 
   // While bootstrapAsync() is still validating a stored token against
   // /auth/me, isAuthenticated is momentarily false — rendering nothing here
@@ -160,9 +172,19 @@ export default function AppNavigator() {
         )
       ) : !isOnboarded ? (
         <Stack.Screen name="ResidentOnboarding" component={ResidentOnboardingScreen} />
+      ) : hasSeenNotificationPrompt === false ? (
+        <Stack.Screen name="NotificationSetup">
+          {(props) => (
+            <NotificationSetupScreen
+              {...props}
+              onComplete={() => setHasSeenNotificationPrompt(true)}
+            />
+          )}
+        </Stack.Screen>
       ) : (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="NotificationSetup" component={NotificationSetupScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CreatePass" component={CreatePassScreen} options={{ headerShown: true, title: 'Create pass' }} />
           <Stack.Screen name="PassDetail" component={PassDetailScreen} options={{ headerShown: true, title: 'Pass details' }} />
           <Stack.Screen name="Household" component={HouseholdScreen} options={{ headerShown: true, title: 'Household members' }} />

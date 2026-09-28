@@ -160,6 +160,62 @@ export async function stopVisitorRing(entryId: string) {
   }
 }
 
+/** Triggers a loud test gate alert with ringtone, vibration, and Approve/Deny buttons */
+export async function testGateNotificationWithRingtone(): Promise<boolean> {
+  const Notifications = await loadNotifications();
+
+  // 1. Request permissions and register push token
+  const token = await registerForPushNotificationsAsync();
+  if (token) {
+    try {
+      await api.post('/auth/fcm-token', { token });
+    } catch (err) {
+      console.log('Push token sync note:', err);
+    }
+  }
+
+  // 2. Schedule loud sample gate notification
+  if (Notifications) {
+    const testData = {
+      type: VISITOR_APPROVAL_CATEGORY,
+      entryId: 'test-demo-' + Date.now(),
+      visitorName: 'Rohan Sharma (Delivery Partner)',
+      gateName: 'Main Security Gate',
+      apartment: '402',
+      tower: 'Tower A',
+      isTest: 'true',
+    };
+
+    if (Platform.OS === 'android') {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🔔 Visitor at your gate!',
+          body: 'Rohan Sharma is waiting at Main Gate. Tap Approve or Deny.',
+          data: testData,
+          categoryIdentifier: VISITOR_APPROVAL_CATEGORY,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          sound: 'visitor_ring.wav',
+          vibrate: [0, 600, 200, 600, 200, 600, 200, 600],
+        },
+        trigger: null,
+      });
+    } else {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🔔 Visitor at your gate!',
+          body: 'Rohan Sharma is waiting at Main Gate. Tap Approve or Deny.',
+          data: testData,
+          sound: true,
+        },
+        trigger: null,
+      });
+    }
+    return true;
+  }
+
+  return false;
+}
+
 /** Approve/Deny tapped on the notification itself — no app UI involved. */
 export async function respondToVisitorFromNotification(entryId: string, status: 'APPROVED' | 'DENIED') {
   try {

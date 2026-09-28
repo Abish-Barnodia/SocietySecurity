@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 type PrefKey = 'pushEnabled' | 'smsEnabled' | 'staffEnabled';
 
-export default function NotificationSettingsScreen() {
+export default function NotificationSettingsScreen({ navigation }: { navigation?: any }) {
   const { alertPreferences, updateAlertPreferences } = useData();
   const { colors } = useTheme();
   const styles = getStyles(colors);
@@ -30,6 +30,26 @@ export default function NotificationSettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* Test Loud Ringtone Card */}
+      <TouchableOpacity
+        style={[styles.testCard, { borderColor: colors.primary, backgroundColor: colors.card }]}
+        onPress={() => navigation?.navigate('NotificationSetup')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.testCardIcon}>
+          <Text style={{ fontSize: 24 }}>🔔</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.testCardTitle, { color: colors.text }]}>Test Gate Notifications</Text>
+          <Text style={[styles.testCardDesc, { color: colors.textMuted }]}>
+            Hear the loud gate ringtone and test visitor approval popup
+          </Text>
+        </View>
+        <Text style={{ fontSize: 18, color: colors.primary, fontWeight: '700' }}>→</Text>
+      </TouchableOpacity>
+
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>PREFERENCES</Text>
+
       {rows.map((row) => (
         <View key={row.key} style={styles.prefRow}>
           <View style={styles.prefTextGroup}>
@@ -56,6 +76,43 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20 },
+    testCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      marginBottom: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    testCardIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: 'rgba(255, 184, 0, 0.15)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 14,
+    },
+    testCardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      marginBottom: 3,
+    },
+    testCardDesc: {
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1,
+      marginBottom: 8,
+    },
     prefRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -76,3 +133,4 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     },
     toggleThumbActive: { transform: [{ translateX: 20 }] },
   });
+

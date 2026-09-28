@@ -32,6 +32,9 @@ interface DemoForm {
   currentSecurity: string;
   demoDate: string;
   message: string;
+  // Verification Document (Aadhaar / ID)
+  documentUrl?: string;
+  documentName?: string;
 }
 
 const emptyDemo = (defaultPlan = ''): DemoForm => ({
@@ -49,6 +52,8 @@ const emptyDemo = (defaultPlan = ''): DemoForm => ({
   currentSecurity: '',
   demoDate: '',
   message: '',
+  documentUrl: undefined,
+  documentName: undefined,
 });
 
 // ─── Scroll fade-in hook ─────────────────────────────────────────────────────
@@ -120,6 +125,8 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
   const [demoSubmitted, setDemoSubmitted] = useState(false);
   const [demoError, setDemoError] = useState('');
   const [demoLoading, setDemoLoading] = useState(false);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docUploadError, setDocUploadError] = useState('');
   const [paymentSuccessInfo, setPaymentSuccessInfo] = useState<{ paymentId: string; plan: string; society: string } | null>(null);
 
   useEffect(() => {
@@ -129,6 +136,44 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
   }, []);
 
   const scrollTo = (id: string) => { setMenuOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
+
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      setDocUploadError('File size exceeds 15MB limit. Please upload a smaller file.');
+      return;
+    }
+
+    setDocUploading(true);
+    setDocUploadError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`${API_BASE}/demo-requests/upload-document`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setDemoForm(f => ({
+          ...f,
+          documentUrl: data.data.url,
+          documentName: data.data.fileName || file.name,
+        }));
+      } else {
+        setDocUploadError(data.message || 'Failed to upload verification document.');
+      }
+    } catch {
+      setDocUploadError('Network error uploading document. Please try again.');
+    } finally {
+      setDocUploading(false);
+    }
+  };
 
   const handleDemoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,6 +216,8 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
         numberOfUnits: demoForm.flats ? parseInt(demoForm.flats, 10) : undefined,
         selectedPlan: demoForm.selectedPlan || 'Standard Pro (₹5,999/mo - Up to 300 Flats)',
         message: extraNotes.length > 0 ? extraNotes.join(' | ') : undefined,
+        documentUrl: demoForm.documentUrl || undefined,
+        documentName: demoForm.documentName || undefined,
       };
 
       // 3. Open Razorpay Checkout popup for ₹1.00
@@ -1102,7 +1149,124 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                   </div>
                 </div>
 
-                {/* 3. Scheduling & Requirements */}
+                {/* 3. Verification Document (Aadhaar Card / ID Proof / Society Deed) */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#00A67C', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon icon="lucide:file-badge" size={14} color="#00A67C" /> Verification Document (Aadhaar / ID Proof)
+                  </div>
+
+                  <div style={{
+                    border: '1.5px dashed ' + (demoForm.documentUrl ? '#00A67C' : '#cbd5e1'),
+                    borderRadius: 12,
+                    padding: '16px',
+                    background: demoForm.documentUrl ? 'rgba(0, 200, 150, 0.05)' : '#f8fafc',
+                    transition: 'all 0.2s',
+                  }}>
+                    {demoForm.documentUrl ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(0, 200, 150, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00A67C' }}>
+                            <Icon icon="lucide:file-check" size={20} color="#00A67C" />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {demoForm.documentName || 'Verification Document'}
+                              </span>
+                              <span style={{ fontSize: 10, background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: 6, fontWeight: 700 }}>Attached</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                              Will be verified by Platform Super Admin upon review
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <a
+                            href={demoForm.documentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              color: '#334155',
+                              textDecoration: 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon icon="lucide:external-link" size={13} /> View
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setDemoForm(f => ({ ...f, documentUrl: undefined, documentName: undefined }))}
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: '#fee2e2',
+                              border: '1px solid #fecaca',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon icon="lucide:trash-2" size={13} /> Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label
+                          htmlFor="demo-document-upload"
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: docUploading ? 'wait' : 'pointer',
+                            padding: '12px 8px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(0, 166, 124, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                            <Icon icon={docUploading ? 'lucide:loader-2' : 'lucide:upload-cloud'} size={22} color="#00A67C" />
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                            {docUploading ? 'Uploading document...' : 'Upload Aadhaar Card / Society Document'}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                            Upload Aadhaar Card, ID proof, or Society Registration deed (PDF, PNG, JPG up to 15MB)
+                          </div>
+                        </label>
+                        <input
+                          id="demo-document-upload"
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                          onChange={handleDocumentUpload}
+                          disabled={docUploading}
+                          style={{ display: 'none' }}
+                        />
+                      </div>
+                    )}
+
+                    {docUploadError && (
+                      <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Icon icon="lucide:alert-circle" size={12} color="#ef4444" /> {docUploadError}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Scheduling & Requirements */}
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 700, color: '#00A67C', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Icon icon="lucide:calendar" size={14} color="#00A67C" /> Preferred Schedule & Plan Selection

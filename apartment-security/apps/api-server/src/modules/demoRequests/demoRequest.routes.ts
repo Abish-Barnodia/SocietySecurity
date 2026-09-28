@@ -6,10 +6,12 @@ import {
   getDemoRequests,
   updateDemoRequestStatus,
   approveAndProvision,
+  uploadDemoDocument,
 } from './demoRequest.controller';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
 import { validate } from '../../middlewares/validate.middleware';
+import { upload } from '../../middlewares/upload.middleware';
 import {
   createDemoRequestSchema,
   updateDemoRequestStatusSchema,
@@ -19,6 +21,7 @@ import {
 const router = Router();
 
 // Public routes for 1-month demo trial & payment from landing page
+router.post('/upload-document', upload.single('file'), uploadDemoDocument);
 router.post('/create-order', createDemoPaymentOrder);
 router.post('/verify-and-submit', verifyDemoPaymentAndSubmit);
 router.post('/', validate(createDemoRequestSchema), createDemoRequest);

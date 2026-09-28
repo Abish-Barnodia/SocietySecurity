@@ -272,6 +272,47 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
             </div>
           )}
 
+          {demoRequest.documentUrl && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 14px',
+              borderRadius: '8px',
+              background: 'rgba(0, 200, 150, 0.08)',
+              border: '1px solid rgba(0, 200, 150, 0.25)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Icon icon="solar:document-text-bold" width="22" color="#00A67C" />
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {demoRequest.documentName || 'Verification Document (Aadhaar / ID)'}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                    Submitted with demo inquiry for identity & property verification
+                  </div>
+                </div>
+              </div>
+              <a
+                href={demoRequest.documentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-secondary btn-sm"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  fontSize: '0.75rem',
+                }}
+              >
+                <Icon icon="solar:link-bold" width="14" />
+                View Document
+              </a>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>

@@ -99,6 +99,7 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                 <th>Contact Person</th>
                 <th>Contact Info</th>
                 <th>City & Units</th>
+                <th>Verification Doc</th>
                 <th>Date Received</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -106,10 +107,10 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
             </thead>
             <tbody>
               {isLoading ? (
-                <TableSkeleton rows={5} columns={7} />
+                <TableSkeleton rows={5} columns={8} />
               ) : demos.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-dim)' }}>
                     No demo requests found.
                   </td>
                 </tr>
@@ -141,6 +142,35 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                       <div style={{ fontSize: '0.725rem', color: 'var(--text-dim)' }}>
                         {demo.numberOfUnits ? `${demo.numberOfUnits} Units` : 'Size unspecified'}
                       </div>
+                    </td>
+                    <td>
+                      {demo.documentUrl ? (
+                        <a
+                          href={demo.documentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-secondary btn-sm"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.75rem',
+                            padding: '4px 8px',
+                            color: '#00A67C',
+                            background: 'rgba(0, 200, 150, 0.08)',
+                            border: '1px solid rgba(0, 200, 150, 0.25)',
+                            borderRadius: '6px',
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                          }}
+                          title={demo.documentName || 'View Document'}
+                        >
+                          <Icon icon="solar:document-text-bold" width="15" />
+                          <span>View Doc</span>
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>—</span>
+                      )}
                     </td>
                     <td>
                       <div style={{ fontSize: '0.8rem' }}>{new Date(demo.createdAt).toLocaleDateString()}</div>

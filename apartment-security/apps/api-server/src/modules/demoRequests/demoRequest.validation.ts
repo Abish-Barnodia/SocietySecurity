@@ -9,6 +9,8 @@ export const createDemoRequestSchema = z.object({
     city: z.string().optional(),
     numberOfUnits: z.number().int().positive().optional(),
     message: z.string().optional(),
+    documentUrl: z.string().optional().nullable(),
+    documentName: z.string().optional().nullable(),
   }),
 });
 

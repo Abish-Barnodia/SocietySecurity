@@ -977,6 +977,8 @@ model DemoRequest {
   city              String?
   numberOfUnits     Int?
   message           String?
+  documentUrl       String?
+  documentName      String?
   status            DemoRequestStatus @default(PENDING)
   notes             String?
   createdPropertyId String?

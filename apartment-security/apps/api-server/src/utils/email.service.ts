@@ -96,6 +96,8 @@ export interface DemoNotificationData {
   amountPaid?: string | null;
   paymentId?: string | null;
   message?: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
 }
 
 // ponytail: direct SMTP email alert to super admin when society registers for demo
@@ -120,6 +122,7 @@ New Society Demo / Trial Registration:
 - City: ${data.city || 'Not provided'}
 - Units: ${data.numberOfUnits || 'Not provided'}
 - Plan: ${data.selectedPlan || 'Starter Tier'} ${data.paymentId ? `(Paid ₹1.00 - ID: ${data.paymentId})` : ''}
+${data.documentUrl ? `- Verification Document: ${data.documentUrl}` : ''}
 ${data.message ? `- Note: ${data.message}` : ''}
 
 Please log in to Super Admin portal and approve this society request within 24 hours:
@@ -167,6 +170,16 @@ ${portalUrl}
             <td style="padding: 8px 0; color: #64748b;">Plan Selected:</td>
             <td style="padding: 8px 0; color: #0f172a;"><strong>${data.selectedPlan || 'Starter Tier'}</strong></td>
           </tr>
+          ${data.documentUrl ? `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Verification Doc:</td>
+            <td style="padding: 8px 0; font-weight: 600;">
+              <a href="${data.documentUrl}" target="_blank" style="color: #00A67C; text-decoration: underline;">
+                📄 View ${data.documentName || 'Aadhaar / Verification Document'}
+              </a>
+            </td>
+          </tr>
+          ` : ''}
           ${data.paymentId ? `
           <tr style="border-bottom: 1px solid #f1f5f9;">
             <td style="padding: 8px 0; color: #64748b;">Payment Status:</td>

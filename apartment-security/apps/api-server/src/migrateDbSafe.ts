@@ -74,6 +74,8 @@ async function migrate() {
         "city" TEXT,
         "numberOfUnits" INTEGER,
         "message" TEXT,
+        "documentUrl" TEXT,
+        "documentName" TEXT,
         "status" "DemoRequestStatus" NOT NULL DEFAULT 'PENDING',
         "notes" TEXT,
         "createdPropertyId" TEXT,
@@ -82,8 +84,12 @@ async function migrate() {
         CONSTRAINT "DemoRequest_pkey" PRIMARY KEY ("id"),
         CONSTRAINT "DemoRequest_createdPropertyId_fkey" FOREIGN KEY ("createdPropertyId") REFERENCES "Property"("id") ON DELETE SET NULL ON UPDATE CASCADE
       );
+
+      ALTER TABLE "DemoRequest" 
+      ADD COLUMN IF NOT EXISTS "documentUrl" TEXT,
+      ADD COLUMN IF NOT EXISTS "documentName" TEXT;
     `);
-    console.log('✓ Created DemoRequest table');
+    console.log('✓ Created/Updated DemoRequest table with documentUrl and documentName');
 
     // 6. Create PlatformAuditLog table if not exists
     await prisma.$executeRawUnsafe(`

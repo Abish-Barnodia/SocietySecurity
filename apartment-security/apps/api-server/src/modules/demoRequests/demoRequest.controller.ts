@@ -8,6 +8,33 @@ import { Role, SocietyStatus, DemoRequestStatus } from '@prisma/client';
 import { razorpay } from '../../config/razorpay';
 import { env } from '../../config/env';
 import { sendDemoRequestNotificationToSuperAdmin } from '../../utils/email.service';
+import { uploadBuffer } from '../../utils/objectStorage.util';
+
+const ALLOWED_DEMO_DOC_MIME = /^(image\/|application\/pdf$|application\/msword$|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$)/;
+
+// Public document upload endpoint for Aadhaar card, Society Deed, or ID proof
+export const uploadDemoDocument = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    if (!file) return next(new AppError('No verification document file uploaded', 400));
+    if (!ALLOWED_DEMO_DOC_MIME.test(file.mimetype)) {
+      return next(new AppError(`Unsupported file type (${file.mimetype}). Please upload a PDF, PNG, JPG, or DOC file.`, 400));
+    }
+
+    const safeFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `demo-documents/${Date.now()}-${safeFilename}`;
+    const url = await uploadBuffer(file.buffer, path, file.mimetype);
+
+    return sendSuccess(res, 201, 'Verification document uploaded successfully', {
+      url,
+      fileName: file.originalname,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // Create ₹1.00 Razorpay order for 1-month demo trial
 export const createDemoPaymentOrder = async (req: Request, res: Response, next: NextFunction) => {
@@ -57,7 +84,7 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       }
     }
 
-    const { contactName, email, phone, societyName, city, numberOfUnits, message, selectedPlan } = demoData;
+    const { contactName, email, phone, societyName, city, numberOfUnits, message, selectedPlan, documentUrl, documentName } = demoData;
 
     const paymentNote = `[PAID TRIAL] ₹1.00 Paid (Payment ID: ${razorpay_payment_id}, Order: ${razorpay_order_id}). 1-Month Demo Trial Active. Selected Plan: ${selectedPlan || 'STANDARD'}`;
     const combinedMessage = message ? `${message} | ${paymentNote}` : paymentNote;
@@ -71,6 +98,8 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
         city: city || null,
         numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
         message: combinedMessage,
+        documentUrl: documentUrl || null,
+        documentName: documentName || null,
         notes: `Paid ₹1 Demo Trial. Payment: ${razorpay_payment_id}. Selected Plan: ${selectedPlan || 'STANDARD'}`,
         status: DemoRequestStatus.PENDING,
       },
@@ -88,6 +117,8 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       paymentId: razorpay_payment_id,
       amountPaid: '₹1.00',
       message: combinedMessage,
+      documentUrl: documentUrl || null,
+      documentName: documentName || null,
     }).catch((err) => console.error('Error sending superadmin notification email:', err));
 
     return sendSuccess(res, 201, 'Payment verified and demo trial activated successfully!', {
@@ -104,7 +135,7 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
 
 export const createDemoRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { contactName, email, phone, societyName, city, numberOfUnits, message } = req.body;
+    const { contactName, email, phone, societyName, city, numberOfUnits, message, documentUrl, documentName } = req.body;
 
     const demoRequest = await prisma.demoRequest.create({
       data: {
@@ -115,6 +146,8 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
         city: city || null,
         numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
         message: message || null,
+        documentUrl: documentUrl || null,
+        documentName: documentName || null,
         status: DemoRequestStatus.PENDING,
       },
     });
@@ -128,6 +161,8 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
       city,
       numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
       message: message || null,
+      documentUrl: documentUrl || null,
+      documentName: documentName || null,
     }).catch((err) => console.error('Error sending superadmin notification email:', err));
 
     return sendSuccess(res, 201, 'Demo request submitted successfully. Our team will contact you soon.', demoRequest);

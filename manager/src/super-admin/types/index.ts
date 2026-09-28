@@ -61,6 +61,8 @@ export interface DemoRequest {
   city: string | null;
   numberOfUnits: number | null;
   message: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
   status: DemoRequestStatus;
   notes: string | null;
   createdPropertyId: string | null;

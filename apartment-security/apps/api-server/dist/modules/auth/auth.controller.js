@@ -360,14 +360,20 @@ const signupEmail = async (req, res, next) => {
 exports.signupEmail = signupEmail;
 const loginEmail = async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, propertyId } = req.body;
         const cleanEmail = (email || '').trim().toLowerCase();
         const cleanPassword = (password || '').trim();
         const user = await prisma_1.prisma.user.findFirst({
             where: {
                 email: { equals: cleanEmail, mode: 'insensitive' },
             },
-            include: { manager: true },
+            include: {
+                manager: {
+                    include: {
+                        property: true,
+                    },
+                },
+            },
         });
         if (!user || !user.passwordHash) {
             return next(new error_middleware_1.AppError('Invalid email or password', 401));
@@ -387,6 +393,19 @@ const loginEmail = async (req, res, next) => {
         }
         if (!user.isActive) {
             return next(new error_middleware_1.AppError('This account has been deactivated', 403));
+        }
+        // Role-specific validations for Manager login:
+        if (user.role === 'MANAGER') {
+            if (!propertyId) {
+                return next(new error_middleware_1.AppError('Please choose your society from the dropdown to sign in.', 400));
+            }
+            if (!user.manager || user.manager.propertyId !== propertyId) {
+                const assignedPropertyName = user.manager?.property?.name;
+                const msg = assignedPropertyName
+                    ? `You are not authorized for the selected society. Your manager account is registered under "${assignedPropertyName}".`
+                    : 'You are not registered as a manager for the selected society.';
+                return next(new error_middleware_1.AppError(msg, 403));
+            }
         }
         // Managers get exactly one active Manager Portal session per property —
         // claim it atomically before issuing any tokens. If another manager

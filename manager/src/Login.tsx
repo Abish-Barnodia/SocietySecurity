@@ -121,11 +121,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
+    if (!cleanEmail || !cleanPassword) {
+      setError('Please enter both email and password.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password: cleanPassword }),
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: cleanPassword,
+          propertyId: selectedSociety?.id || undefined,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
@@ -133,6 +143,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         localStorage.setItem('accessToken', data.data.accessToken);
         localStorage.setItem('refreshToken', data.data.refreshToken);
         localStorage.setItem('user', JSON.stringify(data.data.user));
+        if (selectedSociety) {
+          localStorage.setItem('selectedSociety', JSON.stringify(selectedSociety));
+        }
         if (data.data.user.role === 'SUPER_ADMIN') {
           localStorage.setItem('superadmin_token', data.data.accessToken);
           localStorage.setItem('superadmin_user', JSON.stringify(data.data.user));
@@ -339,9 +352,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div ref={dropdownRef} style={{ position: 'relative' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
-                      Choose Society
+                      Choose Society <span style={{ color: '#EF4444' }}>*</span>
                     </label>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Optional for Super Admin</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Required for Managers (Optional for Super Admin)</span>
                   </div>
                   
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -368,7 +381,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         borderRadius: 10,
                         background: '#F8FAFC',
                         width: '100%',
-                        borderColor: selectedSociety ? 'var(--primary)' : undefined,
+                        borderColor: selectedSociety
+                          ? 'var(--primary)'
+                          : error && error.toLowerCase().includes('society')
+                          ? '#EF4444'
+                          : undefined,
                       }}
                     />
 

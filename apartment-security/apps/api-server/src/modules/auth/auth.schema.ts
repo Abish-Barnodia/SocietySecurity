@@ -74,6 +74,7 @@ export const loginEmailSchema = z.object({
   body: z.object({
     email: z.string().email(),
     password: z.string().min(1),
+    propertyId: z.string().optional().nullable(),
   })
 });
 

@@ -10,6 +10,7 @@ import { auditLog } from '../../utils/audit.util';
 import { logger } from '../../utils/logger.util';
 import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_MS } from '../../utils/managerPortalLock.util';
 import { sendSupabaseRecoveryEmail, verifySupabaseRecoveryCode, setSupabaseUserPassword } from '../../utils/supabaseAuth.util';
+import { sendPasswordResetEmail } from '../../utils/email.service';
 
 export const getPublicSocieties = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -463,17 +464,18 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
 };
 
 
-// Delivery goes through Supabase Auth's own mailer (backed by the real
-// Gmail SMTP relay configured inside Supabase's own dashboard, not this
-// repo's .env) — Ethereal never reaches a real inbox no matter how
-// correctly it's wired up. Supabase is only ever used here to prove the
-// requester owns the email and to send the code; the password that
-// actually matters for login is still our own User.passwordHash, updated
-// below in resetPassword.
+// Password reset supports both Supabase Auth mailer (if configured) and
+// native OTP generation + direct SMTP email delivery via Gmail/Nodemailer.
+// In either case, the password stored in our User.passwordHash is updated.
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
+    if (!email) {
+      return next(new AppError('Email is required', 400));
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
     if (!user) {
       // Don't leak whether the email exists or not
@@ -484,9 +486,18 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
       return next(new AppError('Your account has been deactivated', 403));
     }
 
-    const sent = await sendSupabaseRecoveryEmail(email);
+    let sent = false;
+    try {
+      sent = await sendSupabaseRecoveryEmail(cleanEmail);
+    } catch (err) {
+      logger.warn('Supabase recovery email failed, falling back to native OTP email', { error: err });
+      sent = false;
+    }
+
     if (!sent) {
-      return next(new AppError('Password reset is not configured. Please contact support.', 500));
+      // Native OTP generation and direct SMTP delivery
+      const otp = await createOTP(user.id, 'PASSWORD_RESET');
+      await sendPasswordResetEmail(cleanEmail, otp);
     }
 
     await auditLog(user.id, 'PASSWORD_RESET_REQUESTED', 'User', user.id);
@@ -501,12 +512,30 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
   try {
     const { email, code, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    if (!email || !code || !password) {
+      return next(new AppError('Email, code, and new password are required', 400));
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = code.toString().trim();
+
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user) {
       return next(new AppError('Invalid email or code', 400));
     }
 
-    const verified = await verifySupabaseRecoveryCode(email, code);
+    // Try native OTP verification first
+    let verified = await verifyOTP(user.id, cleanCode, 'PASSWORD_RESET');
+
+    // If native OTP didn't match, check if Supabase recovery code matches
+    let supabaseResult: { userId: string } | null = null;
+    if (!verified) {
+      supabaseResult = await verifySupabaseRecoveryCode(cleanEmail, cleanCode);
+      if (supabaseResult) {
+        verified = true;
+      }
+    }
+
     if (!verified) {
       return next(new AppError('Invalid or expired OTP', 400));
     }
@@ -517,7 +546,10 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
       where: { id: user.id },
       data: { passwordHash }
     });
-    setSupabaseUserPassword(verified.userId, password).catch(() => {});
+
+    if (supabaseResult?.userId) {
+      setSupabaseUserPassword(supabaseResult.userId, password).catch(() => {});
+    }
 
     await auditLog(user.id, 'PASSWORD_RESET_SUCCESS', 'User', user.id);
 

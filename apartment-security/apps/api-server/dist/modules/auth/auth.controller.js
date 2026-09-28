@@ -15,6 +15,7 @@ const audit_util_1 = require("../../utils/audit.util");
 const logger_util_1 = require("../../utils/logger.util");
 const managerPortalLock_util_1 = require("../../utils/managerPortalLock.util");
 const supabaseAuth_util_1 = require("../../utils/supabaseAuth.util");
+const email_service_1 = require("../../utils/email.service");
 const getPublicSocieties = async (req, res, next) => {
     try {
         // Include ACTIVE and PENDING societies so newly provisioned societies
@@ -438,17 +439,17 @@ const loginEmail = async (req, res, next) => {
     }
 };
 exports.loginEmail = loginEmail;
-// Delivery goes through Supabase Auth's own mailer (backed by the real
-// Gmail SMTP relay configured inside Supabase's own dashboard, not this
-// repo's .env) — Ethereal never reaches a real inbox no matter how
-// correctly it's wired up. Supabase is only ever used here to prove the
-// requester owns the email and to send the code; the password that
-// actually matters for login is still our own User.passwordHash, updated
-// below in resetPassword.
+// Password reset supports both Supabase Auth mailer (if configured) and
+// native OTP generation + direct SMTP email delivery via Gmail/Nodemailer.
+// In either case, the password stored in our User.passwordHash is updated.
 const forgotPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
-        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
+        if (!email) {
+            return next(new error_middleware_1.AppError('Email is required', 400));
+        }
+        const cleanEmail = email.trim().toLowerCase();
+        const user = await prisma_1.prisma.user.findUnique({ where: { email: cleanEmail } });
         if (!user) {
             // Don't leak whether the email exists or not
             return (0, response_util_1.sendSuccess)(res, 200, 'If your email is registered, you will receive a reset code.');
@@ -456,9 +457,18 @@ const forgotPassword = async (req, res, next) => {
         if (!user.isActive) {
             return next(new error_middleware_1.AppError('Your account has been deactivated', 403));
         }
-        const sent = await (0, supabaseAuth_util_1.sendSupabaseRecoveryEmail)(email);
+        let sent = false;
+        try {
+            sent = await (0, supabaseAuth_util_1.sendSupabaseRecoveryEmail)(cleanEmail);
+        }
+        catch (err) {
+            logger_util_1.logger.warn('Supabase recovery email failed, falling back to native OTP email', { error: err });
+            sent = false;
+        }
         if (!sent) {
-            return next(new error_middleware_1.AppError('Password reset is not configured. Please contact support.', 500));
+            // Native OTP generation and direct SMTP delivery
+            const otp = await (0, otp_util_1.createOTP)(user.id, 'PASSWORD_RESET');
+            await (0, email_service_1.sendPasswordResetEmail)(cleanEmail, otp);
         }
         await (0, audit_util_1.auditLog)(user.id, 'PASSWORD_RESET_REQUESTED', 'User', user.id);
         return (0, response_util_1.sendSuccess)(res, 200, 'If your email is registered, you will receive a reset code.');
@@ -471,11 +481,25 @@ exports.forgotPassword = forgotPassword;
 const resetPassword = async (req, res, next) => {
     try {
         const { email, code, password } = req.body;
-        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
+        if (!email || !code || !password) {
+            return next(new error_middleware_1.AppError('Email, code, and new password are required', 400));
+        }
+        const cleanEmail = email.trim().toLowerCase();
+        const cleanCode = code.toString().trim();
+        const user = await prisma_1.prisma.user.findUnique({ where: { email: cleanEmail } });
         if (!user) {
             return next(new error_middleware_1.AppError('Invalid email or code', 400));
         }
-        const verified = await (0, supabaseAuth_util_1.verifySupabaseRecoveryCode)(email, code);
+        // Try native OTP verification first
+        let verified = await (0, otp_util_1.verifyOTP)(user.id, cleanCode, 'PASSWORD_RESET');
+        // If native OTP didn't match, check if Supabase recovery code matches
+        let supabaseResult = null;
+        if (!verified) {
+            supabaseResult = await (0, supabaseAuth_util_1.verifySupabaseRecoveryCode)(cleanEmail, cleanCode);
+            if (supabaseResult) {
+                verified = true;
+            }
+        }
         if (!verified) {
             return next(new error_middleware_1.AppError('Invalid or expired OTP', 400));
         }
@@ -484,7 +508,9 @@ const resetPassword = async (req, res, next) => {
             where: { id: user.id },
             data: { passwordHash }
         });
-        (0, supabaseAuth_util_1.setSupabaseUserPassword)(verified.userId, password).catch(() => { });
+        if (supabaseResult?.userId) {
+            (0, supabaseAuth_util_1.setSupabaseUserPassword)(supabaseResult.userId, password).catch(() => { });
+        }
         await (0, audit_util_1.auditLog)(user.id, 'PASSWORD_RESET_SUCCESS', 'User', user.id);
         return (0, response_util_1.sendSuccess)(res, 200, 'Password has been successfully reset');
     }

@@ -57,6 +57,34 @@ export const sendVerificationEmail = async (to: string, otp: string) => {
   return sendEmail(to, subject, text, html);
 };
 
+export const sendPasswordResetEmail = async (to: string, otp: string) => {
+  const subject = '🔐 Password Reset Code - Society Security';
+  const text = `Your password reset verification code is: ${otp}. This code will expire in 10 minutes. If you did not request this, please ignore this email.`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #00A67C, #00C896); padding: 20px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 22px;">Reset Your Password</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.9;">Society Security Portal</p>
+      </div>
+
+      <div style="background: white; padding: 24px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; text-align: center;">
+        <p style="margin-top: 0; font-size: 15px; color: #334155;">
+          You requested to reset your account password. Use the following 6-digit verification code:
+        </p>
+
+        <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; padding: 16px; background-color: #f0fdf4; color: #00A67C; text-align: center; border-radius: 8px; border: 1px dashed #00C896; margin: 20px 0;">
+          ${otp}
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">
+          ⏰ This code will expire in <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email.
+        </p>
+      </div>
+    </div>
+  `;
+  return sendEmail(to, subject, text, html);
+};
+
 export interface DemoNotificationData {
   societyName: string;
   contactName: string;

@@ -9,6 +9,8 @@ import {
   Platform,
   Dimensions,
   ActivityIndicator,
+  Modal,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,7 +20,7 @@ import { testGateNotificationWithRingtone } from '../../utils/notifications';
 
 export const NOTIFICATION_ONBOARDING_KEY = '@resident_has_seen_notification_prompt';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 interface NotificationSetupScreenProps {
   onComplete?: () => void;
@@ -31,15 +33,20 @@ export default function NotificationSetupScreen({
 }: NotificationSetupScreenProps) {
   const [testing, setTesting] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
+  const [showLiveCallModal, setShowLiveCallModal] = useState(false);
+  const [lastAction, setLastAction] = useState<'APPROVED' | 'DENIED' | null>(null);
 
   // Audio player for playing the loud gate ringtone live
   const ringAudio = require('../../../assets/visitor_ring.wav');
   const player = useAudioPlayer(ringAudio);
 
-  // Pulse animation for sound waves
+  // Pulse animation for sound waves on main screen
   const waveAnim1 = useRef(new Animated.Value(1)).current;
   const waveAnim2 = useRef(new Animated.Value(1)).current;
   const cardScale = useRef(new Animated.Value(1)).current;
+
+  // Pulse animation for the incoming visitor modal
+  const modalPulseAnim = useRef(new Animated.Value(1)).current;
 
   const startWaveAnimation = () => {
     Animated.loop(
@@ -88,10 +95,37 @@ export default function NotificationSetupScreen({
     ).start();
   };
 
-  const handleFinish = async () => {
+  const startModalPulse = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(modalPulseAnim, {
+          toValue: 1.15,
+          duration: 600,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(modalPulseAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const stopAllRinging = () => {
     try {
       player.pause();
     } catch {}
+    try {
+      Vibration.cancel();
+    } catch {}
+    setTesting(false);
+  };
+
+  const handleFinish = async () => {
+    stopAllRinging();
     await AsyncStorage.setItem(NOTIFICATION_ONBOARDING_KEY, 'true');
     if (onComplete) {
       onComplete();
@@ -105,10 +139,12 @@ export default function NotificationSetupScreen({
   const handleTestNotification = async () => {
     if (testing) return;
     setTesting(true);
-    setTestSuccess(false);
+    setShowLiveCallModal(true);
+    startWaveAnimation();
+    startModalPulse();
 
     try {
-      // 1. Start loud audio playback so resident hears ringtone immediately
+      // 1. Play loud visitor ring tone
       try {
         player.seekTo(0);
         player.play();
@@ -116,25 +152,28 @@ export default function NotificationSetupScreen({
         console.log('Audio playback note:', e);
       }
 
-      startWaveAnimation();
+      // 2. Continuous pattern vibration
+      if (Platform.OS !== 'web') {
+        Vibration.vibrate([0, 500, 200, 500], true);
+      }
 
-      // 2. Trigger OS notification with MAX importance, vibration & approve/deny
+      // 3. Trigger OS native notification with high priority
       await testGateNotificationWithRingtone();
-      setTestSuccess(true);
     } catch (error) {
       console.log('Test notification error:', error);
-    } finally {
-      setTimeout(() => {
-        setTesting(false);
-      }, 4000);
     }
+  };
+
+  const handleModalDecision = (decision: 'APPROVED' | 'DENIED') => {
+    stopAllRinging();
+    setShowLiveCallModal(false);
+    setLastAction(decision);
+    setTestSuccess(true);
   };
 
   useEffect(() => {
     return () => {
-      try {
-        player.pause();
-      } catch {}
+      stopAllRinging();
     };
   }, []);
 
@@ -208,9 +247,11 @@ export default function NotificationSetupScreen({
       {/* Success Notification Banner when verified */}
       {testSuccess && (
         <View style={styles.successBanner}>
-          <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+          <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
           <Text style={styles.successBannerText}>
-            Loud ringtone & visitor alert sent!
+            {lastAction === 'APPROVED'
+              ? 'Visitor Approved! Gate notification & loud ring verified 🎉'
+              : 'Visitor Denied! Gate notification & loud ring verified 🎉'}
           </Text>
         </View>
       )}
@@ -218,8 +259,8 @@ export default function NotificationSetupScreen({
       {/* Bottom Action Area */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.testButton, testing && styles.testButtonActive]}
-          onPress={handleTestNotification}
+          style={[styles.testButton, testSuccess && styles.testButtonSuccess]}
+          onPress={testSuccess ? handleFinish : handleTestNotification}
           activeOpacity={0.85}
         >
           {testing ? (
@@ -229,21 +270,119 @@ export default function NotificationSetupScreen({
             </View>
           ) : (
             <Text style={styles.testButtonText}>
-              {testSuccess ? 'Test Again 🔔' : 'Test Notifications'}
+              {testSuccess ? 'Continue to App →' : 'Test Notifications'}
             </Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.skipButton}
-          onPress={handleFinish}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.skipText}>
-            {testSuccess ? 'Continue to App →' : 'Skip for now >'}
-          </Text>
-        </TouchableOpacity>
+        {testSuccess ? (
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleTestNotification}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.testAgainText}>Test Again 🔔</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleFinish}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.skipText}>Skip for now &gt;</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* ========================================================= */}
+      {/* REALISTIC INCOMING VISITOR LIVE GATE CALL MODAL OVERLAY */}
+      {/* ========================================================= */}
+      <Modal
+        visible={showLiveCallModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => handleModalDecision('DENIED')}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.callCardContainer}>
+            {/* Live Indicator Header */}
+            <View style={styles.callHeaderBadge}>
+              <View style={styles.livePulseDot} />
+              <Text style={styles.callHeaderBadgeText}>LIVE GATE CALL - GATE #1</Text>
+              <TouchableOpacity
+                onPress={() => handleModalDecision('DENIED')}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Visitor Avatar with soundwaves */}
+            <View style={styles.visitorAvatarWrapper}>
+              <Animated.View
+                style={[
+                  styles.avatarPulseRing,
+                  { transform: [{ scale: modalPulseAnim }] },
+                ]}
+              />
+              <View style={styles.visitorAvatarBox}>
+                <Ionicons name="cube" size={38} color="#0284C7" />
+              </View>
+            </View>
+
+            <Text style={styles.visitorNameText}>Rohan Sharma</Text>
+            <View style={styles.visitorTagPill}>
+              <Ionicons name="bicycle-outline" size={14} color="#0369A1" style={{ marginRight: 4 }} />
+              <Text style={styles.visitorTagText}>Delivery Partner (Amazon Express)</Text>
+            </View>
+
+            {/* Details Box */}
+            <View style={styles.callInfoBox}>
+              <View style={styles.callInfoRow}>
+                <Text style={styles.callInfoLabel}>Destination</Text>
+                <Text style={styles.callInfoVal}>Flat 103, Tower A</Text>
+              </View>
+              <View style={styles.callInfoDivider} />
+              <View style={styles.callInfoRow}>
+                <Text style={styles.callInfoLabel}>Vehicle</Text>
+                <Text style={styles.callInfoVal}>KA-01-MJ-8821</Text>
+              </View>
+              <View style={styles.callInfoDivider} />
+              <View style={styles.callInfoRow}>
+                <Text style={styles.callInfoLabel}>Purpose</Text>
+                <Text style={styles.callInfoVal}>Package Delivery</Text>
+              </View>
+            </View>
+
+            {/* Audio Alert Status */}
+            <View style={styles.ringingStatusRow}>
+              <Ionicons name="volume-high" size={18} color="#EA580C" />
+              <Text style={styles.ringingStatusText}>Loud Ringtone Playing...</Text>
+            </View>
+
+            {/* Approve / Deny Action Buttons */}
+            <View style={styles.callActionRow}>
+              <TouchableOpacity
+                style={styles.denyCallBtn}
+                onPress={() => handleModalDecision('DENIED')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="close-circle" size={22} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.denyCallText}>Deny Entry</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.approveCallBtn}
+                onPress={() => handleModalDecision('APPROVED')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.approveCallText}>Approve Entry</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -395,15 +534,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
     borderWidth: 1,
     borderColor: '#86EFAC',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 20,
-    marginBottom: 8,
+    marginBottom: 10,
+    maxWidth: 340,
   },
   successBannerText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#15803D',
+    flex: 1,
   },
   footer: {
     width: '100%',
@@ -413,19 +554,20 @@ const styles = StyleSheet.create({
   testButton: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: '#FFD900',
+    backgroundColor: '#FFD200',
     paddingVertical: 17,
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#FFD900',
+    shadowColor: '#FFD200',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 5,
   },
-  testButtonActive: {
-    backgroundColor: '#FFE347',
+  testButtonSuccess: {
+    backgroundColor: '#16A34A',
+    shadowColor: '#16A34A',
   },
   testingRow: {
     flexDirection: 'row',
@@ -446,5 +588,189 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#475569',
+  },
+  testAgainText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+
+  // Modal Styles
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  callCardContainer: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  callHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  livePulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    marginRight: 6,
+  },
+  callHeaderBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  visitorAvatarWrapper: {
+    width: 88,
+    height: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+    position: 'relative',
+  },
+  avatarPulseRing: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#BAE6FD',
+    opacity: 0.5,
+  },
+  visitorAvatarBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 2.5,
+    borderColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visitorNameText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 6,
+  },
+  visitorTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  visitorTagText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  callInfoBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  callInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  callInfoLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  callInfoVal: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  callInfoDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+  ringingStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  ringingStatusText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#EA580C',
+  },
+  callActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  denyCallBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  denyCallText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  approveCallBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#16A34A',
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  approveCallText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

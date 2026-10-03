@@ -1,3 +1,4 @@
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -8,147 +9,168 @@ import { useTheme } from '../../context/ThemeContext';
 export default function ProfileScreen({ navigation }: { navigation: any }) {
   const { logout, userProfile, userPhone } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
-  const styles = getStyles(colors);
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const name = userProfile?.name || 'Resident';
   const phone = userProfile?.phone || userPhone || '';
-  const appVersion = Constants.expoConfig?.version ?? '—';
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const propertyName = userProfile?.propertyName || 'Apartment Security';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.pageTitle}>Profile</Text>
+      {/* HEADER (Matching Entries & Home Design) */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.subTitle}>{propertyName} • Resident Settings</Text>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* MAIN PROFILE CARD */}
         <View style={styles.card}>
-          <TouchableOpacity 
-            style={styles.profileRow} 
-            activeOpacity={0.7} 
+          <TouchableOpacity
+            style={styles.profileRow}
+            activeOpacity={0.75}
             onPress={() => navigation.navigate('Household')}
           >
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={28} color={colors.primary} />
+            {/* Quick Actions Style Monochrome Icon Box */}
+            <View style={styles.quickActionAvatarBox}>
+              <Ionicons name="person-outline" size={26} color={colors.text} />
             </View>
+
             <View style={styles.profileInfo}>
               <Text style={styles.name}>{name}</Text>
-              <Text style={styles.propertyText}>{userProfile?.propertyName || 'Apartment Security'}</Text>
+              <Text style={styles.propertyText}>{propertyName}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
 
+          {/* CONTACT INFO */}
           <View style={styles.detailsContainer}>
             {!!phone && (
               <View style={styles.detailRow}>
-                <Ionicons name="call-outline" size={16} color={colors.textMuted} />
+                <Ionicons name="call-outline" size={15} color={colors.textMuted} />
                 <Text style={styles.detailText}>{phone}</Text>
               </View>
             )}
             {!!userProfile?.email && (
               <View style={styles.detailRow}>
-                <Ionicons name="mail-outline" size={16} color={colors.textMuted} />
+                <Ionicons name="mail-outline" size={15} color={colors.textMuted} />
                 <Text style={styles.detailText}>{userProfile.email}</Text>
               </View>
             )}
           </View>
 
-          <View style={[styles.divider, { marginVertical: 16 }]} />
+          <View style={styles.divider} />
 
+          {/* RESIDENT INFO GRID (Box sizes matching Entries) */}
           <View style={styles.infoGrid}>
             <View style={styles.infoGridItem}>
               <Text style={styles.infoGridLabel}>Tower</Text>
-              <Text style={styles.infoGridValue}>{userProfile?.wing || '—'}</Text>
+              <Text style={styles.infoGridValue}>{userProfile?.wing || 'Tower A'}</Text>
             </View>
             <View style={styles.infoGridItem}>
               <Text style={styles.infoGridLabel}>Flat</Text>
-              <Text style={styles.infoGridValue}>{userProfile?.flat || '—'}</Text>
+              <Text style={styles.infoGridValue}>{userProfile?.flat || 'Flat 402'}</Text>
             </View>
             <View style={styles.infoGridItem}>
               <Text style={styles.infoGridLabel}>Role</Text>
               <Text style={styles.infoGridValue}>{userProfile?.residentType || 'Owner'}</Text>
             </View>
             <View style={styles.infoGridItem}>
-              <Text style={styles.infoGridLabel}>Type</Text>
-              <Text style={styles.infoGridValue}>{userProfile?.isPrimary ? 'Primary' : (userProfile?.relationship || 'Member')}</Text>
+              <Text style={styles.infoGridLabel}>Membership</Text>
+              <Text style={styles.infoGridValue}>
+                {userProfile?.isPrimary ? 'Primary' : userProfile?.relationship || 'Resident'}
+              </Text>
             </View>
           </View>
         </View>
 
-        <TouchableOpacity style={styles.appearanceRow} onPress={toggleTheme} activeOpacity={0.7}>
-          <View style={[styles.rowIcon, { backgroundColor: colors.primaryLight }]}>
-            <Ionicons name={isDark ? 'moon' : 'sunny'} size={18} color={colors.primary} />
+        {/* APPEARANCE TOGGLE ROW */}
+        <TouchableOpacity style={styles.appearanceRow} onPress={toggleTheme} activeOpacity={0.8}>
+          <View style={styles.quickActionIconBox}>
+            <Ionicons name={isDark ? 'moon-outline' : 'sunny-outline'} size={20} color={colors.text} />
           </View>
           <View style={styles.rowTextGroup}>
-            <Text style={styles.rowTitle}>Appearance</Text>
-            <Text style={styles.rowSubtitle}>{isDark ? 'Dark mode' : 'Light mode'}</Text>
+            <Text style={styles.rowTitle}>Theme & Appearance</Text>
+            <Text style={styles.rowSubtitle}>{isDark ? 'Dark Theme (Active)' : 'Light Theme (Active)'}</Text>
           </View>
           <View style={styles.appearanceToggle}>
-            <Ionicons name={isDark ? 'moon' : 'sunny'} size={16} color={colors.primary} />
+            <Ionicons name={isDark ? 'moon' : 'sunny'} size={15} color={colors.text} />
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.sectionLabel}>SETTINGS</Text>
+        {/* SETTINGS SECTION */}
+        <Text style={styles.sectionLabel}>PREFERENCES & SECURITY</Text>
         <View style={styles.menuCard}>
           <MenuRow
-            icon="people"
-            iconBg={colors.primaryLight}
-            iconColor={colors.primary}
-            label="My Family / Household"
+            icon="people-outline"
+            label="My Family & Household"
+            subLabel="Manage family members & permissions"
             colors={colors}
+            isDark={isDark}
             onPress={() => navigation.navigate('Household')}
           />
-          <View style={styles.divider} />
+          <View style={styles.menuDivider} />
           <MenuRow
-            icon="notifications"
-            iconBg={colors.primaryLight}
-            iconColor={colors.primary}
-            label="Notification Settings"
+            icon="notifications-outline"
+            label="Notification Preferences"
+            subLabel="Gate alerts, intercom, WhatsApp"
             colors={colors}
+            isDark={isDark}
             onPress={() => navigation.navigate('NotificationSettings')}
           />
-          <View style={styles.divider} />
+          <View style={styles.menuDivider} />
           <MenuRow
-            icon="shield-checkmark"
-            iconBg={colors.dangerLight}
-            iconColor={colors.danger}
-            label="Security Settings"
+            icon="shield-checkmark-outline"
+            label="Security & Guard Settings"
+            subLabel="Duress PIN, Auto-approval rules"
             colors={colors}
+            isDark={isDark}
             onPress={() => navigation.navigate('SecuritySettings')}
           />
-          <View style={styles.divider} />
+          <View style={styles.menuDivider} />
           <MenuRow
-            icon="eye-off"
-            iconBg={colors.border}
-            iconColor={colors.textMuted}
-            label="Privacy"
+            icon="eye-off-outline"
+            label="Privacy & Visibility"
+            subLabel="Control profile visibility in directory"
             colors={colors}
+            isDark={isDark}
             onPress={() => navigation.navigate('Privacy')}
           />
         </View>
 
-        <Text style={styles.sectionLabel}>ABOUT</Text>
+        {/* ABOUT SECTION */}
+        <Text style={styles.sectionLabel}>SYSTEM & SUPPORT</Text>
         <View style={styles.menuCard}>
           <View style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
-              <View style={[styles.rowIcon, { backgroundColor: colors.primaryLight }]}>
-                <Ionicons name="information-circle" size={18} color={colors.primary} />
+              <View style={styles.quickActionIconBox}>
+                <Ionicons name="information-circle-outline" size={20} color={colors.text} />
               </View>
-              <Text style={styles.rowTitle}>App Version</Text>
+              <View style={styles.menuTextCol}>
+                <Text style={styles.rowTitle}>App Version</Text>
+                <Text style={styles.rowSubtitle}>Latest stable release</Text>
+              </View>
             </View>
-            <Text style={styles.versionValue}>{appVersion}</Text>
+            <Text style={styles.versionValue}>v{appVersion}</Text>
           </View>
-          <View style={styles.divider} />
+
+          <View style={styles.menuDivider} />
+
           <MenuRow
-            icon="help-circle"
-            iconBg={colors.primaryLight}
-            iconColor={colors.primary}
-            label="Help & Support"
+            icon="help-circle-outline"
+            label="Help & Society Support"
+            subLabel="Gate helpline and management office"
             colors={colors}
+            isDark={isDark}
             onPress={() => navigation.navigate('HelpSupport')}
           />
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Ionicons name="log-out-outline" size={20} color={colors.danger} style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>Logout</Text>
+        {/* LOGOUT BUTTON */}
+        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={18} color="#dc2626" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>Log Out Account</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -157,85 +179,116 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
 
 function MenuRow({
   icon,
-  iconBg,
-  iconColor,
   label,
+  subLabel,
   colors,
+  isDark,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
-  iconBg: string;
-  iconColor: string;
   label: string;
-  colors: ReturnType<typeof useTheme>['colors'];
+  subLabel?: string;
+  colors: any;
+  isDark: boolean;
   onPress: () => void;
 }) {
-  const styles = getStyles(colors);
+  const styles = getStyles(colors, isDark);
   return (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress}>
+    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.75}>
       <View style={styles.menuItemLeft}>
-        <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
-          <Ionicons name={icon} size={18} color={iconColor} />
+        <View style={styles.quickActionIconBox}>
+          <Ionicons name={icon} size={20} color={colors.text} />
         </View>
-        <Text style={styles.rowTitle}>{label}</Text>
+        <View style={styles.menuTextCol}>
+          <Text style={styles.rowTitle}>{label}</Text>
+          {!!subLabel && <Text style={styles.rowSubtitle}>{subLabel}</Text>}
+        </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
 
-const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const getStyles = (colors: any, isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: isDark ? '#0f172a' : '#f5f3ef',
+    },
+    header: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '800',
+      color: colors.text,
+    },
+    subTitle: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2,
     },
     content: {
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingTop: 8,
       paddingBottom: 40,
     },
-    pageTitle: {
-      fontSize: 26,
-      fontWeight: 'bold',
-      color: colors.text,
-      marginBottom: 16,
-    },
+
+    // PROFILE CARD (Matching Entries & Home Box Sizes)
     card: {
-      backgroundColor: colors.card,
-      borderRadius: 18,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderRadius: 16,
       padding: 16,
-      marginBottom: 16,
+      marginBottom: 14,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 2,
     },
     profileRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 16,
     },
-    avatar: {
-      width: 56,
-      height: 56,
+    quickActionAvatarBox: {
+      width: 52,
+      height: 52,
       borderRadius: 16,
-      backgroundColor: colors.primaryLight,
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 2,
+      elevation: 1,
     },
-    profileInfo: { flex: 1 },
+    profileInfo: {
+      flex: 1,
+    },
     name: {
-      fontSize: 20,
-      fontWeight: 'bold',
+      fontSize: 17,
+      fontWeight: '800',
       color: colors.text,
       marginBottom: 2,
     },
     propertyText: {
-      fontSize: 14,
+      fontSize: 13,
       color: colors.textMuted,
+      fontWeight: '500',
     },
     detailsContainer: {
-      gap: 8,
-      marginTop: 4,
+      gap: 6,
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#334155' : '#f1f5f9',
     },
     detailRow: {
       flexDirection: 'row',
@@ -243,116 +296,155 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       gap: 8,
     },
     detailText: {
-      fontSize: 15,
+      fontSize: 13,
       color: colors.text,
+      fontWeight: '600',
+    },
+    divider: {
+      height: 1,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
+      marginVertical: 12,
     },
     infoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
+      gap: 10,
     },
     infoGridItem: {
       width: '48%',
-      backgroundColor: colors.background,
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
       borderRadius: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
       borderWidth: 1,
       borderColor: colors.border,
     },
     infoGridLabel: {
-      fontSize: 12,
+      fontSize: 11,
       color: colors.textMuted,
-      marginBottom: 4,
+      fontWeight: '600',
+      marginBottom: 2,
     },
     infoGridValue: {
-      fontSize: 15,
-      fontWeight: '700',
+      fontSize: 14,
+      fontWeight: '800',
       color: colors.text,
     },
+
+    // APPEARANCE ROW
     appearanceRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.card,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderRadius: 16,
       padding: 14,
-      marginBottom: 20,
+      marginBottom: 16,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.04,
+      shadowRadius: 3,
+      elevation: 2,
     },
-    rowIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
+    quickActionIconBox: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12,
     },
-    rowTextGroup: { flex: 1 },
+    rowTextGroup: {
+      flex: 1,
+    },
     rowTitle: {
-      fontSize: 15,
-      fontWeight: '600',
+      fontSize: 14,
+      fontWeight: '700',
       color: colors.text,
     },
     rowSubtitle: {
-      fontSize: 13,
+      fontSize: 12,
       color: colors.textMuted,
-      marginTop: 1,
+      marginTop: 2,
     },
     appearanceToggle: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.background,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: isDark ? '#0f172a' : '#f1f5f9',
+      borderWidth: 1,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
     },
+
+    // SECTION HEADINGS
     sectionLabel: {
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 11,
+      fontWeight: '800',
       color: colors.textMuted,
       letterSpacing: 0.6,
       marginBottom: 8,
       marginLeft: 4,
     },
+
+    // MENU CARDS
     menuCard: {
-      backgroundColor: colors.card,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderRadius: 16,
       paddingHorizontal: 14,
-      marginBottom: 20,
+      marginBottom: 16,
       borderWidth: 1,
       borderColor: colors.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.04,
+      shadowRadius: 3,
+      elevation: 2,
     },
     menuItem: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 14,
+      paddingVertical: 12,
     },
     menuItemLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      flexShrink: 1,
+      flex: 1,
+    },
+    menuTextCol: {
+      flex: 1,
+      marginRight: 8,
+    },
+    menuDivider: {
+      height: 1,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
     },
     versionValue: {
-      fontSize: 14,
+      fontSize: 13,
       color: colors.textMuted,
+      fontWeight: '700',
     },
-    divider: {
-      height: 1,
-      backgroundColor: colors.border,
-    },
+
+    // LOGOUT BUTTON
     logoutButton: {
       flexDirection: 'row',
-      backgroundColor: colors.dangerLight,
-      padding: 16,
+      backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+      borderWidth: 1,
+      borderColor: isDark ? '#7f1d1d' : '#fecaca',
+      paddingVertical: 14,
       borderRadius: 14,
       justifyContent: 'center',
       alignItems: 'center',
+      marginTop: 4,
+      marginBottom: 16,
     },
     logoutText: {
-      color: colors.danger,
-      fontSize: 16,
-      fontWeight: 'bold',
+      color: '#dc2626',
+      fontSize: 14,
+      fontWeight: '800',
     },
   });

@@ -7,6 +7,7 @@ import { io } from '../../server';
 import { sendSMS } from '../../utils/sms.util';
 import { env } from '../../config/env';
 import { acknowledgeAlert } from '../../utils/alert.util';
+import { getResidentContext } from '../../utils/residentContext.util';
 
 export const broadcastAlert = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -240,5 +241,44 @@ export const acknowledgeAlertRoute = async (req: Request, res: Response, next: N
 
     const updated = await acknowledgeAlert(id, req.user!.userId);
     return sendSuccess(res, 200, 'Alert acknowledged', updated);
+  } catch (err) { next(err); }
+};
+
+export const notifyGuardsOverstay = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { entryId, visitorName, expectedDuration, reason } = req.body;
+    const { propertyId, name: residentName, unitId } = await getResidentContext(req.user!.userId);
+
+    const unit = await prisma.unit.findUnique({
+      where: { id: unitId },
+      select: { unitNumber: true, tower: true },
+    });
+
+    const unitInfo = unit?.tower ? `${unit.tower} - ${unit.unitNumber}` : (unit?.unitNumber || 'Unit');
+
+    const title = `🚨 Overstay Notice: ${visitorName || 'Visitor'}`;
+    const body = `Resident ${residentName} (${unitInfo}) notified security that visitor ${visitorName || ''} is staying longer than pass time.${reason ? ` Reason: ${reason}` : ''}${expectedDuration ? ` Duration: ${expectedDuration}` : ''}`;
+
+    const { triggerAlert } = await import('../../utils/alert.util');
+    const alert = await triggerAlert({
+      priority: 'P2',
+      title,
+      body,
+      targetRoles: ['GUARD', 'MANAGER', 'COMMITTEE'],
+      propertyId,
+      entryId: entryId || undefined,
+    });
+
+    io?.to(`property:${propertyId}`).emit('alert:new', alert);
+    io?.to(`property:${propertyId}:guards`).emit('alert:new', alert);
+    io?.to(`property:${propertyId}`).emit('guard:overstay_alert', {
+      alert,
+      unitInfo,
+      visitorName,
+      residentName,
+    });
+
+    await auditLog(req.user!.userId, 'NOTIFY_GUARD_OVERSTAY', 'Alert', alert.id);
+    return sendSuccess(res, 201, 'Guards notified of visitor overstay', alert);
   } catch (err) { next(err); }
 };

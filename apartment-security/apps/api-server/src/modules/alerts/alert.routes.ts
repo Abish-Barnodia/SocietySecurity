@@ -9,7 +9,8 @@ import {
   getAlerts,
   acknowledgeAlertRoute,
   broadcastVehicleAlert,
-  claimVehicleAlert
+  claimVehicleAlert,
+  notifyGuardsOverstay,
 } from './alert.controller';
 import {
   createAlertSchema,
@@ -37,5 +38,8 @@ router.post('/vehicle', requireRole('GUARD'), validate(vehicleAlertSchema), broa
 
 // Resident claims an unknown vehicle as their own
 router.post('/:id/claim', requireRole('RESIDENT'), claimVehicleAlert);
+
+// Resident notifies guards of visitor overstay / extended stay
+router.post('/overstay', requireRole('RESIDENT'), notifyGuardsOverstay);
 
 export { router as alertRouter };

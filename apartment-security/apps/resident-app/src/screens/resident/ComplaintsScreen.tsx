@@ -14,14 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useComplaints, Complaint, ComplaintStatus } from '../../context/ComplaintsContext';
 import { useTheme } from '../../context/ThemeContext';
-import { categoryMeta, statusLabel, priorityLabel, STATUS_COLOR_KEY, PRIORITY_COLOR_KEY, STATUS_OPTIONS } from '../../constants/complaints';
+import { categoryMeta, statusLabel, priorityLabel, STATUS_OPTIONS } from '../../constants/complaints';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
 export default function ComplaintsScreen({ navigation }: { navigation: any }) {
   const { complaints, loading, error, fetchComplaints, lastFetchedAt } = useComplaints();
-  const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
 
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ComplaintStatus | null>(null);
@@ -58,27 +58,34 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
 
   const renderItem = ({ item }: { item: Complaint }) => {
     const category = categoryMeta(item.category);
-    const statusColor = colors[STATUS_COLOR_KEY[item.status]];
-    const priorityColor = colors[PRIORITY_COLOR_KEY[item.priority]];
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('ComplaintDetail', { complaintId: item.id })}>
-        <View style={styles.cardIcon}>
-          <Ionicons name={category.icon} size={20} color={colors.primary} />
-        </View>
-        <View style={styles.cardBody}>
-          <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.cardMeta}>{category.label} · {formatDate(item.createdAt)}</Text>
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, { backgroundColor: `${statusColor}22` }]}>
-              <Text style={[styles.badgeText, { color: statusColor }]}>{statusLabel(item.status)}</Text>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('ComplaintDetail', { complaintId: item.id })}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIconBox}>
+            <Ionicons name={category.icon as any} size={22} color={colors.text} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </View>
-            <View style={[styles.badge, { backgroundColor: `${priorityColor}22` }]}>
-              <Text style={[styles.badgeText, { color: priorityColor }]}>{priorityLabel(item.priority)}</Text>
-            </View>
+            <Text style={styles.cardMeta}>{category.label} · {formatDate(item.createdAt)}</Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+
+        <View style={styles.badgeRow}>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
+          </View>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{priorityLabel(item.priority)} Priority</Text>
+          </View>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -86,48 +93,67 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Complaints</Text>
+        {navigation.canGoBack() && (
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </TouchableOpacity>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Helpdesk & Complaints</Text>
+          <Text style={styles.headerSubtitle}>Raise tickets, report issues, and track resolutions</Text>
+        </View>
         <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('CreateComplaint')}>
-          <Ionicons name="add" size={22} color={colors.card} />
+          <Ionicons name="add" size={22} color={isDark ? '#000' : '#fff'} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchBar}>
-        <Ionicons name="search" size={16} color={colors.textMuted} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search complaints"
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search tickets, issues..."
+            placeholderTextColor={colors.textMuted}
+            value={query}
+            onChangeText={setQuery}
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')}>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.filterSection}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={STATUS_OPTIONS}
+          keyExtractor={(item) => item.value}
+          contentContainerStyle={styles.filterRow}
+          renderItem={({ item }) => {
+            const active = statusFilter === item.value;
+            const count = statusCounts[item.value] ?? 0;
+            return (
+              <TouchableOpacity
+                style={[styles.filterChip, active && styles.filterChipActive]}
+                onPress={() => setStatusFilter(active ? null : item.value)}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{item.label}</Text>
+                <View style={[styles.filterChipCount, active && styles.filterChipCountActive]}>
+                  <Text style={[styles.filterChipCountText, active && styles.filterChipCountTextActive]}>{count}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       </View>
 
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={STATUS_OPTIONS}
-        keyExtractor={(item) => item.value}
-        contentContainerStyle={styles.filterRow}
-        renderItem={({ item }) => {
-          const active = statusFilter === item.value;
-          const count = statusCounts[item.value] ?? 0;
-          return (
-            <TouchableOpacity
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setStatusFilter(active ? null : item.value)}
-            >
-              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{item.label}</Text>
-              <View style={[styles.filterChipCount, active && styles.filterChipCountActive]}>
-                <Text style={[styles.filterChipCountText, active && styles.filterChipCountTextActive]}>{count}</Text>
-              </View>
-            </TouchableOpacity>
-          );
-        }}
-      />
-
       {loading && complaints.length === 0 ? (
-        <ActivityIndicator style={styles.loader} color={colors.primary} />
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={colors.text} />
+        </View>
       ) : error ? (
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{error}</Text>
@@ -141,12 +167,15 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.text} />}
           ListEmptyComponent={
             <View style={styles.centerState}>
-              <Ionicons name="chatbox-ellipses-outline" size={40} color={colors.textMuted} />
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="chatbox-ellipses-outline" size={28} color={colors.textMuted} />
+              </View>
+              <Text style={styles.emptyTitle}>No Complaints Found</Text>
               <Text style={styles.emptyText}>
-                {complaints.length === 0 ? 'No complaints yet' : 'No complaints match your search'}
+                {complaints.length === 0 ? 'No complaints have been filed yet.' : 'No tickets match your filter criteria.'}
               </Text>
             </View>
           }
@@ -156,96 +185,135 @@ export default function ComplaintsScreen({ navigation }: { navigation: any }) {
   );
 }
 
-const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolean) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: isDark ? '#0f172a' : '#f5f3ef' },
     header: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 14,
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingTop: 8,
-      paddingBottom: 12,
     },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.text },
-    addButton: {
+    backBtn: {
       width: 40,
       height: 40,
-      borderRadius: 20,
-      backgroundColor: colors.primary,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    addButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#ffffff' : '#0f172a',
       justifyContent: 'center',
       alignItems: 'center',
+      marginLeft: 8,
+    },
+    searchContainer: {
+      paddingHorizontal: 20,
+      marginBottom: 10,
     },
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.card,
-      marginHorizontal: 16,
-      borderRadius: 12,
-      paddingHorizontal: 12,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderRadius: 14,
+      paddingHorizontal: 14,
       paddingVertical: 10,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: colors.text },
-    filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+    searchInput: { flex: 1, marginLeft: 10, fontSize: 14, color: colors.text },
+    filterSection: { marginBottom: 12 },
+    filterRow: { paddingHorizontal: 20, gap: 8 },
     filterChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 14,
-      backgroundColor: colors.card,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderWidth: 1,
       borderColor: colors.border,
-      marginRight: 8,
     },
-    filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    filterChipText: { fontSize: 12, color: colors.textMuted, fontWeight: '600' },
-    filterChipTextActive: { color: colors.card },
+    filterChipActive: { backgroundColor: isDark ? '#ffffff' : '#0f172a', borderColor: isDark ? '#ffffff' : '#0f172a' },
+    filterChipText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
+    filterChipTextActive: { color: isDark ? '#0f172a' : '#ffffff', fontWeight: '700' },
     filterChipCount: {
-      backgroundColor: colors.background,
-      borderRadius: 8,
-      minWidth: 18,
-      height: 18,
-      paddingHorizontal: 4,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
       marginLeft: 6,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    filterChipCountActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-    filterChipCountText: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
-    filterChipCountTextActive: { color: colors.card },
-    listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-    loader: { marginTop: 60 },
+    filterChipCountActive: { backgroundColor: isDark ? '#e2e8f0' : '#334155' },
+    filterChipCountText: { fontSize: 11, fontWeight: '700', color: colors.text },
+    filterChipCountTextActive: { color: isDark ? '#0f172a' : '#ffffff' },
+
+    listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+    loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
     card: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 10,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    cardIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: colors.primaryLight,
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    cardIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
-      marginRight: 12,
     },
-    cardBody: { flex: 1 },
-    cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 2 },
-    cardMeta: { fontSize: 12, color: colors.textMuted, marginBottom: 6 },
-    badgeRow: { flexDirection: 'row', gap: 6 },
-    badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginRight: 6 },
-    badgeText: { fontSize: 11, fontWeight: '700' },
+    cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, flex: 1, marginRight: 8 },
+    cardMeta: { fontSize: 12, color: colors.textMuted, marginTop: 3 },
+    badgeRow: { flexDirection: 'row', gap: 8, paddingTop: 4 },
+    badge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
+    },
+    badgeText: { fontSize: 11, fontWeight: '700', color: colors.text },
+
     centerState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 32 },
-    emptyText: { color: colors.textMuted, marginTop: 12, textAlign: 'center' },
-    errorText: { color: colors.danger, textAlign: 'center', marginBottom: 12 },
-    retryButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },
-    retryButtonText: { color: colors.card, fontWeight: '700' },
+    emptyIconBox: {
+      width: 56,
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
+    emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
+    errorText: { color: '#ef4444', textAlign: 'center', marginBottom: 12 },
+    retryButton: {
+      backgroundColor: isDark ? '#ffffff' : '#0f172a',
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 12,
+    },
+    retryButtonText: { color: isDark ? '#0f172a' : '#ffffff', fontWeight: '700' },
   });

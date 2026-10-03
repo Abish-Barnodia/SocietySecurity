@@ -269,6 +269,7 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
             id: true,
             name: true,
             residentType: true,
+            status: true,
             isPrimary: true,
             relationship: true,
             unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }
@@ -462,6 +463,19 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       }
     }
 
+    // For residents: verify they are approved before letting them log into the app
+    if (user.role === 'RESIDENT') {
+      const resident = await prisma.resident.findUnique({
+        where: { userId: user.id },
+      });
+      if (resident && resident.status === 'PENDING') {
+        return next(new AppError('Your account verification is still pending approval by your society manager.', 403));
+      }
+      if (resident && resident.status === 'REJECTED') {
+        return next(new AppError('Your registration request was rejected by your society management.', 403));
+      }
+    }
+
     const payload = { userId: user.id, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) };
     const accessToken = signAccessToken(payload);
     const refreshToken = signRefreshToken(payload);
@@ -478,6 +492,53 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       accessToken,
       refreshToken,
       user: { id: user.id, email: user.email, role: user.role }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const checkApprovalStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, phone, userId } = req.query;
+
+    let user: any = null;
+    if (email) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: String(email).trim().toLowerCase(), mode: 'insensitive' } },
+        include: { resident: { include: { unit: { include: { property: true } } } } },
+      });
+    } else if (phone) {
+      user = await prisma.user.findUnique({
+        where: { phone: String(phone).trim() },
+        include: { resident: { include: { unit: { include: { property: true } } } } },
+      });
+    } else if (userId) {
+      user = await prisma.user.findUnique({
+        where: { id: String(userId) },
+        include: { resident: { include: { unit: { include: { property: true } } } } },
+      });
+    }
+
+    if (!user) {
+      return sendSuccess(res, 200, 'Status retrieved', {
+        registered: false,
+        status: 'NOT_REGISTERED',
+        message: 'No registration found with these details.',
+      });
+    }
+
+    const resident = user.resident;
+    const status = resident?.status || 'PENDING';
+
+    return sendSuccess(res, 200, 'Status retrieved', {
+      registered: true,
+      status, // 'PENDING' | 'APPROVED' | 'REJECTED'
+      name: resident?.name || user.email,
+      flat: resident?.unit?.unitNumber,
+      tower: resident?.unit?.tower,
+      society: resident?.unit?.property?.name,
+      submittedAt: resident?.createdAt,
     });
   } catch (error) {
     next(error);

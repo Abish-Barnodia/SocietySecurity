@@ -208,3 +208,171 @@ ${portalUrl}
   }
 };
 
+
+export interface ResidentRegistrationEmailData {
+  managerEmail?: string | null;
+  societyName: string;
+  residentName: string;
+  residentEmail?: string | null;
+  residentPhone?: string | null;
+  unitNumber: string;
+  tower?: string | null;
+  residentType: string;
+  tenantSubtype?: string | null;
+  occupancyStatus?: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
+}
+
+// ponytail: direct SMTP email alert to manager when a resident registers/requests entry for the first time
+export const sendResidentRegistrationEmailToManager = async (data: ResidentRegistrationEmailData) => {
+  const managerTargetEmail =
+    data.managerEmail ||
+    process.env.MANAGER_EMAIL ||
+    process.env.SUPER_ADMIN_EMAIL ||
+    process.env.SMTP_USER ||
+    'abishbarnodia2018@gmail.com';
+
+  const portalUrl = process.env.CLIENT_MANAGER_URL
+    ? `${process.env.CLIENT_MANAGER_URL}/residents`
+    : 'http://localhost:3000/residents';
+
+  const subject = `🔔 New Resident Registration Request: Flat ${data.unitNumber} (${data.tower || 'Main Block'}) - ${data.societyName}`;
+
+  const text = `
+New Resident Registration Request:
+- Society: ${data.societyName}
+- Unit / Flat: ${data.tower ? `${data.tower} - ` : ''}${data.unitNumber}
+- Resident Name: ${data.residentName}
+- Email: ${data.residentEmail || 'Not provided'}
+- Phone: ${data.residentPhone || 'Not provided'}
+- Resident Type: ${data.residentType} ${data.tenantSubtype ? `(${data.tenantSubtype})` : ''}
+- Occupancy Status: ${data.occupancyStatus || 'Currently residing'}
+${data.documentUrl ? `- Agreement / Document: ${data.documentUrl}` : ''}
+
+Please log in to the Manager Portal to verify and approve this resident request:
+${portalUrl}
+  `.trim();
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #0284c7, #0ea5e9); padding: 20px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 22px;">New Resident Registration Request</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Action Required: Review and Approve Resident Access</p>
+      </div>
+
+      <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin-top: 0; font-size: 15px; color: #334155;">
+          A new resident has submitted their profile and is awaiting verification for <strong>${data.societyName}</strong>.
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 15px;">
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b; width: 140px;">Society:</td>
+            <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${data.societyName}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Flat / Unit:</td>
+            <td style="padding: 8px 0; font-weight: 700; color: #0284c7;">${data.tower ? `${data.tower} - ` : ''}Flat ${data.unitNumber}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Resident Name:</td>
+            <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${data.residentName}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Contact Email:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="mailto:${data.residentEmail || ''}" style="color: #0284c7;">${data.residentEmail || 'N/A'}</a></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Contact Phone:</td>
+            <td style="padding: 8px 0; color: #0f172a;"><a href="tel:${data.residentPhone || ''}" style="color: #0284c7;">${data.residentPhone || 'N/A'}</a></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Resident Role:</td>
+            <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${data.residentType} ${data.tenantSubtype ? `<span style="font-weight: 400; color: #64748b;">(${data.tenantSubtype})</span>` : ''}</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Occupancy:</td>
+            <td style="padding: 8px 0; color: #0f172a;">${data.occupancyStatus || 'Currently residing'}</td>
+          </tr>
+          ${data.documentUrl ? `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 0; color: #64748b;">Rental Agreement / ID:</td>
+            <td style="padding: 8px 0; font-weight: 600;">
+              <a href="${data.documentUrl}" target="_blank" style="color: #0284c7; text-decoration: underline;">
+                📄 View ${data.documentName || 'Uploaded Document'}
+              </a>
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+      </div>
+
+      <div style="background: #eff6ff; border-left: 4px solid #0284c7; padding: 12px 16px; border-radius: 4px; margin-bottom: 24px; font-size: 14px; color: #1e40af;">
+        ⏰ Verification timeline: Residents expect approval within 24–72 hours. Please log in to approve or reject this request.
+      </div>
+
+      <div style="text-align: center;">
+        <a href="${portalUrl}" style="display: inline-block; background: linear-gradient(135deg, #0284c7, #0369a1); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);">
+          Review & Approve Resident →
+        </a>
+      </div>
+    </div>
+  `;
+
+  try {
+    return await sendEmail(managerTargetEmail, subject, text, html);
+  } catch (err) {
+    console.error('Failed to send Manager resident notification email:', err);
+  }
+};
+
+export const sendResidentApprovalNotificationToResident = async (
+  residentEmail: string,
+  residentName: string,
+  societyName: string,
+  flatNumber: string,
+  tower: string
+) => {
+  const subject = `🎉 Your Residency Request has been Approved! - ${societyName}`;
+  const text = `
+Hello ${residentName},
+
+Great news! Your registration request for Flat ${tower ? `${tower} - ` : ''}${flatNumber} in ${societyName} has been approved by the Society Office.
+
+You now have full access to create visitor passes, approve deliveries, join the community, and manage your home security in the Society Security app.
+
+Best regards,
+${societyName} Management Committee
+  `.trim();
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #16a34a, #22c55e); padding: 20px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 22px;">Account Approved! 🎉</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Welcome to ${societyName}</p>
+      </div>
+
+      <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin-top: 0; font-size: 15px; color: #334155;">
+          Hello <strong>${residentName}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #334155; line-height: 22px;">
+          Your residency verification for <strong>${tower ? `${tower} - ` : ''}Flat ${flatNumber}</strong> has been successfully approved by the Management Committee.
+        </p>
+        <p style="font-size: 14px; color: #334155; line-height: 22px;">
+          You can now open the <strong>Society Security</strong> app to generate visitor QR passes, approve guests, book amenities, and receive real-time security alerts.
+        </p>
+      </div>
+    </div>
+  `;
+
+  try {
+    return await sendEmail(residentEmail, subject, text, html);
+  } catch (err) {
+    console.error('Failed to send resident approval confirmation email:', err);
+  }
+};
+
+
+

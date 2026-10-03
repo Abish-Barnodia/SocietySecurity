@@ -61,7 +61,16 @@ async function migrate() {
     await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "Property_slug_key" ON "Property"("slug");
     `);
-    console.log('✓ Updated Property table columns');
+    // 4b. Add columns to Resident table if not exists
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Resident"
+      ADD COLUMN IF NOT EXISTS "status" TEXT DEFAULT 'APPROVED',
+      ADD COLUMN IF NOT EXISTS "occupancyStatus" TEXT,
+      ADD COLUMN IF NOT EXISTS "documentUrl" TEXT,
+      ADD COLUMN IF NOT EXISTS "documentName" TEXT;
+    `);
+    console.log('✓ Updated Resident table columns');
+
 
     // 5. Create DemoRequest table if not exists
     await prisma.$executeRawUnsafe(`

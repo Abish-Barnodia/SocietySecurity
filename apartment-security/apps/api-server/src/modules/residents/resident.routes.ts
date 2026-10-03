@@ -23,6 +23,10 @@ import {
   restoreFamily,
   shareResidentCredential,
   getUnitSummary,
+  getPendingResidents,
+  approveResident,
+  rejectResident,
+  uploadResidentDocument,
 } from './resident.controller';
 import {
   onboardResidentSchema,
@@ -32,8 +36,12 @@ import {
   alertPreferencesSchema,
   updateHouseholdSchema,
 } from './resident.schema';
+import { upload } from '../../middlewares/upload.middleware';
 
 const router = Router();
+
+// Document upload for registration / rental agreements
+router.post('/upload-document', upload.single('file'), uploadResidentDocument);
 
 router.use(authenticate);
 
@@ -49,8 +57,12 @@ router.post('/unit/members', requireRole('RESIDENT'), addHouseholdMember);
 router.delete('/unit/members/:memberId', requireRole('RESIDENT'), removeHouseholdMember);
 
 // Manager operations
+router.get('/pending',             requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getPendingResidents);
+router.post('/:id/approve',        requireRole('MANAGER'), requireManagerPermission('residents'), approveResident);
+router.post('/:id/reject',         requireRole('MANAGER'), requireManagerPermission('residents'), rejectResident);
 router.get('/',                    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getAllResidents);
 router.get('/families/:unitId',    requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getFamilyDetails);
+
 router.post('/',                   requireRole('MANAGER'), requireManagerPermission('residents'), validate(onboardResidentSchema), onboardResident);
 router.post('/household',          requireRole('MANAGER'), requireManagerPermission('residents'), validate(onboardHouseholdSchema), onboardHousehold);
 router.put('/families/:unitId',    requireRole('MANAGER'), requireManagerPermission('residents'), validate(updateHouseholdSchema), updateHousehold);

@@ -2,24 +2,25 @@ import { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useMaintenance, Invoice, InvoiceStatus } from '../../context/MaintenanceContext';
 import { useTheme } from '../../context/ThemeContext';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 const formatAmount = (n: number) => `₹${n.toLocaleString('en-IN')}`;
 
-const STATUS_STYLE: Record<InvoiceStatus, { key: 'success' | 'warning' | 'danger' | 'textMuted'; label: string }> = {
-  PAID: { key: 'success', label: 'Paid' },
-  PENDING: { key: 'warning', label: 'Pending' },
-  OVERDUE: { key: 'danger', label: 'Overdue' },
-  CANCELLED: { key: 'textMuted', label: 'Cancelled' },
+const STATUS_CONFIG: Record<InvoiceStatus, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  PAID: { label: 'Paid', icon: 'checkmark-circle-outline' },
+  PENDING: { label: 'Pending', icon: 'time-outline' },
+  OVERDUE: { label: 'Overdue', icon: 'alert-circle-outline' },
+  CANCELLED: { label: 'Cancelled', icon: 'close-circle-outline' },
 };
 
 export default function MaintenanceScreen() {
+  const navigation = useNavigation();
   const { invoices, loading, fetchInvoices, payInvoice, lastFetchedAt } = useMaintenance();
-  const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
   const [refreshing, setRefreshing] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
 
@@ -39,44 +40,78 @@ export default function MaintenanceScreen() {
     setPayingId(invoice.id);
     try {
       await payInvoice(invoice.id);
-      Alert.alert('Payment successful', `${formatAmount(invoice.amount)} paid for ${invoice.description}.`);
+      Alert.alert('Payment Successful', `${formatAmount(invoice.amount)} paid for ${invoice.description}.`);
     } catch (error: any) {
-      Alert.alert('Payment failed', error.response?.data?.message ?? 'Please try again.');
+      Alert.alert('Payment Failed', error.response?.data?.message ?? 'Please try again.');
     } finally {
       setPayingId(null);
     }
   };
 
-  const totalDue = invoices.filter((i) => i.status === 'PENDING' || i.status === 'OVERDUE').reduce((sum, i) => sum + i.amount, 0);
+  const pendingInvoices = invoices.filter((i) => i.status === 'PENDING' || i.status === 'OVERDUE');
+  const totalDue = pendingInvoices.reduce((sum, i) => sum + i.amount, 0);
+
+  const renderHeader = () => (
+    <View style={styles.summaryBanner}>
+      <View style={styles.summaryTopRow}>
+        <View style={styles.summaryIconBox}>
+          <Ionicons name="receipt-outline" size={22} color={colors.text} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.summaryLabel}>Outstanding Dues</Text>
+          <Text style={styles.summaryAmount}>{formatAmount(totalDue)}</Text>
+        </View>
+        <View style={styles.summaryBadge}>
+          <Text style={styles.summaryBadgeText}>{pendingInvoices.length} Pending</Text>
+        </View>
+      </View>
+      <Text style={styles.summarySub}>
+        {totalDue > 0 ? 'Please clear all pending society dues before the due date to avoid late fees.' : 'All society bills and maintenance dues are cleared.'}
+      </Text>
+    </View>
+  );
 
   const renderItem = ({ item }: { item: Invoice }) => {
-    const status = STATUS_STYLE[item.status];
-    const statusColor = colors[status.key];
+    const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
     const payable = item.status === 'PENDING' || item.status === 'OVERDUE';
+    const isOverdue = item.status === 'OVERDUE';
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>{item.description}</Text>
+          <View style={styles.cardIconBox}>
+            <Ionicons name={statusCfg.icon} size={22} color={colors.text} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.cardTitle} numberOfLines={1}>{item.description}</Text>
             <Text style={styles.cardMeta}>Due {formatDate(item.dueDate)}</Text>
           </View>
-          <Text style={styles.amount}>{formatAmount(item.amount)}</Text>
-        </View>
-        <View style={styles.footerRow}>
-          <View style={[styles.badge, { backgroundColor: `${statusColor}22` }]}>
-            <Text style={[styles.badgeText, { color: statusColor }]}>{status.label}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.amount}>{formatAmount(item.amount)}</Text>
+            <View style={[styles.badge, isOverdue && styles.badgeOverdue]}>
+              <Text style={[styles.badgeText, isOverdue && styles.badgeTextOverdue]}>{statusCfg.label}</Text>
+            </View>
           </View>
-          {payable && (
-            <TouchableOpacity style={styles.payButton} onPress={() => handlePay(item)} disabled={payingId === item.id}>
+        </View>
+
+        {payable && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.payButton}
+              onPress={() => handlePay(item)}
+              disabled={payingId === item.id}
+            >
               {payingId === item.id ? (
-                <ActivityIndicator size="small" color={colors.card} />
+                <ActivityIndicator size="small" color={isDark ? '#000' : '#fff'} />
               ) : (
-                <Text style={styles.payButtonText}>Pay Now</Text>
+                <>
+                  <Ionicons name="card-outline" size={16} color={isDark ? '#000' : '#fff'} style={{ marginRight: 6 }} />
+                  <Text style={styles.payButtonText}>Pay Now ({formatAmount(item.amount)})</Text>
+                </>
               )}
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -84,23 +119,36 @@ export default function MaintenanceScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Maintenance</Text>
-        {totalDue > 0 && <Text style={styles.dueSummary}>{formatAmount(totalDue)} due</Text>}
+        {navigation.canGoBack() && (
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </TouchableOpacity>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>Maintenance & Bills</Text>
+          <Text style={styles.headerSubtitle}>Society dues, invoices, and payment receipts</Text>
+        </View>
       </View>
 
       {loading && invoices.length === 0 ? (
-        <ActivityIndicator style={styles.loader} color={colors.primary} />
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={colors.text} />
+        </View>
       ) : (
         <FlatList
           data={invoices}
           keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderHeader}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.text} />}
           ListEmptyComponent={
             <View style={styles.centerState}>
-              <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyText}>No invoices yet</Text>
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="receipt-outline" size={28} color={colors.textMuted} />
+              </View>
+              <Text style={styles.emptyTitle}>No Invoices Found</Text>
+              <Text style={styles.emptyText}>You do not have any pending or past maintenance invoices.</Text>
             </View>
           }
         />
@@ -109,31 +157,131 @@ export default function MaintenanceScreen() {
   );
 }
 
-const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolean) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    headerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.text },
-    dueSummary: { fontSize: 13, fontWeight: '700', color: colors.danger },
-    listContent: { paddingHorizontal: 16, paddingBottom: 40 },
-    loader: { marginTop: 60 },
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: 14,
-      padding: 14,
-      marginBottom: 10,
+    container: { flex: 1, backgroundColor: isDark ? '#0f172a' : '#f5f3ef' },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    listContent: { paddingHorizontal: 20, paddingBottom: 40 },
+    loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+    summaryBanner: {
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 16,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 2 },
-    cardMeta: { fontSize: 12, color: colors.textMuted },
+    summaryTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+    summaryIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    summaryLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+    summaryAmount: { fontSize: 22, fontWeight: '800', color: colors.text, marginTop: 1 },
+    summaryBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
+    },
+    summaryBadgeText: { fontSize: 11, fontWeight: '700', color: colors.text },
+    summarySub: { fontSize: 12, color: colors.textMuted, lineHeight: 16 },
+
+    card: {
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cardHeader: { flexDirection: 'row', alignItems: 'center' },
+    cardIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+    cardMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
     amount: { fontSize: 16, fontWeight: '800', color: colors.text },
-    footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-    badgeText: { fontSize: 11, fontWeight: '700' },
-    payButton: { backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, minWidth: 84, alignItems: 'center' },
-    payButtonText: { color: colors.card, fontSize: 13, fontWeight: '700' },
+    badge: {
+      marginTop: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: isDark ? '#334155' : '#f1f5f9',
+    },
+    badgeText: { fontSize: 11, fontWeight: '700', color: colors.text },
+    badgeOverdue: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2',
+    },
+    badgeTextOverdue: {
+      color: '#ef4444',
+    },
+
+    actionRow: {
+      marginTop: 14,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? '#334155' : '#f1f5f9',
+    },
+    payButton: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? '#ffffff' : '#0f172a',
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    payButtonText: {
+      color: isDark ? '#0f172a' : '#ffffff',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+
     centerState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 32 },
-    emptyText: { color: colors.textMuted, marginTop: 12, textAlign: 'center' },
+    emptyIconBox: {
+      width: 56,
+      height: 56,
+      borderRadius: 16,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
+    emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
   });

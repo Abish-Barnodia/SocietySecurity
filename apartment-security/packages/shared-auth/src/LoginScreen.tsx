@@ -26,9 +26,15 @@ type LoginScreenProps = {
   allowSignup?: boolean;
   appTitle?: string;
   onForgotPassword?: () => void;
+  onGoToRegister?: () => void;
 };
 
-export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT ACCESS", onForgotPassword }: LoginScreenProps) {
+export default function LoginScreen({
+  allowSignup = true,
+  appTitle = 'RESIDENT ACCESS',
+  onForgotPassword,
+  onGoToRegister,
+}: LoginScreenProps) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -213,6 +219,21 @@ export default function LoginScreen({ allowSignup = true, appTitle = "RESIDENT A
               <Text style={styles.switchModeText}>
                 {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                 <Text style={styles.switchModeTextBold}>{mode === 'login' ? 'Sign Up' : 'Sign In'}</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {onGoToRegister && (
+            <TouchableOpacity
+              style={[styles.switchModeButton, { marginTop: 12 }]}
+              onPress={onGoToRegister}
+              disabled={loading}
+            >
+              <Text style={styles.switchModeText}>
+                New resident?{' '}
+                <Text style={[styles.switchModeTextBold, { color: colors.primary }]}>
+                  Register Home / Flat →
+                </Text>
               </Text>
             </TouchableOpacity>
           )}

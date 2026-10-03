@@ -63,6 +63,16 @@ exports.onboardSelfSchema = zod_1.z.object({
         name: zod_1.z.string().min(2),
         tower: zod_1.z.string().min(1),
         flatNumber: zod_1.z.string().min(1),
+        societyName: zod_1.z.string().optional(),
+        propertyId: zod_1.z.string().optional(),
+        city: zod_1.z.string().optional(),
+        country: zod_1.z.string().optional(),
+        type: zod_1.z.string().optional(),
+        tenantSubtype: zod_1.z.string().optional(),
+        occupancyStatus: zod_1.z.string().optional(),
+        documentUrl: zod_1.z.string().optional(),
+        documentName: zod_1.z.string().optional(),
+        vehicleNumber: zod_1.z.string().optional(),
     }),
 });
 //# sourceMappingURL=resident.schema.js.map

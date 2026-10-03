@@ -251,6 +251,7 @@ const getMe = async (req, res, next) => {
                         id: true,
                         name: true,
                         residentType: true,
+                        status: true,
                         isPrimary: true,
                         relationship: true,
                         unit: { select: { unitNumber: true, tower: true, property: { select: { name: true } } } }

@@ -8,8 +8,11 @@ const managerPermission_middleware_1 = require("../../middlewares/managerPermiss
 const validate_middleware_1 = require("../../middlewares/validate.middleware");
 const resident_controller_1 = require("./resident.controller");
 const resident_schema_1 = require("./resident.schema");
+const upload_middleware_1 = require("../../middlewares/upload.middleware");
 const router = (0, express_1.Router)();
 exports.residentRouter = router;
+// Document upload for registration / rental agreements
+router.post('/upload-document', upload_middleware_1.upload.single('file'), resident_controller_1.uploadResidentDocument);
 router.use(auth_middleware_1.authenticate);
 // Resident self-service
 router.get('/towers', resident_controller_1.getTowers);
@@ -22,6 +25,9 @@ router.get('/unit', (0, role_middleware_1.requireRole)('RESIDENT'), resident_con
 router.post('/unit/members', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.addHouseholdMember);
 router.delete('/unit/members/:memberId', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.removeHouseholdMember);
 // Manager operations
+router.get('/pending', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.getPendingResidents);
+router.post('/:id/approve', (0, role_middleware_1.requireRole)('MANAGER'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.approveResident);
+router.post('/:id/reject', (0, role_middleware_1.requireRole)('MANAGER'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.rejectResident);
 router.get('/', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.getAllResidents);
 router.get('/families/:unitId', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.getFamilyDetails);
 router.post('/', (0, role_middleware_1.requireRole)('MANAGER'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), (0, validate_middleware_1.validate)(resident_schema_1.onboardResidentSchema), resident_controller_1.onboardResident);

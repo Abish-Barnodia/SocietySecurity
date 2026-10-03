@@ -11,6 +11,7 @@ import {
   votePoll,
   searchMessages,
   listMembers,
+  getCommunityDirectoryHub,
   uploadMedia,
   deleteMessage,
   reportMessage,
@@ -33,6 +34,7 @@ router.post('/messages/:id/report', requireRole('RESIDENT'), validate(reportSche
 router.post('/polls/:pollId/vote', requireRole('RESIDENT'), validate(voteSchema), votePoll);
 router.get('/search', requireRole('RESIDENT'), searchMessages);
 router.get('/members', requireRole('RESIDENT'), listMembers);
+router.get('/hub', requireRole('RESIDENT', 'MANAGER'), getCommunityDirectoryHub);
 router.post('/uploads', requireRole('RESIDENT', 'MANAGER'), upload.single('file'), uploadMedia);
 
 // Resident + Manager: read the feed, moderate messages

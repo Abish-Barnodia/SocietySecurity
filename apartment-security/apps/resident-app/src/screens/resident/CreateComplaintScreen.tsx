@@ -13,7 +13,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -25,8 +25,8 @@ type Attachment = { url: string; localUri?: string; isImage: boolean; name: stri
 
 export default function CreateComplaintScreen({ navigation }: { navigation: any }) {
   const { createComplaint, uploadAttachment } = useComplaints();
-  const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
   const insets = useSafeAreaInsets();
 
   const [category, setCategory] = useState<ComplaintCategory>('MAINTENANCE');
@@ -109,98 +109,119 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.label}>Category</Text>
-        <View style={styles.chipGrid}>
-          {CATEGORY_OPTIONS.map((option) => {
-            const active = category === option.value;
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
-                onPress={() => setCategory(option.value)}
-              >
-                <Ionicons name={option.icon} size={16} color={active ? colors.card : colors.primary} />
-                <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{option.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={styles.label}>Priority</Text>
-        <View style={styles.priorityRow}>
-          {PRIORITY_OPTIONS.map((option) => {
-            const active = priority === option.value;
-            return (
-              <TouchableOpacity
-                key={option.value}
-                style={[styles.priorityChip, active && styles.priorityChipActive]}
-                onPress={() => setPriority(option.value)}
-              >
-                <Text style={[styles.priorityChipText, active && styles.priorityChipTextActive]}>{option.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <Text style={styles.label}>Title</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Brief summary of the issue"
-          placeholderTextColor={colors.textMuted}
-          value={title}
-          onChangeText={setTitle}
-        />
-
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Describe the issue in detail..."
-          placeholderTextColor={colors.textMuted}
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={5}
-          textAlignVertical="top"
-        />
-
-        <Text style={styles.label}>Attachments</Text>
-        <View style={styles.attachmentGrid}>
-          {attachments.map((a) => (
-            <View key={a.url} style={styles.attachmentPreview}>
-              <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewItem(a)}>
-                {a.isImage ? (
-                  <Image source={{ uri: a.localUri ?? a.url }} style={styles.attachmentImage} />
-                ) : (
-                  <View style={styles.fileAttachment}>
-                    <Ionicons name="document-text" size={20} color={colors.primary} />
-                    <Text style={styles.fileAttachmentName} numberOfLines={1}>{a.name}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.removeAttachmentButton} onPress={() => removeAttachment(a.url)}>
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
-              </TouchableOpacity>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.addAttachmentButton} onPress={handleAddPhoto} disabled={uploading}>
-            <Ionicons name="camera" size={20} color={colors.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addAttachmentButton} onPress={handleAddFile} disabled={uploading}>
-            <Ionicons name="document-attach" size={20} color={colors.primary} />
-          </TouchableOpacity>
-          {uploading && <ActivityIndicator color={colors.primary} style={{ marginLeft: 8 }} />}
-        </View>
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity style={[styles.submitButton, (!canSubmit || submitting) && styles.submitButtonDisabled]} onPress={handleSubmit} disabled={!canSubmit || submitting}>
-          {submitting ? <ActivityIndicator color={colors.card} /> : <Text style={styles.submitButtonText}>Submit complaint</Text>}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>New Complaint</Text>
+          <Text style={styles.headerSubtitle}>Submit an issue or service request</Text>
+        </View>
       </View>
 
-      {/* Attachment Preview Modal */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.sectionLabel}>CATEGORY</Text>
+          <View style={styles.chipGrid}>
+            {CATEGORY_OPTIONS.map((option) => {
+              const active = category === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.categoryChip, active && styles.categoryChipActive]}
+                  onPress={() => setCategory(option.value)}
+                >
+                  <Ionicons name={option.icon as any} size={16} color={active ? (isDark ? '#0f172a' : '#ffffff') : colors.text} />
+                  <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{option.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionLabel}>PRIORITY LEVEL</Text>
+          <View style={styles.priorityRow}>
+            {PRIORITY_OPTIONS.map((option) => {
+              const active = priority === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.priorityChip, active && styles.priorityChipActive]}
+                  onPress={() => setPriority(option.value)}
+                >
+                  <Text style={[styles.priorityChipText, active && styles.priorityChipTextActive]}>{option.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionLabel}>TITLE</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Brief summary of the issue"
+            placeholderTextColor={colors.textMuted}
+            value={title}
+            onChangeText={setTitle}
+          />
+
+          <Text style={styles.sectionLabel}>DESCRIPTION</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Describe the issue in detail..."
+            placeholderTextColor={colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={5}
+            textAlignVertical="top"
+          />
+
+          <Text style={styles.sectionLabel}>ATTACHMENTS (OPTIONAL)</Text>
+          <View style={styles.attachmentGrid}>
+            {attachments.map((a) => (
+              <View key={a.url} style={styles.attachmentPreview}>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => setPreviewItem(a)}>
+                  {a.isImage ? (
+                    <Image source={{ uri: a.localUri ?? a.url }} style={styles.attachmentImage} />
+                  ) : (
+                    <View style={styles.fileAttachment}>
+                      <Ionicons name="document-text-outline" size={22} color={colors.text} />
+                      <Text style={styles.fileAttachmentName} numberOfLines={1}>{a.name}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.removeAttachmentButton} onPress={() => removeAttachment(a.url)}>
+                  <Ionicons name="close-circle" size={20} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addAttachmentButton} onPress={handleAddPhoto} disabled={uploading}>
+              <Ionicons name="camera-outline" size={22} color={colors.text} />
+              <Text style={styles.addAttachmentText}>Photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addAttachmentButton} onPress={handleAddFile} disabled={uploading}>
+              <Ionicons name="document-attach-outline" size={22} color={colors.text} />
+              <Text style={styles.addAttachmentText}>Doc</Text>
+            </TouchableOpacity>
+            {uploading && <ActivityIndicator color={colors.text} style={{ marginLeft: 8 }} />}
+          </View>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <TouchableOpacity
+            style={[styles.submitButton, (!canSubmit || submitting) && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={!canSubmit || submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator color={isDark ? '#000' : '#fff'} />
+            ) : (
+              <Text style={styles.submitButtonText}>Submit Complaint</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
       <Modal visible={!!previewItem} transparent animationType="fade" onRequestClose={() => setPreviewItem(null)}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.modalCloseButton} onPress={() => setPreviewItem(null)}>
@@ -210,93 +231,130 @@ export default function CreateComplaintScreen({ navigation }: { navigation: any 
             <Image source={{ uri: previewItem.localUri ?? previewItem.url }} style={styles.fullImagePreview} resizeMode="contain" />
           ) : (
             <View style={styles.fullFilePreview}>
-              <Ionicons name="document-text" size={64} color={colors.primary} />
+              <Ionicons name="document-text" size={64} color={colors.text} />
               <Text style={styles.fullFileName}>{previewItem?.name}</Text>
             </View>
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolean) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    content: { padding: 16, paddingBottom: 24 },
-    label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 8, marginTop: 16 },
+    container: { flex: 1, backgroundColor: isDark ? '#0f172a' : '#f5f3ef' },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+    },
+    headerTitle: { fontSize: 26, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
+    headerSubtitle: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+    content: { padding: 20, paddingBottom: 30 },
+    sectionLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: 14,
+      marginBottom: 8,
+    },
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     categoryChip: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.card,
-      marginRight: 8,
-      marginBottom: 8,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
     },
-    categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-    categoryChipText: { fontSize: 13, color: colors.text, marginLeft: 6, fontWeight: '600' },
-    categoryChipTextActive: { color: colors.card },
+    categoryChipActive: { backgroundColor: isDark ? '#ffffff' : '#0f172a', borderColor: isDark ? '#ffffff' : '#0f172a' },
+    categoryChipText: { fontSize: 13, color: colors.text, marginLeft: 8, fontWeight: '600' },
+    categoryChipTextActive: { color: isDark ? '#0f172a' : '#ffffff', fontWeight: '700' },
     priorityRow: { flexDirection: 'row', gap: 8 },
     priorityChip: {
       flex: 1,
       alignItems: 'center',
       paddingVertical: 10,
-      borderRadius: 10,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.card,
-      marginRight: 8,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
     },
-    priorityChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    priorityChipActive: { backgroundColor: isDark ? '#ffffff' : '#0f172a', borderColor: isDark ? '#ffffff' : '#0f172a' },
     priorityChipText: { fontSize: 13, color: colors.text, fontWeight: '600' },
-    priorityChipTextActive: { color: colors.card },
+    priorityChipTextActive: { color: isDark ? '#0f172a' : '#ffffff', fontWeight: '700' },
     input: {
-      backgroundColor: colors.card,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 10,
-      padding: 12,
-      fontSize: 15,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 14,
       color: colors.text,
     },
-    textArea: { height: 120 },
+    textArea: { height: 110 },
     attachmentGrid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
-    attachmentPreview: { position: 'relative', marginRight: 10, marginBottom: 10 },
-    attachmentImage: { width: 64, height: 64, borderRadius: 10, backgroundColor: colors.border },
+    attachmentPreview: { position: 'relative' },
+    attachmentImage: { width: 68, height: 68, borderRadius: 14, backgroundColor: colors.border },
     fileAttachment: {
-      width: 64,
-      height: 64,
-      borderRadius: 10,
-      backgroundColor: colors.card,
+      width: 68,
+      height: 68,
+      borderRadius: 14,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       borderWidth: 1,
       borderColor: colors.border,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 4,
+      padding: 6,
     },
     fileAttachmentName: { fontSize: 9, color: colors.textMuted, marginTop: 4, textAlign: 'center' },
-    removeAttachmentButton: { position: 'absolute', top: -8, right: -8, backgroundColor: colors.background, borderRadius: 10 },
+    removeAttachmentButton: { position: 'absolute', top: -6, right: -6, backgroundColor: isDark ? '#1e293b' : '#ffffff', borderRadius: 10 },
     addAttachmentButton: {
-      width: 64,
-      height: 64,
-      borderRadius: 10,
+      width: 68,
+      height: 68,
+      borderRadius: 14,
       borderWidth: 1,
       borderStyle: 'dashed',
-      borderColor: colors.primary,
+      borderColor: colors.border,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 10,
-      marginBottom: 10,
     },
-    footer: { padding: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
-    submitButton: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
+    addAttachmentText: { fontSize: 11, fontWeight: '600', color: colors.textMuted, marginTop: 2 },
+    footer: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      backgroundColor: isDark ? '#0f172a' : '#f5f3ef',
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    submitButton: {
+      backgroundColor: isDark ? '#ffffff' : '#0f172a',
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
     submitButtonDisabled: { opacity: 0.5 },
-    submitButtonText: { color: colors.card, fontSize: 16, fontWeight: 'bold' },
+    submitButtonText: { color: isDark ? '#0f172a' : '#ffffff', fontSize: 15, fontWeight: '700' },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.9)',
@@ -317,7 +375,7 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       borderRadius: 16,
     },
     fullFilePreview: {
-      backgroundColor: colors.card,
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
       padding: 32,
       borderRadius: 20,
       alignItems: 'center',

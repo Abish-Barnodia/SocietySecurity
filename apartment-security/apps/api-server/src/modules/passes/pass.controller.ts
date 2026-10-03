@@ -296,15 +296,48 @@ export const getPublicPassVerification = async (req: Request, res: Response, nex
       });
     }
 
+    const activeEntry = await prisma.entry.findFirst({
+      where: { passId: pass.id },
+      orderBy: { entryAt: 'desc' },
+      include: { entryPoint: true },
+    });
+
+    const isInside = activeEntry != null && activeEntry.exitAt == null && activeEntry.status === 'APPROVED';
+    const hasExited = activeEntry != null && activeEntry.exitAt != null;
+
+    let scanPhase: 'READY_FOR_ENTRY' | 'INSIDE_BUILDING' | 'COMPLETED_EXPIRED' = 'READY_FOR_ENTRY';
+    let scansUsed = 0;
+    let durationFormatted: string | null = null;
+
+    if (isInside) {
+      scanPhase = 'INSIDE_BUILDING';
+      scansUsed = 1;
+      const durationMs = Math.max(0, Date.now() - new Date(activeEntry.entryAt).getTime());
+      const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+      durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${(durationMinutes / 60).toFixed(1)}h`;
+    } else if (hasExited) {
+      scanPhase = 'COMPLETED_EXPIRED';
+      scansUsed = 2;
+      const durationMs = Math.max(0, new Date(activeEntry.exitAt!).getTime() - new Date(activeEntry.entryAt).getTime());
+      const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+      durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${(durationMinutes / 60).toFixed(1)}h`;
+    }
+
     const now = new Date();
-    const isExpired = now > pass.validUntil;
+    const isExpired = now > pass.validUntil || pass.status === 'EXPIRED' || hasExited;
     const isEarly = now < pass.validFrom;
-    const isActive = pass.status === 'ACTIVE' && !isExpired && !isEarly;
+    const isActive = (pass.status === 'ACTIVE' || isInside) && !isExpired && !isEarly;
 
     let statusText = 'ACTIVE';
-    let statusMessage = 'Pass is valid and clear for entry';
+    let statusMessage = 'Pass is valid and clear for entry (1/2 scans remaining)';
 
-    if (pass.status !== 'ACTIVE') {
+    if (hasExited || pass.status === 'EXPIRED') {
+      statusText = 'EXPIRED';
+      statusMessage = `Pass completed & expired (Visit duration: ${durationFormatted || 'Completed'})`;
+    } else if (isInside) {
+      statusText = 'INSIDE';
+      statusMessage = `Visitor inside building (Stayed ${durationFormatted || '0m'}). Ready for exit scan.`;
+    } else if (pass.status !== 'ACTIVE') {
       statusText = pass.status;
       statusMessage = `Pass has been ${pass.status.toLowerCase()}`;
     } else if (isExpired) {
@@ -319,6 +352,19 @@ export const getPublicPassVerification = async (req: Request, res: Response, nex
       status: statusText,
       isValid: isActive,
       message: statusMessage,
+      scanPhase,
+      scansUsed,
+      scansTotal: 2,
+      durationInside: isInside ? durationFormatted : null,
+      totalDuration: hasExited ? durationFormatted : null,
+      activeEntry: activeEntry
+        ? {
+            id: activeEntry.id,
+            entryAt: activeEntry.entryAt,
+            exitAt: activeEntry.exitAt,
+            gateName: activeEntry.entryPoint?.name || 'Gate',
+          }
+        : null,
       pass: {
         id: pass.id,
         visitorName: pass.visitorName,

@@ -42,10 +42,15 @@ import GuardShell from '../screens/guard/GuardShell';
 import ScanPassScreen from '../screens/guard/ScanScreen';
 import GuardDetailsScreen from '../screens/guard/GuardDetailsScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ResidentRegistrationFlow from '../screens/resident/ResidentRegistrationFlow';
+import ApprovalPendingScreen from '../screens/resident/ApprovalPendingScreen';
+
 
 export type RootStackParamList = {
+  Register: undefined;
   Login: undefined;
   ForgotPassword: undefined;
+  ApprovalPending: { flat?: string; building?: string; society?: string; submittedAt?: string } | undefined;
   MainTabs: undefined;
   GuardTabs: undefined;
   ResidentOnboarding: undefined;
@@ -56,6 +61,7 @@ export type RootStackParamList = {
   Amenities: undefined;
   WalkInApproval: { requestId: string } | undefined;
   ScanPass: undefined;
+
   NotificationSettings: undefined;
   SecuritySettings: undefined;
   Privacy: undefined;
@@ -78,7 +84,7 @@ import { useData } from '../context/DataContext';
 
 const MainTabs = () => {
   const { alerts } = useData();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const unreadCount = alerts.filter(a => a.unread).length;
 
@@ -95,15 +101,16 @@ const MainTabs = () => {
           else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: isDark ? '#ffffff' : '#0f172a',
         tabBarInactiveTintColor: colors.textMuted,
         headerShown: false,
         tabBarStyle: {
-          paddingBottom: Math.max(insets.bottom, 5),
-          paddingTop: 5,
-          height: 55 + Math.max(insets.bottom, 5),
-          backgroundColor: colors.card,
+          paddingBottom: Math.max(insets.bottom, 6),
+          paddingTop: 6,
+          height: 58 + Math.max(insets.bottom, 0),
+          backgroundColor: isDark ? '#1e293b' : '#ffffff',
           borderTopColor: colors.border,
+          borderTopWidth: 1,
         },
       })}
     >
@@ -122,7 +129,7 @@ const MainTabs = () => {
 };
 
 export default function AppNavigator() {
-  const { isAuthenticated, isLoading, userRole, isOnboarded, guardProfile } = useAuth();
+  const { isAuthenticated, isLoading, userRole, userProfile, isOnboarded, guardProfile } = useAuth();
   // Meant to be session-only, but AppNavigator itself never unmounts across
   // logout/login (it's mounted once at the app root), so this useState would
   // otherwise keep whatever value the previous guard's session left it at —
@@ -154,10 +161,50 @@ export default function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         <Stack.Group screenOptions={{ headerShown: false, animation: 'fade' }}>
-          <Stack.Screen name="Login">
-            {(props) => <LoginScreen {...props} appTitle="SOCIETY SECURITY" allowSignup={false} onForgotPassword={() => props.navigation.navigate('ForgotPassword')} />}
+          <Stack.Screen name="Register">
+            {(props) => (
+              <ResidentRegistrationFlow
+                {...props}
+                onGoToLogin={() => props.navigation.navigate('Login')}
+                onCompleteRegistration={(data) =>
+                  props.navigation.navigate('ApprovalPending', data)
+                }
+              />
+            )}
           </Stack.Screen>
-          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ presentation: 'modal' }} />
+          <Stack.Screen name="Login">
+            {(props) => (
+              <LoginScreen
+                {...props}
+                appTitle="SOCIETY SECURITY"
+                allowSignup={false}
+                onForgotPassword={() => props.navigation.navigate('ForgotPassword')}
+                onGoToRegister={() => props.navigation.navigate('Register')}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen
+            name="ApprovalPending"
+            options={{ presentation: 'card' }}
+          >
+            {(props: any) => (
+              <ApprovalPendingScreen
+                {...props}
+                email={props.route?.params?.email}
+                flatNumber={props.route?.params?.flat}
+                tower={props.route?.params?.building}
+                societyName={props.route?.params?.society}
+                submittedAt={props.route?.params?.submittedAt}
+                onGoToLogin={() => props.navigation.navigate('Login')}
+                onSwitchAccount={() => props.navigation.navigate('Login')}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen
+            name="ForgotPassword"
+            component={ForgotPasswordScreen}
+            options={{ presentation: 'modal' }}
+          />
         </Stack.Group>
       ) : userRole === 'GUARD' ? (
         !guardProfile?.isOnDuty && !guardOnboardingSkipped ? (
@@ -170,7 +217,7 @@ export default function AppNavigator() {
             <Stack.Screen name="ScanPass" component={ScanPassScreen} options={{ headerShown: true, title: 'Scan Pass' }} />
           </>
         )
-      ) : !isOnboarded ? (
+      ) : !isOnboarded || userProfile?.status === 'PENDING' ? (
         <Stack.Screen name="ResidentOnboarding" component={ResidentOnboardingScreen} />
       ) : hasSeenNotificationPrompt === false ? (
         <Stack.Screen name="NotificationSetup">
@@ -185,7 +232,7 @@ export default function AppNavigator() {
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
           <Stack.Screen name="NotificationSetup" component={NotificationSetupScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="CreatePass" component={CreatePassScreen} options={{ headerShown: true, title: 'Create pass' }} />
+          <Stack.Screen name="CreatePass" component={CreatePassScreen} options={{ headerShown: false }} />
           <Stack.Screen name="PassDetail" component={PassDetailScreen} options={{ headerShown: true, title: 'Pass details' }} />
           <Stack.Screen name="Household" component={HouseholdScreen} options={{ headerShown: true, title: 'Household members' }} />
           <Stack.Screen name="Amenities" component={AmenitiesScreen} options={{ headerShown: true, title: 'Amenities' }} />

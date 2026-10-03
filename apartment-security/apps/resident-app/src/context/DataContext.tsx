@@ -106,11 +106,23 @@ export type Entry = {
   initials: string;
   color: string;
   time: string;
+  fullDate: string;
   status: 'Entered' | 'Exited' | 'Denied' | 'Pending';
   method: string;
   gate?: string;
   statusColor: string;
   date: 'TODAY' | 'YESTERDAY' | 'EARLIER';
+  phone?: string;
+  vehicleNumber?: string;
+  purpose?: string;
+  category?: string;
+  entryAt: string;
+  exitAt?: string | null;
+  validUntil?: string | null;
+  passType?: string;
+  passName?: string;
+  passId?: string;
+  rating?: number;
 };
 
 const ENTRY_METHOD_LABEL: Record<string, string> = {
@@ -138,24 +150,48 @@ const colorForId = (id: string) => {
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
 const mapEntry = (raw: any): Entry => {
-  const entryDate = new Date(raw.entryAt);
+  const entryDate = new Date(raw.entryAt || Date.now());
   const today = startOfDay(new Date());
   const diffDays = Math.round((today - startOfDay(entryDate)) / 86400000);
   const status = raw.exitAt
     ? { label: 'Exited' as const, color: colors.textMuted }
     : ENTRY_STATUS[raw.status] ?? { label: 'Entered' as const, color: colors.success };
 
+  const derivedCategory = raw.pass?.type
+    ? raw.pass.type
+    : raw.method === 'DOMESTIC_WORKER'
+    ? 'DAILY_HELP'
+    : raw.vehicleNumber
+    ? 'VEHICLE'
+    : raw.purpose?.toUpperCase().includes('DELIVERY')
+    ? 'DELIVERY'
+    : raw.purpose?.toUpperCase().includes('CAB')
+    ? 'CAB'
+    : 'GUEST';
+
   return {
     id: raw.id,
-    name: raw.visitorName,
+    name: raw.visitorName || 'Visitor',
     initials: (raw.visitorName || '?').charAt(0).toUpperCase(),
     color: colorForId(raw.id),
     time: entryDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    fullDate: entryDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
     status: status.label,
     method: ENTRY_METHOD_LABEL[raw.method] ?? raw.method,
     gate: raw.entryPoint?.name ?? undefined,
     statusColor: status.color,
     date: diffDays === 0 ? 'TODAY' : diffDays === 1 ? 'YESTERDAY' : 'EARLIER',
+    phone: raw.visitorPhone || undefined,
+    vehicleNumber: raw.vehicleNumber || undefined,
+    purpose: raw.purpose || undefined,
+    category: derivedCategory,
+    entryAt: raw.entryAt || new Date().toISOString(),
+    exitAt: raw.exitAt ?? null,
+    validUntil: raw.pass?.validUntil ?? null,
+    passType: raw.pass?.type ?? undefined,
+    passName: raw.pass?.visitorName ?? undefined,
+    passId: raw.passId ?? undefined,
+    rating: 4.5,
   };
 };
 
@@ -307,6 +343,7 @@ type DataContextType = {
   showUnitInCommunity: boolean;
   updateShowUnitInCommunity: (value: boolean) => Promise<void>;
   fetchProfileSettings: () => Promise<void>;
+  notifyGuardsOverstay: (params: { entryId?: string; visitorName: string; expectedDuration?: string; reason?: string }) => Promise<void>;
 };
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -323,7 +360,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [alertPreferences, setAlertPreferences] = useState<AlertPreferences>(DEFAULT_ALERT_PREFERENCES);
   const [showUnitInCommunity, setShowUnitInCommunity] = useState<boolean>(true);
 
-  const { isAuthenticated, userRole } = useAuth();
+  const { isAuthenticated, userRole, userProfile } = useAuth();
   const socket = useSocket();
 
   // Mirrors `alerts` for read-only use inside callbacks that must stay
@@ -405,6 +442,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const triggerDuressAlert = useCallback(async () => {
     await api.post('/alerts/duress', {});
+  }, []);
+
+  const notifyGuardsOverstay = useCallback(async (params: { entryId?: string; visitorName: string; expectedDuration?: string; reason?: string }) => {
+    await api.post('/alerts/overstay', params);
   }, []);
 
   const fetchEntries = useCallback(async () => {
@@ -533,7 +574,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [showUnitInCommunity]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || userProfile?.status === 'PENDING') return;
     if (userRole === 'RESIDENT') {
       Promise.allSettled([
         fetchPasses(),
@@ -544,7 +585,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchAmenities(),
       ]);
     }
-  }, [isAuthenticated, userRole, fetchPasses, fetchAlerts, fetchProfileSettings, fetchEntries, fetchMembers, fetchAmenities]);
+  }, [isAuthenticated, userRole, userProfile?.status, fetchPasses, fetchAlerts, fetchProfileSettings, fetchEntries, fetchMembers, fetchAmenities]);
 
   // Guard-initiated walk-in requests arrive over the resident's `unit_{id}`
   // socket room (see api-server socket.handler.ts) — surface them as a real
@@ -684,6 +725,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       stopVisitorRing(payload.entryId);
     };
 
+    const handleVisitorEntryLogged = (payload: any) => {
+      fetchEntries();
+      fetchPasses();
+      if (userRole === 'RESIDENT' && payload?.visitorName) {
+        scheduleLocalNotification(
+          'Visitor Entered Building',
+          `${payload.visitorName} entered via ${payload.gateName || 'Gate'}. Live visit timer started.`
+        );
+      }
+    };
+
+    const handleVisitorExitLogged = (payload: any) => {
+      fetchEntries();
+      fetchPasses();
+      if (userRole === 'RESIDENT' && payload?.visitorName) {
+        scheduleLocalNotification(
+          'Visitor Left Building',
+          `${payload.visitorName} exited via ${payload.gateName || 'Gate'} (Duration: ${payload.durationFormatted || 'Completed'}). Pass expired.`
+        );
+      }
+    };
+
     socket.on('connect', handleConnect);
     socket.on('walkin_request', handleWalkinRequest);
     socket.on('new_alert', handleNewAlert);
@@ -692,6 +755,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     socket.on('visitor_approval_request', handleVisitorApprovalRequest);
     socket.on('visitor_approval_timeout', handleVisitorApprovalTimeout);
     socket.on('walkin_resolved', handleWalkinResolved);
+    socket.on('visitor_entry_logged', handleVisitorEntryLogged);
+    socket.on('visitor_exit_logged', handleVisitorExitLogged);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -702,8 +767,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       socket.off('visitor_approval_request', handleVisitorApprovalRequest);
       socket.off('visitor_approval_timeout', handleVisitorApprovalTimeout);
       socket.off('walkin_resolved', handleWalkinResolved);
+      socket.off('visitor_entry_logged', handleVisitorEntryLogged);
+      socket.off('visitor_exit_logged', handleVisitorExitLogged);
     };
-  }, [socket, userRole, fetchAlerts, addAlert, markAlertRead, fetchMembers]);
+  }, [socket, userRole, fetchAlerts, addAlert, markAlertRead, fetchMembers, fetchEntries, fetchPasses]);
 
   const value = useMemo<DataContextType>(() => ({
     passes, fetchPasses, createPass, suspendPass, revokePass,
@@ -717,6 +784,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     alertPreferences, updateAlertPreferences,
     showUnitInCommunity, updateShowUnitInCommunity,
     fetchProfileSettings,
+    notifyGuardsOverstay,
   }), [
     passes, fetchPasses, createPass, suspendPass, revokePass,
     alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
@@ -729,6 +797,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     alertPreferences, updateAlertPreferences,
     showUnitInCommunity, updateShowUnitInCommunity,
     fetchProfileSettings,
+    notifyGuardsOverstay,
   ]);
 
   return <DataContext.Provider value={value}>{children}  </DataContext.Provider>;

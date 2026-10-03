@@ -52,6 +52,10 @@ export type CommunityMember = {
   userId: string;
   name: string;
   unit?: string;
+  phone?: string | null;
+  email?: string | null;
+  residentType?: string;
+  isPrimary?: boolean;
 };
 
 const formatUnit = (unit?: { unitNumber?: string; tower?: string | null } | null) => {
@@ -194,7 +198,18 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const response = await api.get('/community/members');
       const raw: any[] = response.data.data ?? [];
-      setMembers(raw.map((r) => ({ id: r.id, userId: r.userId, name: r.name, unit: formatUnit(r.unit) })));
+      setMembers(
+        raw.map((r) => ({
+          id: r.id,
+          userId: r.userId,
+          name: r.name,
+          unit: formatUnit(r.unit),
+          phone: r.phone,
+          email: r.email,
+          residentType: r.residentType || (r.isPrimary ? 'Owner' : 'Member'),
+          isPrimary: r.isPrimary,
+        }))
+      );
     } catch (error) {
       console.error('Failed to fetch community members:', error);
     }

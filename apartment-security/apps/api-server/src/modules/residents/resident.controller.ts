@@ -5,6 +5,12 @@ import { AppError } from '../../middlewares/error.middleware';
 import { auditLog } from '../../utils/audit.util';
 import { io } from '../../server';
 import bcrypt from 'bcryptjs';
+import {
+  sendResidentRegistrationEmailToManager,
+  sendResidentApprovalNotificationToResident,
+} from '../../utils/email.service';
+
+
 
 export const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -178,7 +184,7 @@ export const getUnitsByTower = async (req: Request, res: Response, next: NextFun
 
 export const onboardSelf = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, tower, flatNumber, type, vehicleNumber } = req.body;
+    const { name, tower, flatNumber, type, vehicleNumber, propertyId, societyName, tenantSubtype, occupancyStatus, documentUrl, documentName } = req.body;
     const userId = req.user!.userId;
 
     const existing = await prisma.resident.findUnique({ where: { userId } });
@@ -186,10 +192,21 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
       return next(new AppError('Your resident profile is already set up', 400));
     }
 
-    let property = await prisma.property.findFirst();
+    let property = null;
+    if (propertyId) {
+      property = await prisma.property.findUnique({ where: { id: propertyId } });
+    }
+    if (!property && societyName) {
+      property = await prisma.property.findFirst({
+        where: { name: { contains: societyName, mode: 'insensitive' } },
+      });
+    }
+    if (!property) {
+      property = await prisma.property.findFirst();
+    }
     if (!property) {
       property = await prisma.property.create({
-        data: { name: 'Default Property', address: 'Address', city: 'City', pincode: '000000', totalUnits: 100 },
+        data: { name: societyName || 'Aban Humming Bees', address: 'Address', city: req.body.city || 'Bengaluru', pincode: '560001', totalUnits: 100 },
       });
     }
 
@@ -203,14 +220,18 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
       unit = await prisma.unit.create({
         data: {
           unitNumber: flatNumber,
-          tower,
+          tower: tower || 'Block A',
           floor: 1,
           propertyId: property.id,
           isOccupied: true,
         },
       });
-    } else if (unit.tower !== tower) {
-      return next(new AppError(`Flat ${flatNumber} belongs to ${unit.tower}, not ${tower}`, 400));
+    } else if (unit.tower !== tower && tower) {
+      // update tower if unit exists
+      await prisma.unit.update({
+        where: { id: unit.id },
+        data: { tower },
+      });
     }
 
     const existingUnitResidents = await prisma.resident.count({ where: { unitId: unit.id } });
@@ -221,6 +242,11 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
         unitId: unit.id,
         name,
         residentType: type || 'Owner',
+        relationship: tenantSubtype || 'Primary',
+        status: 'PENDING',
+        occupancyStatus: occupancyStatus || 'Currently residing',
+        documentUrl: documentUrl || null,
+        documentName: documentName || null,
         isPrimary: existingUnitResidents === 0,
       },
       include: { unit: { include: { property: true } } },
@@ -242,9 +268,108 @@ export const onboardSelf = async (req: Request, res: Response, next: NextFunctio
 
     await auditLog(userId, 'SELF_ONBOARD_RESIDENT', 'Resident', resident.id);
 
-    return sendSuccess(res, 201, 'Profile created successfully', resident);
+    // Fetch user for email and managers for notification
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const managers = await prisma.manager.findMany({
+      where: { propertyId: property.id },
+      include: { user: true },
+    });
+
+    const managerEmails = managers
+      .map((m) => m.user?.email)
+      .filter((e): e is string => !!e);
+
+    const targetManagerEmail = managerEmails.length > 0 ? managerEmails.join(', ') : null;
+
+    // Send email alert to manager via SMTP
+    sendResidentRegistrationEmailToManager({
+      managerEmail: targetManagerEmail,
+      societyName: property.name,
+      residentName: name,
+      residentEmail: user?.email || null,
+      residentPhone: user?.phone || null,
+      unitNumber: flatNumber,
+      tower: tower || 'Block A',
+      residentType: type || 'Owner',
+      tenantSubtype: tenantSubtype || null,
+      occupancyStatus: occupancyStatus || 'Currently residing',
+      documentUrl: documentUrl || null,
+      documentName: documentName || null,
+    }).catch((err) => {
+      console.error('Failed to send manager alert email:', err);
+    });
+
+    return sendSuccess(res, 201, 'Registration request submitted for approval', resident);
   } catch (err) { next(err); }
 };
+
+export const getPendingResidents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = req.user?.propertyId;
+    const pending = await prisma.resident.findMany({
+      where: {
+        status: 'PENDING',
+        ...(propertyId ? { unit: { propertyId } } : {}),
+      },
+      include: {
+        unit: { include: { property: true } },
+        user: { select: { phone: true, email: true, createdAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return sendSuccess(res, 200, 'Pending resident requests fetched', pending);
+  } catch (err) { next(err); }
+};
+
+export const approveResident = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const resident = await prisma.resident.findUnique({
+      where: { id },
+      include: { unit: { include: { property: true } }, user: true },
+    });
+    if (!resident) return next(new AppError('Resident request not found', 404));
+
+    const updated = await prisma.resident.update({
+      where: { id },
+      data: { status: 'APPROVED' },
+      include: { unit: { include: { property: true } }, user: true },
+    });
+
+    await auditLog(req.user!.userId, 'APPROVE_RESIDENT', 'Resident', resident.id);
+
+    // Send confirmation email via SMTP to resident
+    if (resident.user?.email) {
+      sendResidentApprovalNotificationToResident(
+        resident.user.email,
+        resident.name,
+        resident.unit?.property?.name || 'Society Security',
+        resident.unit?.unitNumber || '',
+        resident.unit?.tower || 'Block A'
+      ).catch((err) => console.error('Failed to send resident approval email:', err));
+    }
+
+    return sendSuccess(res, 200, 'Resident approved successfully', updated);
+  } catch (err) { next(err); }
+};
+
+export const rejectResident = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const resident = await prisma.resident.findUnique({ where: { id } });
+    if (!resident) return next(new AppError('Resident request not found', 404));
+
+    const updated = await prisma.resident.update({
+      where: { id },
+      data: { status: 'REJECTED' },
+    });
+
+    await auditLog(req.user!.userId, 'REJECT_RESIDENT', 'Resident', resident.id);
+
+    return sendSuccess(res, 200, 'Resident request rejected', updated);
+  } catch (err) { next(err); }
+};
+
 
 export const getAllResidents = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -281,6 +406,10 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
                     apartmentNumber: r.unit.unitNumber,
                     tower: r.unit.tower || 'Tower A',
                     floor: r.unit.floor,
+                    residentType: r.residentType,
+                    occupancyStatus: r.occupancyStatus,
+                    documentUrl: r.documentUrl,
+                    documentName: r.documentName,
                     totalMembers: 0,
                     primaryResident: null,
                     members: [],
@@ -291,6 +420,11 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
                 id: r.id,
                 name: r.name,
                 relationship: r.relationship,
+                residentType: r.residentType,
+                occupancyStatus: r.occupancyStatus,
+                documentUrl: r.documentUrl,
+                documentName: r.documentName,
+                status: r.status,
                 isPrimary: r.isPrimary,
                 phone: r.user?.phone || null,
                 email: r.user?.email || null,
@@ -300,7 +434,21 @@ export const getAllResidents = async (req: Request, res: Response, next: NextFun
             family.members.push(member);
             family.totalMembers += 1;
             if (r.isPrimary || !family.primaryResident) {
-                family.primaryResident = { id: r.id, name: r.name, phone: r.user?.phone || null, email: r.user?.email || null };
+                family.primaryResident = {
+                    id: r.id,
+                    name: r.name,
+                    phone: r.user?.phone || null,
+                    email: r.user?.email || null,
+                    residentType: r.residentType,
+                    occupancyStatus: r.occupancyStatus,
+                    relationship: r.relationship,
+                    documentUrl: r.documentUrl,
+                    documentName: r.documentName,
+                };
+                family.residentType = r.residentType;
+                family.occupancyStatus = r.occupancyStatus;
+                family.documentUrl = r.documentUrl;
+                family.documentName = r.documentName;
             }
         }
 
@@ -330,12 +478,29 @@ export const getFamilyDetails = async (req: Request, res: Response, next: NextFu
             apartmentNumber: unit.unitNumber,
             tower: unit.tower || 'Tower A',
             floor: unit.floor,
+            residentType: primary?.residentType || 'Owner',
+            occupancyStatus: primary?.occupancyStatus || 'Currently residing',
+            documentUrl: primary?.documentUrl || null,
+            documentName: primary?.documentName || null,
             totalMembers: unit.residents.length,
-            primaryResident: primary ? { id: primary.id, name: primary.name } : null,
+            primaryResident: primary ? {
+                id: primary.id,
+                name: primary.name,
+                residentType: primary.residentType,
+                occupancyStatus: primary.occupancyStatus,
+                relationship: primary.relationship,
+                documentUrl: primary.documentUrl,
+                documentName: primary.documentName,
+            } : null,
             members: unit.residents.map(r => ({
                 id: r.id,
                 name: r.name,
                 relationship: r.relationship,
+                residentType: r.residentType,
+                occupancyStatus: r.occupancyStatus,
+                documentUrl: r.documentUrl,
+                documentName: r.documentName,
+                status: r.status,
                 isPrimary: r.isPrimary,
                 phone: r.user?.phone || null,
                 email: r.user?.email || null,
@@ -344,6 +509,25 @@ export const getFamilyDetails = async (req: Request, res: Response, next: NextFu
             })),
         };
         return sendSuccess(res, 200, 'Family details fetched', result);
+    } catch (err) { next(err); }
+};
+
+export const uploadResidentDocument = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const file = req.file;
+        if (!file) return next(new AppError('No document file uploaded', 400));
+
+        const { uploadBuffer } = await import('../../utils/objectStorage.util');
+        const safeFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `resident-documents/${Date.now()}-${safeFilename}`;
+        const url = await uploadBuffer(file.buffer, path, file.mimetype);
+
+        return sendSuccess(res, 201, 'Document uploaded successfully', {
+            url,
+            fileName: file.originalname,
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+        });
     } catch (err) { next(err); }
 };
 

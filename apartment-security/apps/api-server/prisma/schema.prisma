@@ -125,6 +125,10 @@ model Resident {
   updatedAt            DateTime         @updatedAt
   showUnitInCommunity  Boolean          @default(true)
   residentType         String           @default("Owner")
+  status               String           @default("APPROVED") // "PENDING" | "APPROVED" | "REJECTED"
+  occupancyStatus      String?
+  documentUrl          String?
+  documentName         String?
   mutedFromCommunity   Boolean          @default(false)
   relationship         String           @default("Primary")
   complaints           Complaint[]

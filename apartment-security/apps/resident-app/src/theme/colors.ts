@@ -1,40 +1,40 @@
 export const colors = {
-  primary: '#B67318', // Warm brown/golden for active buttons and accents
-  primaryLight: '#F5EBE1', // Light tan background for icons/badges
-  primaryDark: '#8F5A13',
-  background: '#FFFDF9', // Warm off-white background
-  card: '#FFFFFF',
-  text: '#1C1917', // Dark brown/black for text
-  textMuted: '#8A7D73', // Muted text
-  success: '#16A34A',
-  successLight: '#DCFCE7',
-  danger: '#DC2626',
-  dangerLight: '#FDECEF', // Light red background for emergency button
-  warning: '#EAB308',
-  warningLight: '#FEF9C3',
-  border: '#EBE5DF', // Light border for inputs and cards
+  primary: '#0f172a', // Clean Deep Slate Black for active buttons and accents
+  primaryLight: '#f1f5f9', // Light slate for icons/badges
+  primaryDark: '#020617',
+  background: '#f5f3ef', // Neutral off-white background
+  card: '#ffffff',
+  text: '#0f172a', // Dark slate for text
+  textMuted: '#64748b', // Slate muted
+  success: '#16a34a',
+  successLight: '#dcfce7',
+  danger: '#ef4444',
+  dangerLight: '#fee2e2',
+  warning: '#f59e0b',
+  warningLight: '#fef3c7',
+  border: '#e2e8f0', // Crisp border for inputs and cards
   black: '#000000',
-  white: '#FFFFFF',
+  white: '#ffffff',
   overlay: 'rgba(0,0,0,0.5)',
 };
 
 export const darkColors: typeof colors = {
-  primary: '#D9973F',
-  primaryLight: '#3A2C1A',
-  primaryDark: '#F2A65A',
-  background: '#141210',
-  card: '#1F1B17',
-  text: '#F5EFE7',
-  textMuted: '#A99C8E',
-  success: '#22C55E',
-  successLight: '#123321',
-  danger: '#F87171',
-  dangerLight: '#3B1717',
-  warning: '#FBBF24',
-  warningLight: '#3A2E0C',
-  border: '#332C25',
+  primary: '#ffffff', // High-contrast White for active elements in dark mode
+  primaryLight: '#334155', // Slate 700 for icon boxes
+  primaryDark: '#cbd5e1',
+  background: '#0f172a', // Slate 900 — matching all app pages
+  card: '#1e293b', // Slate 800 — matching all app pages
+  text: '#f8fafc', // Slate 50 — clean crisp white text
+  textMuted: '#94a3b8', // Slate 400 — clean muted text
+  success: '#22c55e',
+  successLight: 'rgba(34, 197, 94, 0.2)',
+  danger: '#ef4444',
+  dangerLight: 'rgba(239, 68, 68, 0.2)',
+  warning: '#f59e0b',
+  warningLight: 'rgba(245, 158, 11, 0.2)',
+  border: '#334155', // Slate 700 — matching all app pages
   black: '#000000',
-  white: '#FFFFFF',
+  white: '#ffffff',
   overlay: 'rgba(0,0,0,0.65)',
 };
 

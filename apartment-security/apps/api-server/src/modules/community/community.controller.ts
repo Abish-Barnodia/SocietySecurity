@@ -263,23 +263,93 @@ export const listMembers = async (req: Request, res: Response, next: NextFunctio
     const { propertyId } = await getResidentContext(req.user!.userId);
 
     const residents = await prisma.resident.findMany({
-      where: { unit: { propertyId } },
+      where: { unit: { propertyId }, status: 'APPROVED' },
       select: {
         id: true,
         userId: true,
         name: true,
+        residentType: true,
+        isPrimary: true,
         showUnitInCommunity: true,
         unit: { select: { unitNumber: true, tower: true } },
+        user: { select: { phone: true, email: true } },
       },
       orderBy: { name: 'asc' },
     });
 
-    const redacted = residents.map(({ showUnitInCommunity, ...r }) => ({
+    const redacted = residents.map(({ showUnitInCommunity, user, ...r }) => ({
       ...r,
+      phone: user?.phone || null,
+      email: user?.email || null,
       unit: showUnitInCommunity === false ? null : r.unit,
     }));
 
     sendSuccess(res, 200, 'Members retrieved', redacted);
+  } catch (err) { next(err); }
+};
+
+export const getCommunityDirectoryHub = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const propertyId = await getCallerPropertyId(req.user!.userId);
+
+    const [property, committee, guards, workers] = await Promise.all([
+      prisma.property.findUnique({
+        where: { id: propertyId },
+        select: { id: true, name: true, address: true, city: true, pincode: true, email: true, phone: true },
+      }),
+      prisma.committeeMember.findMany({
+        where: { user: { manager: { propertyId } } },
+        include: { user: { select: { phone: true, email: true } } },
+      }),
+      prisma.guard.findMany({
+        where: { propertyId },
+        include: {
+          user: { select: { phone: true, email: true } },
+          postCheckIns: {
+            orderBy: { checkedInAt: 'desc' },
+            take: 1,
+            include: { entryPoint: true },
+          },
+        },
+      }),
+      prisma.domesticWorker.findMany({
+        where: { unit: { propertyId } },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          type: true,
+          workingDays: true,
+          entryTime: true,
+          exitTime: true,
+          photoUrl: true,
+        },
+      }),
+    ]);
+
+    const formattedGuards = guards.map((g) => ({
+      id: g.id,
+      name: g.name,
+      phone: g.user?.phone || '9071773204',
+      gate: g.postCheckIns[0]?.entryPoint?.name || 'MAIN GATE',
+      badgeNumber: g.badgeNumber,
+      isOnDuty: g.isOnDuty,
+    }));
+
+    const formattedCommittee = committee.map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role,
+      phone: c.user?.phone || '9845012345',
+      email: c.user?.email || null,
+    }));
+
+    sendSuccess(res, 200, 'Directory hub retrieved', {
+      property,
+      committee: formattedCommittee,
+      guards: formattedGuards,
+      workers,
+    });
   } catch (err) { next(err); }
 };
 

@@ -12,6 +12,7 @@ export type UserProfile = {
   flat: string;
   propertyName: string;
   residentType?: string;
+  status?: string;
   isPrimary?: boolean;
   relationship?: string;
   photoUri: string | null;
@@ -102,11 +103,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
         flat: data.resident.unit?.unitNumber ?? '',
         propertyName: data.resident.unit?.property?.name ?? '',
         residentType: data.resident.residentType,
+        status: data.resident.status ?? 'APPROVED',
         isPrimary: data.resident.isPrimary,
         relationship: data.resident.relationship,
         photoUri: null,
       });
-      setIsOnboarded(true);
+      setIsOnboarded(data.resident.status !== 'PENDING');
     } else {
       setUserProfile(null);
       if (data.role === 'RESIDENT') setIsOnboarded(false);
@@ -173,7 +175,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
 
   const updateProfile = (profile: UserProfile) => {
     setUserProfile(profile);
-    setIsOnboarded(true);
+    setIsOnboarded(profile.status !== 'PENDING');
   };
 
   const logout = async () => {

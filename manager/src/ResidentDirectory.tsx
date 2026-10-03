@@ -9,6 +9,11 @@ interface FamilyMember {
   id: string;
   name: string;
   relationship: string;
+  residentType?: string;
+  occupancyStatus?: string;
+  documentUrl?: string | null;
+  documentName?: string | null;
+  status?: string;
   isPrimary: boolean;
   phone: string | null;
   email: string | null;
@@ -22,14 +27,31 @@ interface Family {
   apartmentNumber: string;
   tower: string;
   floor: number;
+  residentType?: string;
+  occupancyStatus?: string;
+  documentUrl?: string | null;
+  documentName?: string | null;
   totalMembers: number;
-  primaryResident: { id: string; name: string; phone: string | null; email: string | null } | null;
+  primaryResident: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    residentType?: string;
+    occupancyStatus?: string;
+    relationship?: string;
+    documentUrl?: string | null;
+    documentName?: string | null;
+  } | null;
   members: FamilyMember[];
 }
 
 const ResidentDirectory = () => {
   const [activeTab, setActiveTab] = useState('directory');
   const [families, setFamilies] = useState<Family[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<{ url: string; name: string } | null>(null);
   const [deletedFamilies, setDeletedFamilies] = useState<Family[]>([]);
   const [restoringUnitId, setRestoringUnitId] = useState<string | null>(null);
   const [amenities, setAmenities] = useState<any[]>([]);
@@ -38,6 +60,7 @@ const ResidentDirectory = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [towerFilter, setTowerFilter] = useState('All Towers');
+
 
   const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
   const [editFamilyUnitId, setEditFamilyUnitId] = useState<string | null>(null);
@@ -110,6 +133,7 @@ const ResidentDirectory = () => {
   const [workers, setWorkers] = useState<any[]>([]);
   const [workersLoading, setWorkersLoading] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState<any | null>(null);
+  const [rejectConfirmReq, setRejectConfirmReq] = useState<any | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -118,13 +142,26 @@ const ResidentDirectory = () => {
 
   const getAuthToken = () => localStorage.getItem('accessToken') || '';
 
-  useEffect(() => { fetchData(); }, [activeTab]);
+  useEffect(() => { fetchData(); fetchPending(); }, [activeTab]);
+
+  const fetchPending = async () => {
+    try {
+      const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
+      const res = await fetch(`${API_BASE}/residents/pending`, { headers });
+      const data = await res.json();
+      if (data.status === 'success') setPendingApprovals(data.data || []);
+    } catch (e) {
+      console.error('Failed to fetch pending resident approvals', e);
+    }
+  };
 
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${getAuthToken()}` };
-      if (activeTab === 'directory') {
+      if (activeTab === 'approvals') {
+        await fetchPending();
+      } else if (activeTab === 'directory') {
         const res = await fetch(`${API_BASE}/residents`, { headers });
         const data = await res.json();
         if (data.status === 'success') setFamilies(data.data);
@@ -148,15 +185,63 @@ const ResidentDirectory = () => {
     }
   };
 
-  // Keep the complaints queue and family directory live while open —
-  // residents add/remove household members and file complaints from the app
-  // in real time, and the manager shouldn't have to switch tabs away and
-  // back (or refresh) to see a change land.
+  const handleApproveResident = async (id: string) => {
+    setActionBusyId(id);
+    try {
+      const headers = {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json'
+      };
+      const res = await fetch(`${API_BASE}/residents/${id}/approve`, { method: 'POST', headers });
+      const data = await res.json();
+      if (data.status === 'success') {
+        showToast('Resident request approved! Confirmation email sent.', 'success');
+        fetchPending();
+        fetchData(true);
+      } else {
+        showToast(data.message || 'Failed to approve resident', 'error');
+      }
+    } catch {
+      showToast('Failed to approve resident', 'error');
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  const handleRejectResident = async (id: string) => {
+    setActionBusyId(id);
+    try {
+      const headers = {
+        'Authorization': `Bearer ${getAuthToken()}`,
+        'Content-Type': 'application/json'
+      };
+      const res = await fetch(`${API_BASE}/residents/${id}/reject`, { method: 'POST', headers });
+      const data = await res.json();
+      if (data.status === 'success') {
+        showToast('Resident request rejected', 'success');
+        setRejectConfirmReq(null);
+        fetchPending();
+        fetchData(true);
+      } else {
+        showToast(data.message || 'Failed to reject resident', 'error');
+      }
+    } catch {
+      showToast('Failed to reject resident', 'error');
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  // Keep the complaints queue, approvals and family directory live while open
   useEffect(() => {
-    if (activeTab !== 'complaints' && activeTab !== 'directory') return;
-    const interval = setInterval(() => fetchData(true), 15000);
+    if (activeTab !== 'complaints' && activeTab !== 'directory' && activeTab !== 'approvals') return;
+    const interval = setInterval(() => {
+      fetchData(true);
+      fetchPending();
+    }, 15000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
 
   const handleResolveComplaint = async (id: string) => {
     setResolvingComplaintId(id);
@@ -380,6 +465,7 @@ const ResidentDirectory = () => {
   };
 
   const tabs = [
+    { id: 'approvals', label: 'New Approvals', icon: <Icon name="user-check" size={16} />, badge: pendingApprovals.length },
     { id: 'directory', label: 'Directory', icon: <Icon name="users" size={16} /> },
     { id: 'amenities', label: 'Amenities', icon: <Icon name="building-skyscraper" size={16} /> },
     { id: 'complaints', label: 'Complaints', icon: <Icon name="message-exclamation" size={16} /> },
@@ -416,9 +502,22 @@ const ResidentDirectory = () => {
             boxShadow: activeTab === tab.id ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'
           }}>
             {tab.icon} {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span style={{
+                backgroundColor: activeTab === tab.id ? '#EF4444' : '#F87171',
+                color: 'white',
+                fontSize: 11,
+                fontWeight: 700,
+                borderRadius: 10,
+                padding: '2px 7px',
+              }}>
+                {tab.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
+
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
@@ -426,6 +525,184 @@ const ResidentDirectory = () => {
         </div>
       ) : (
         <>
+          {activeTab === 'approvals' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                    Pending Resident Registrations ({pendingApprovals.length})
+                  </h2>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>
+                    Review new residents who registered via the mobile app and authorize their gate and security access.
+                  </p>
+                </div>
+                <button
+                  className="btn btn-outline"
+                  style={{ backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: 6 }}
+                  onClick={() => fetchPending()}
+                >
+                  <Icon name="refresh-cw" size={14} /> Refresh Requests
+                </button>
+              </div>
+
+              {pendingApprovals.length === 0 ? (
+                <EmptyState
+                  icon="user-check"
+                  message="No pending resident registrations right now. All submissions are verified!"
+                  compact
+                />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+                  {pendingApprovals.map((req) => (
+                    <div
+                      key={req.id}
+                      style={{
+                        backgroundColor: 'white',
+                        borderRadius: 12,
+                        border: '1px solid var(--border-color)',
+                        padding: 20,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                          <div>
+                            <span style={{
+                              padding: '3px 10px',
+                              borderRadius: 6,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              backgroundColor: '#FEF3C7',
+                              color: '#B45309',
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                            }}>
+                              Pending Verification
+                            </span>
+                            <h3 style={{ fontSize: 18, fontWeight: 700, margin: '10px 0 2px', color: 'var(--text-main)' }}>
+                              {req.name}
+                            </h3>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>
+                              {req.unit?.tower ? `${req.unit.tower} - ` : ''}Flat {req.unit?.unitNumber}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', fontSize: 11, color: 'var(--text-muted)' }}>
+                            {new Date(req.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, margin: '14px 0', padding: 12, backgroundColor: '#F8FAFC', borderRadius: 8, fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Role:</span>
+                            <div style={{ fontWeight: 600, color: '#0F172A', marginTop: 2 }}>
+                              {req.residentType} {req.relationship && req.relationship !== 'Primary' ? `(${req.relationship})` : ''}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Occupancy:</span>
+                            <div style={{ fontWeight: 600, color: '#0F172A', marginTop: 2 }}>
+                              {req.occupancyStatus || 'Currently residing'}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Email:</span>
+                            <div style={{ fontWeight: 600, color: '#0F172A', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {req.user?.email || 'N/A'}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Phone:</span>
+                            <div style={{ fontWeight: 600, color: '#0F172A', marginTop: 2 }}>
+                              {req.user?.phone || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {req.documentUrl && (
+                          <div style={{ marginBottom: 16 }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDocument({
+                                url: req.documentUrl,
+                                name: req.documentName || `${req.name} - Rental Agreement / Document`
+                              })}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: '#0284C7',
+                                padding: '6px 12px',
+                                backgroundColor: '#F0F9FF',
+                                borderRadius: 6,
+                                border: '1px solid #BAE6FD',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Icon name="file-text" size={14} />
+                              View Rental Agreement / ID Document
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+                        <button
+                          style={{
+                            flex: 1,
+                            padding: '9px 16px',
+                            backgroundColor: '#16A34A',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                          }}
+                          disabled={actionBusyId === req.id}
+                          onClick={() => handleApproveResident(req.id)}
+                        >
+                          {actionBusyId === req.id ? (
+                            <Icon name="loader-2" className="spin" size={14} />
+                          ) : (
+                            <>
+                              <Icon name="check" size={14} /> Approve Access
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          style={{
+                            padding: '9px 14px',
+                            backgroundColor: 'white',
+                            color: '#DC2626',
+                            border: '1px solid #FCA5A5',
+                            borderRadius: 6,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                          }}
+                          disabled={actionBusyId === req.id}
+                          onClick={() => setRejectConfirmReq(req)}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'directory' && (
             <>
               {/* Search & Filters */}
@@ -466,6 +743,7 @@ const ResidentDirectory = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {filteredFamilies.map(family => {
                     const active = familyIsActive(family);
+                    const isTenant = family.residentType === 'Tenant' || family.primaryResident?.residentType === 'Tenant';
                     return (
                       <div key={family.unitId}
                         style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.1s' }}
@@ -473,9 +751,20 @@ const ResidentDirectory = () => {
                         onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
                         onClick={() => { setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}>
 
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                           <div>
-                            <h3 style={{ margin: '0 0 5px 0', fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{displayName(family)}</h3>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{displayName(family)}</h3>
+                              {isTenant ? (
+                                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                                  Tenant (Rented)
+                                </span>
+                              ) : (
+                                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                  Owner
+                                </span>
+                              )}
+                            </div>
                             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
                               <Icon name="home" size={11} /> Unit {family.apartmentNumber} &middot; {family.tower}
                             </p>
@@ -485,7 +774,7 @@ const ResidentDirectory = () => {
                           </span>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                           <div style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Primary Resident</div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>{family.primaryResident?.name || '-'}</div>
@@ -494,6 +783,41 @@ const ResidentDirectory = () => {
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Members</div>
                             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)' }}>{family.totalMembers}</div>
                           </div>
+                        </div>
+
+                        {/* Occupancy and Document Row */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: 8, fontSize: 12 }}>
+                          <div>
+                            <span style={{ color: 'var(--text-muted)' }}>Occupancy: </span>
+                            <span style={{ fontWeight: 600, color: '#0F172A' }}>{family.occupancyStatus || family.primaryResident?.occupancyStatus || 'Currently residing'}</span>
+                          </div>
+                          {(family.documentUrl || family.primaryResident?.documentUrl) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedDocument({
+                                  url: (family.documentUrl || family.primaryResident?.documentUrl)!,
+                                  name: family.documentName || family.primaryResident?.documentName || `Unit ${family.apartmentNumber} Agreement`
+                                });
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: '#0284C7',
+                                padding: '3px 8px',
+                                backgroundColor: '#F0F9FF',
+                                borderRadius: 5,
+                                border: '1px solid #BAE6FD',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <Icon name="file-text" size={12} /> Agreement
+                            </button>
+                          )}
                         </div>
 
                         {/* Member name pills */}
@@ -681,18 +1005,54 @@ const ResidentDirectory = () => {
               </button>
             </div>
 
-            <div style={{ padding: '16px 28px', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
+            <div style={{ padding: '16px 28px', display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
               {[
-                { label: 'Primary Resident', value: selectedFamily.primaryResident?.name || 'â€”' },
-                { label: 'Total Members', value: String(selectedFamily.totalMembers) },
+                { label: 'Primary Resident', value: selectedFamily.primaryResident?.name || '—' },
+                {
+                  label: 'Tenancy Role',
+                  value: (selectedFamily.residentType || selectedFamily.primaryResident?.residentType) === 'Tenant' ? 'Tenant (Rented)' : 'Owner',
+                  color: (selectedFamily.residentType || selectedFamily.primaryResident?.residentType) === 'Tenant' ? '#1D4ED8' : '#92400E'
+                },
+                { label: 'Occupancy', value: selectedFamily.occupancyStatus || selectedFamily.primaryResident?.occupancyStatus || 'Currently residing' },
                 { label: 'Status', value: familyIsActive(selectedFamily) ? 'Active' : 'Suspended', color: familyIsActive(selectedFamily) ? '#059669' : '#DC2626' },
               ].map(s => (
-                <div key={s.label} style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '12px 14px' }}>
+                <div key={s.label} style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: '10px 12px' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{s.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: s.color || '#0F172A' }}>{s.value}</div>
                 </div>
               ))}
             </div>
+
+            {(selectedFamily.documentUrl || selectedFamily.primaryResident?.documentUrl) && (
+              <div style={{ padding: '12px 28px', backgroundColor: '#F0F9FF', borderBottom: '1px solid #BAE6FD', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#0369A1', fontWeight: 600 }}>
+                  <Icon name="file-text" size={16} />
+                  <span>Rental Agreement / ID Document Available</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocument({
+                    url: (selectedFamily.documentUrl || selectedFamily.primaryResident?.documentUrl)!,
+                    name: selectedFamily.documentName || selectedFamily.primaryResident?.documentName || `Unit ${selectedFamily.apartmentNumber} Agreement`
+                  })}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    backgroundColor: '#0284C7',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Icon name="file-text" size={14} /> Open Agreement
+                </button>
+              </div>
+            )}
 
             <div style={{ padding: '16px 28px 20px', overflowY: 'auto', flex: 1 }}>
               <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Family Members</h4>
@@ -1100,6 +1460,329 @@ const ResidentDirectory = () => {
                 <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setIsAddAmenityOpen(false)}>Cancel</button>
                 <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleSaveAmenity}>{editAmenityId ? 'Save Changes' : 'Add Amenity'}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== DOCUMENT VIEWER MODAL ===== */}
+      {selectedDocument && (
+        <div className="modal-overlay" onClick={() => setSelectedDocument(null)} style={{ zIndex: 10000 }}>
+          <div
+            className="modal-content"
+            onClick={e => e.stopPropagation()}
+            style={{ width: 740, maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+          >
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="file-text" size={18} color="var(--primary)" />
+                  {selectedDocument.name || 'Rental Agreement / Document'}
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                  Resident verification document uploaded during registration
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedDocument(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+              >
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+
+            <div style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 380, backgroundColor: '#F1F5F9' }}>
+              {selectedDocument.url.startsWith('data:image/') ? (
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center', padding: 10 }}>
+                  <img
+                    src={selectedDocument.url}
+                    alt="Document preview"
+                    style={{ maxWidth: '100%', maxHeight: '68vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+                  />
+                </div>
+              ) : selectedDocument.url.startsWith('data:application/pdf') ? (
+                <iframe
+                  src={selectedDocument.url}
+                  title="Document PDF"
+                  style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8, backgroundColor: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                />
+              ) : selectedDocument.url.startsWith('http') || selectedDocument.url.startsWith('/uploads') ? (
+                (() => {
+                  const fullUrl = selectedDocument.url.startsWith('http') ? selectedDocument.url : `${API_BASE}${selectedDocument.url}`;
+                  const isImg = /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(fullUrl);
+                  return isImg ? (
+                    <div style={{ width: '100%', display: 'flex', justifyContent: 'center', padding: 10 }}>
+                      <img
+                        src={fullUrl}
+                        alt="Document preview"
+                        style={{ maxWidth: '100%', maxHeight: '68vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      src={fullUrl}
+                      title="Document PDF"
+                      style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8, backgroundColor: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+                    />
+                  );
+                })()
+              ) : (
+                <div style={{ width: '100%', maxWidth: 620, backgroundColor: 'white', borderRadius: 12, border: '1px solid #E2E8F0', padding: 24, boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: 14, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 42, height: 42, borderRadius: 8, backgroundColor: '#E0F2FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="file-text" size={22} color="#0284C7" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{selectedDocument.name}</div>
+                        <div style={{ fontSize: 12, color: '#16A34A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="check-circle" size={13} /> Mobile Verification Document Registered
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#FEF3C7', color: '#B45309' }}>
+                      Official Record
+                    </span>
+                  </div>
+
+                  <div style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 16, border: '1px solid #E2E8F0', marginBottom: 16, fontSize: 13, color: '#334155' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8, marginBottom: 8 }}>
+                      <span style={{ color: '#64748B', fontWeight: 500 }}>Document:</span>
+                      <span style={{ fontWeight: 600, color: '#0F172A' }}>{selectedDocument.name}</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8, marginBottom: 8 }}>
+                      <span style={{ color: '#64748B', fontWeight: 500 }}>Upload Source:</span>
+                      <span style={{ fontWeight: 600, color: '#0F172A' }}>Resident Mobile Application (Expo)</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 8 }}>
+                      <span style={{ color: '#64748B', fontWeight: 500 }}>File Identifier:</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#475569', wordBreak: 'break-all' }}>
+                        {selectedDocument.url.replace(/^file:\/\/\/?/, '')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0' }}>
+                    <Icon name="shield-check" size={18} color="#16A34A" />
+                    <span style={{ fontSize: 12, color: '#15803D', fontWeight: 600 }}>
+                      Identity and tenancy verification submitted for Society Admin review.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white' }}>
+              {selectedDocument.url.startsWith('http') ? (
+                <a
+                  href={selectedDocument.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#0284C7',
+                    textDecoration: 'none',
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    backgroundColor: '#F0F9FF',
+                    border: '1px solid #BAE6FD',
+                  }}
+                >
+                  <Icon name="external-link" size={14} /> Open in New Tab
+                </a>
+              ) : selectedDocument.url.startsWith('data:') ? (
+                <div style={{ fontSize: 12, color: '#16A34A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" size={14} /> Embedded Document Preview
+                </div>
+              ) : <div />}
+              <button
+                className="btn btn-primary"
+                onClick={() => setSelectedDocument(null)}
+                style={{ padding: '8px 24px' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== REJECT CONFIRMATION MODAL ===== */}
+      {rejectConfirmReq && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: 16
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 16,
+            maxWidth: 480,
+            width: '100%',
+            overflow: 'hidden',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            border: '1px solid #FEE2E2'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '18px 24px',
+              backgroundColor: '#FEF2F2',
+              borderBottom: '1px solid #FEE2E2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: '#FEE2E2',
+                  border: '1px solid #FECACA',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Icon name="alert-triangle" size={20} color="#DC2626" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991B1B' }}>
+                    Reject Resident Request
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 12, color: '#B91C1C', marginTop: 2 }}>
+                    Confirmation Required
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRejectConfirmReq(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#9CA3AF',
+                  padding: 4,
+                  borderRadius: 6,
+                  display: 'flex'
+                }}
+              >
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 24px', color: '#334155' }}>
+              <p style={{ fontSize: 14, lineHeight: 1.5, margin: '0 0 16px 0', color: '#1E293B' }}>
+                Are you sure you want to reject the registration request for{' '}
+                <strong style={{ color: '#0F172A' }}>{rejectConfirmReq.fullName}</strong>?
+              </p>
+
+              <div style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: 10,
+                padding: '12px 16px',
+                border: '1px solid #E2E8F0',
+                marginBottom: 16,
+                fontSize: 13
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: '#64748B' }}>Unit / Flat:</span>
+                  <span style={{ fontWeight: 600, color: '#0F172A' }}>
+                    {rejectConfirmReq.towerName} - Flat {rejectConfirmReq.flatNumber}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: '#64748B' }}>Role:</span>
+                  <span style={{ fontWeight: 600, color: '#0F172A' }}>
+                    {rejectConfirmReq.role === 'OWNER' ? 'Owner' : 'Tenant'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748B' }}>Email:</span>
+                  <span style={{ fontWeight: 500, color: '#0F172A' }}>{rejectConfirmReq.email}</span>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                padding: '10px 12px',
+                backgroundColor: '#FFFBEB',
+                borderRadius: 8,
+                border: '1px solid #FDE68A'
+              }}>
+                <Icon name="info-circle" size={16} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.4 }}>
+                  This request will be removed from pending approvals and the applicant will not be authorized.
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{
+              padding: '14px 24px',
+              backgroundColor: '#F8FAFC',
+              borderTop: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 12
+            }}>
+              <button
+                type="button"
+                onClick={() => setRejectConfirmReq(null)}
+                disabled={actionBusyId === rejectConfirmReq.id}
+                style={{
+                  padding: '9px 18px',
+                  backgroundColor: 'white',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRejectResident(rejectConfirmReq.id)}
+                disabled={actionBusyId === rejectConfirmReq.id}
+                style={{
+                  padding: '9px 18px',
+                  backgroundColor: '#DC2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
+                }}
+              >
+                {actionBusyId === rejectConfirmReq.id ? (
+                  'Rejecting...'
+                ) : (
+                  <>
+                    <Icon name="trash" size={15} color="white" />
+                    Confirm Rejection
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

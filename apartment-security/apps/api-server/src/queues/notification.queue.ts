@@ -4,54 +4,67 @@ import { logger } from '../utils/logger.util';
 import { sendPush as sendPushDirect } from '../utils/push.util';
 import { sendEmail as sendEmailDirect, sendInvoiceEmail as sendInvoiceEmailDirect } from '../utils/email.service';
 
-// ponytail: single resilient Bull queue for background notification & email workers
-export const notificationQueue = new Queue('notifications', env.REDIS_URL || 'redis://localhost:6379', {
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: 100,
-    removeOnFail: 200,
-  },
-});
+const shouldEnableQueue = !!(process.env.REDIS_URL || env.NODE_ENV === 'development');
 
-notificationQueue.on('error', (err) => {
-  logger.warn('Notification queue error (falling back if needed):', { err: err?.message || err });
-});
+let queueInstance: Queue.Queue | null = null;
 
-// Worker: process push notifications
-notificationQueue.process('send-push', 5, async (job) => {
-  const { tokens, payload } = job.data;
-  if (!tokens || !tokens.length) return;
-  await sendPushDirect(tokens, payload);
-});
+if (shouldEnableQueue) {
+  try {
+    queueInstance = new Queue('notifications', env.REDIS_URL || 'redis://localhost:6379', {
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 200,
+      },
+    });
 
-// Worker: process general emails
-notificationQueue.process('send-email', 5, async (job) => {
-  const { to, subject, text, html, attachments } = job.data;
-  await sendEmailDirect(to, subject, text, html, attachments);
-});
+    queueInstance.on('error', (err) => {
+      logger.warn('Notification queue error (falling back to direct dispatch):', { err: err?.message || err });
+    });
 
-// Worker: process maintenance invoice emails
-notificationQueue.process('send-invoice-email', 3, async (job) => {
-  const { opts } = job.data;
-  // Convert base64 buffer back to Buffer if serialized
-  if (opts.pdfBuffer && typeof opts.pdfBuffer === 'string') {
-    opts.pdfBuffer = Buffer.from(opts.pdfBuffer, 'base64');
-  } else if (opts.pdfBuffer?.data) {
-    opts.pdfBuffer = Buffer.from(opts.pdfBuffer.data);
+    // Worker: process push notifications
+    queueInstance.process('send-push', 5, async (job) => {
+      const { tokens, payload } = job.data;
+      if (!tokens || !tokens.length) return;
+      await sendPushDirect(tokens, payload);
+    });
+
+    // Worker: process general emails
+    queueInstance.process('send-email', 5, async (job) => {
+      const { to, subject, text, html, attachments } = job.data;
+      await sendEmailDirect(to, subject, text, html, attachments);
+    });
+
+    // Worker: process maintenance invoice emails
+    queueInstance.process('send-invoice-email', 3, async (job) => {
+      const { opts } = job.data;
+      if (opts.pdfBuffer && typeof opts.pdfBuffer === 'string') {
+        opts.pdfBuffer = Buffer.from(opts.pdfBuffer, 'base64');
+      } else if (opts.pdfBuffer?.data) {
+        opts.pdfBuffer = Buffer.from(opts.pdfBuffer.data);
+      }
+      await sendInvoiceEmailDirect(opts);
+    });
+  } catch (err: any) {
+    logger.warn('Failed to initialize Bull notification queue, using direct dispatch mode:', { err: err?.message || err });
+    queueInstance = null;
   }
-  await sendInvoiceEmailDirect(opts);
-});
+}
+
+export const notificationQueue = queueInstance;
 
 // Dispatch helpers
 export const queuePushNotification = async (tokens: string[], payload: any) => {
+  if (!queueInstance) {
+    return sendPushDirect(tokens, payload).catch((e) => logger.error('Direct push fallback failed:', { e }));
+  }
   try {
-    await notificationQueue.add('send-push', { tokens, payload });
+    await queueInstance.add('send-push', { tokens, payload });
   } catch (err) {
-    // If Redis is unavailable, fallback to direct execution without blocking callers
     logger.warn('Failed to enqueue push notification, executing directly:', { err });
     sendPushDirect(tokens, payload).catch((e) => logger.error('Direct push fallback failed:', { e }));
   }
@@ -64,8 +77,11 @@ export const queueEmail = async (
   html?: string,
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 ) => {
+  if (!queueInstance) {
+    return sendEmailDirect(to, subject, text, html, attachments).catch((e) => logger.error('Direct email fallback failed:', { e }));
+  }
   try {
-    await notificationQueue.add('send-email', { to, subject, text, html, attachments });
+    await queueInstance.add('send-email', { to, subject, text, html, attachments });
   } catch (err) {
     logger.warn('Failed to enqueue email, executing directly:', { err });
     sendEmailDirect(to, subject, text, html, attachments).catch((e) => logger.error('Direct email fallback failed:', { e }));
@@ -84,13 +100,16 @@ export const queueInvoiceEmail = async (opts: {
   pdfBuffer: Buffer;
   invoiceId: string;
 }) => {
+  if (!queueInstance) {
+    return sendInvoiceEmailDirect(opts).catch((e) => logger.error('Direct invoice email fallback failed:', { e }));
+  }
   try {
     // Serialize Buffer for Redis storage
     const serializedOpts = {
       ...opts,
       pdfBuffer: opts.pdfBuffer.toString('base64'),
     };
-    await notificationQueue.add('send-invoice-email', { opts: serializedOpts });
+    await queueInstance.add('send-invoice-email', { opts: serializedOpts });
   } catch (err) {
     logger.warn('Failed to enqueue invoice email, executing directly:', { err });
     sendInvoiceEmailDirect(opts).catch((e) => logger.error('Direct invoice email fallback failed:', { e }));

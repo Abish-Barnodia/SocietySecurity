@@ -2,15 +2,17 @@ import { Redis } from 'ioredis';
 import { env } from './env';
 import { logger } from '../utils/logger.util';
 
+// ponytail: Graceful Redis client that never crashes the server if Redis is absent
 export const redis = new Redis(env.REDIS_URL || 'redis://localhost:6379', {
+  lazyConnect: true,
+  enableOfflineQueue: true,
+  maxRetriesPerRequest: 1,
   retryStrategy: (times) => {
-    if (times > 5) {
-      logger.error('Redis connection failed after 5 retries');
-      return null;
+    if (times > 3 && env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+      return null; // Stop polling localhost in production if REDIS_URL was never provided
     }
-    return Math.min(times * 200, 2000);
+    return Math.min(times * 500, 3000);
   },
-  enableOfflineQueue: false,
 });
 
 redis.on('connect', () => {
@@ -18,5 +20,8 @@ redis.on('connect', () => {
 });
 
 redis.on('error', (err) => {
-  logger.error('Redis connection error', { err });
+  // Silent / warning log so unhandled event emitter errors don't trigger fatal process exits
+  logger.warn('Redis connection notice (running in fallback mode if unavailable):', {
+    message: err?.message || err,
+  });
 });

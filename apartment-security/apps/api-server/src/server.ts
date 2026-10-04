@@ -24,22 +24,32 @@ export const io = new Server(server, {
   },
 });
 
-// ponytail: attach Redis adapter for multi-instance Socket.io clustering
-if (env.REDIS_URL) {
+// ponytail: only attach Redis adapter if an external REDIS_URL is explicitly configured
+if (process.env.REDIS_URL) {
   try {
-    const pubClient = new Redis(env.REDIS_URL, {
-      retryStrategy: (times) => (times > 5 ? null : Math.min(times * 200, 2000)),
+    const pubClient = new Redis(process.env.REDIS_URL, {
+      lazyConnect: true,
       enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 500, 2000)),
     });
     const subClient = pubClient.duplicate();
 
-    pubClient.on('error', (err) => logger.warn('Socket.io Redis pub client error:', { err: err?.message || err }));
-    subClient.on('error', (err) => logger.warn('Socket.io Redis sub client error:', { err: err?.message || err }));
+    pubClient.on('error', (err) => logger.warn('Socket.io Redis pub client notice:', { message: err?.message || err }));
+    subClient.on('error', (err) => logger.warn('Socket.io Redis sub client notice:', { message: err?.message || err }));
 
-    io.adapter(createAdapter(pubClient, subClient));
-    logger.info('Socket.io Redis adapter initialized for multi-instance clustering');
+    Promise.all([pubClient.connect(), subClient.connect()])
+      .then(() => {
+        io.adapter(createAdapter(pubClient, subClient));
+        logger.info('Socket.io Redis adapter initialized for multi-instance clustering');
+      })
+      .catch((err) => {
+        logger.warn('Socket.io Redis connection not established, running with default adapter:', {
+          message: err?.message || err,
+        });
+      });
   } catch (err: any) {
-    logger.warn('Socket.io Redis adapter setup skipped:', { err: err?.message || err });
+    logger.warn('Socket.io Redis adapter setup skipped:', { message: err?.message || err });
   }
 }
 
@@ -53,10 +63,6 @@ import { startAllJobs } from './jobs';
 
 const startServer = async () => {
   try {
-    // We do not strictly await prisma connect because Prisma connects lazily
-    // But we can do a dummy query to ensure it's up before serving traffic if needed
-    // await prisma.$connect();
-    
     // Start cron jobs
     startAllJobs();
 
@@ -71,16 +77,34 @@ const startServer = async () => {
 
 startServer();
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err: Error) => {
-  logger.error('UNHANDLED REJECTION! 💥 Shutting down...');
-  logger.error(err.name, err.message);
-  // Force-kill after 5 seconds in case keep-alive connections block server.close()
+// Handle unhandled promise rejections safely without crashing on non-fatal background errors
+process.on('unhandledRejection', (err: any) => {
+  const errMsg = err?.message || String(err);
+  const isIgnorable =
+    errMsg.includes('ECONNREFUSED') ||
+    errMsg.includes('Redis') ||
+    errMsg.includes('getaddrinfo') ||
+    errMsg.includes('Socket.io CORS');
+
+  if (isIgnorable) {
+    logger.warn('Non-fatal unhandled rejection caught (server remains active):', {
+      error: errMsg,
+    });
+    return;
+  }
+
+  logger.error('FATAL UNHANDLED REJECTION! 💥 Shutting down...', {
+    name: err?.name,
+    message: errMsg,
+    stack: err?.stack,
+  });
+
   const forceKill = setTimeout(() => {
     logger.error('Forced shutdown after timeout.');
     process.exit(1);
   }, 5000);
-  forceKill.unref(); // Don't let this timer keep the event loop alive
+  forceKill.unref();
+
   server.close(() => {
     process.exit(1);
   });

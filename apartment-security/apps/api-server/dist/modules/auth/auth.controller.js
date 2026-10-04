@@ -332,7 +332,8 @@ const signupEmail = async (req, res, next) => {
             return next(new error_middleware_1.AppError('Email already in use', 400));
         }
         const passwordHash = await bcryptjs_1.default.hash(password, 10);
-        const resolvedRole = role === 'MANAGER' ? 'MANAGER' : 'RESIDENT';
+        // ponytail: Public signup is strictly RESIDENT. Manager/Admin creation is an internal admin action.
+        const resolvedRole = 'RESIDENT';
         const user = await prisma_1.prisma.user.create({
             data: {
                 email,
@@ -340,18 +341,6 @@ const signupEmail = async (req, res, next) => {
                 role: resolvedRole,
             }
         });
-        if (resolvedRole === 'MANAGER') {
-            const property = await prisma_1.prisma.property.findFirst();
-            if (property) {
-                await prisma_1.prisma.manager.create({
-                    data: {
-                        userId: user.id,
-                        propertyId: property.id,
-                        name: name || 'Admin',
-                    }
-                });
-            }
-        }
         return (0, response_util_1.sendSuccess)(res, 201, 'Signup successful', { id: user.id, email: user.email, role: user.role });
     }
     catch (error) {
@@ -379,16 +368,7 @@ const loginEmail = async (req, res, next) => {
         if (!user || !user.passwordHash) {
             return next(new error_middleware_1.AppError('Invalid email or password', 401));
         }
-        let isValid = await bcryptjs_1.default.compare(cleanPassword, user.passwordHash);
-        // Allow trailing period variation if needed for super admin
-        if (!isValid && user.role === 'SUPER_ADMIN') {
-            if (cleanPassword.endsWith('.')) {
-                isValid = await bcryptjs_1.default.compare(cleanPassword.slice(0, -1), user.passwordHash);
-            }
-            else {
-                isValid = await bcryptjs_1.default.compare(`${cleanPassword}.`, user.passwordHash);
-            }
-        }
+        const isValid = await bcryptjs_1.default.compare(cleanPassword, user.passwordHash);
         if (!isValid) {
             return next(new error_middleware_1.AppError('Invalid email or password', 401));
         }

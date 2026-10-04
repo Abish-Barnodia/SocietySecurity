@@ -64,8 +64,11 @@ const logEntry = async (req, res, next) => {
             // 1. Try cryptographic signed QR payload
             const parsedQr = (0, qr_util_1.verifySignedQRPayload)(candidateCode);
             if (parsedQr?.passId) {
-                pass = await prisma_1.prisma.pass.findUnique({
-                    where: { id: parsedQr.passId },
+                pass = await prisma_1.prisma.pass.findFirst({
+                    where: {
+                        id: parsedQr.passId,
+                        unit: { propertyId: guard.propertyId },
+                    },
                     include: {
                         unit: { include: { residents: { include: { user: true } } } },
                         resident: { include: { user: true } },
@@ -75,11 +78,12 @@ const logEntry = async (req, res, next) => {
             // 2. If not a signed QR, search by 6-digit OTP or Pass ID / Code
             if (!pass) {
                 const cleanCode = candidateCode.replace(/^OTP:\s*/i, '').replace(/^PASS-\s*/i, '').trim();
-                // Check active pass by exact 6-digit OTP
+                // ponytail: check active pass strictly scoped to this property
                 pass = await prisma_1.prisma.pass.findFirst({
                     where: {
                         otpCode: cleanCode,
                         status: 'ACTIVE',
+                        unit: { propertyId: guard.propertyId },
                     },
                     include: {
                         unit: { include: { residents: { include: { user: true } } } },
@@ -97,6 +101,7 @@ const logEntry = async (req, res, next) => {
                                 { id: { endsWith: cleanCode } },
                             ],
                             status: 'ACTIVE',
+                            unit: { propertyId: guard.propertyId },
                         },
                         include: {
                             unit: { include: { residents: { include: { user: true } } } },
@@ -115,6 +120,7 @@ const logEntry = async (req, res, next) => {
                                 { id: candidateCode },
                                 { id: { endsWith: cleanCode } },
                             ],
+                            unit: { propertyId: guard.propertyId },
                         },
                         orderBy: { createdAt: 'desc' },
                     });

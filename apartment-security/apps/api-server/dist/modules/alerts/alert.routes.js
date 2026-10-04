@@ -23,4 +23,6 @@ router.put('/:id/acknowledge', alert_controller_1.acknowledgeAlertRoute);
 router.post('/vehicle', (0, role_middleware_1.requireRole)('GUARD'), (0, validate_middleware_1.validate)(alert_schema_1.vehicleAlertSchema), alert_controller_1.broadcastVehicleAlert);
 // Resident claims an unknown vehicle as their own
 router.post('/:id/claim', (0, role_middleware_1.requireRole)('RESIDENT'), alert_controller_1.claimVehicleAlert);
+// Resident notifies guards of visitor overstay / extended stay
+router.post('/overstay', (0, role_middleware_1.requireRole)('RESIDENT'), alert_controller_1.notifyGuardsOverstay);
 //# sourceMappingURL=alert.routes.js.map

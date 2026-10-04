@@ -107,9 +107,11 @@ export type RegistrationStep =
 interface Props {
   onCompleteRegistration?: (data: any) => void;
   onGoToLogin?: () => void;
+  onBack?: () => void;
+  navigation?: any;
 }
 
-export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoToLogin }: Props) {
+export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoToLogin, onBack, navigation }: Props) {
   const { colors } = useTheme();
   const { isAuthenticated, signup, login, logout, updateProfile } = useAuth();
 
@@ -530,7 +532,11 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.headerRow}>
-          {onGoToLogin ? (
+          {onBack ? (
+            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#1E293B" />
+            </TouchableOpacity>
+          ) : onGoToLogin ? (
             <TouchableOpacity onPress={onGoToLogin} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#1E293B" />
             </TouchableOpacity>

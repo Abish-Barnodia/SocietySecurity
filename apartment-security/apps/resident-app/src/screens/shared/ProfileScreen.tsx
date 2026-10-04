@@ -1,20 +1,34 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../../context/ThemeContext';
+import LogoutConfirmModal from '../../components/LogoutConfirmModal';
 
 export default function ProfileScreen({ navigation }: { navigation: any }) {
   const { logout, userProfile, userPhone } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const name = userProfile?.name || 'Resident';
   const phone = userProfile?.phone || userPhone || '';
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const propertyName = userProfile?.propertyName || 'Apartment Security';
+
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+      setLogoutModalVisible(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -168,11 +182,24 @@ export default function ProfileScreen({ navigation }: { navigation: any }) {
         </View>
 
         {/* LOGOUT BUTTON */}
-        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={() => setLogoutModalVisible(true)}
+          activeOpacity={0.8}
+        >
           <Ionicons name="log-out-outline" size={18} color="#dc2626" style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Log Out Account</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        loading={isLoggingOut}
+        onCancel={() => setLogoutModalVisible(false)}
+        onConfirm={handleConfirmLogout}
+        title="Log Out"
+        message="Are you sure you want to log out of your account?"
+      />
     </SafeAreaView>
   );
 }

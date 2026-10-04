@@ -79,6 +79,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     fetchSocieties();
   }, []);
 
+  // When dropdown opens, refresh societies in background to pick up newly approved ones immediately
+  useEffect(() => {
+    if (isDropdownOpen) {
+      fetch(`${API_BASE}/auth/societies`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data?.data)) {
+            setSocieties(data.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isDropdownOpen]);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

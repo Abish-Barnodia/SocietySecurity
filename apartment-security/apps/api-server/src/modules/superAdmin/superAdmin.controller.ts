@@ -8,6 +8,15 @@ import { Role, SocietyStatus, DemoRequestStatus } from '@prisma/client';
 
 export const getPlatformStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const cacheKey = 'superadmin:platform_stats';
+    try {
+      const { redis } = await import('../../config/redis');
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return sendSuccess(res, 200, 'Platform stats retrieved successfully', JSON.parse(cached));
+      }
+    } catch {}
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -127,7 +136,7 @@ export const getPlatformStats = async (req: Request, res: Response, next: NextFu
       });
     }
 
-    return sendSuccess(res, 200, 'Platform stats retrieved successfully', {
+    const resultData = {
       metrics: {
         totalSocieties,
         activeSocieties,
@@ -148,7 +157,14 @@ export const getPlatformStats = async (req: Request, res: Response, next: NextFu
       },
       recentDemos,
       recentSocieties,
-    });
+    };
+
+    try {
+      const { redis } = await import('../../config/redis');
+      await redis.setex(cacheKey, 30, JSON.stringify(resultData));
+    } catch {}
+
+    return sendSuccess(res, 200, 'Platform stats retrieved successfully', resultData);
   } catch (error) {
     next(error);
   }
@@ -189,6 +205,20 @@ export const getSocieties = async (req: Request, res: Response, next: NextFuncti
                 select: { id: true, email: true, phone: true, isActive: true, lastLoginAt: true },
               },
             },
+          },
+          demoRequests: {
+            select: {
+              id: true,
+              contactName: true,
+              email: true,
+              phone: true,
+              documentUrl: true,
+              documentName: true,
+              message: true,
+              createdAt: true,
+            },
+            take: 1,
+            orderBy: { createdAt: 'desc' },
           },
           _count: {
             select: {
@@ -231,6 +261,21 @@ export const getSocietyById = async (req: Request, res: Response, next: NextFunc
         },
         entryPoints: true,
         managerPortalLock: true,
+        demoRequests: {
+          select: {
+            id: true,
+            contactName: true,
+            email: true,
+            phone: true,
+            documentUrl: true,
+            documentName: true,
+            message: true,
+            notes: true,
+            createdAt: true,
+            status: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         _count: {
           select: {
             units: true,
@@ -318,6 +363,35 @@ export const createSociety = async (req: Request, res: Response, next: NextFunct
         },
       });
 
+      // ponytail: Auto-seed starter units across towers so residents can immediately register in the app
+      const towerCount = totalTowers ? Number(totalTowers) : 1;
+      const unitsCount = totalUnits ? Number(totalUnits) : 20;
+      const towerLetters = ['A', 'B', 'C', 'D', 'E'].slice(0, Math.max(1, Math.min(towerCount, 5)));
+      const unitsPerTower = Math.max(4, Math.min(Math.ceil(unitsCount / towerLetters.length), 20));
+      const starterUnits: { propertyId: string; unitNumber: string; floor: number; tower: string }[] = [];
+
+      for (const letter of towerLetters) {
+        const towerName = `Tower ${letter}`;
+        const prefix = towerLetters.length > 1 ? `${letter}-` : '';
+        for (let i = 1; i <= unitsPerTower; i++) {
+          const floor = Math.ceil(i / 4);
+          const unitNumber = `${prefix}${floor}0${((i - 1) % 4) + 1}`;
+          starterUnits.push({
+            propertyId: property.id,
+            unitNumber,
+            floor,
+            tower: towerName,
+          });
+        }
+      }
+
+      if (starterUnits.length > 0) {
+        await tx.unit.createMany({
+          data: starterUnits,
+          skipDuplicates: true,
+        });
+      }
+
       const user = await tx.user.create({
         data: {
           email: managerEmail,
@@ -350,6 +424,31 @@ export const createSociety = async (req: Request, res: Response, next: NextFunct
           metadata: { name, managerEmail },
         },
       });
+    }
+
+    // ponytail: Broadcast to all connected mobile apps and web portals
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('societies:refresh', {
+          action: 'CREATED',
+          society: {
+            id: result.property.id,
+            name: result.property.name,
+            slug: result.property.slug,
+            city: result.property.city,
+            address: result.property.address,
+          },
+        });
+        io.emit('society_created_or_updated', {
+          id: result.property.id,
+          name: result.property.name,
+          slug: result.property.slug,
+          status: result.property.status,
+        });
+      }
+    } catch (e) {
+      // Non-blocking
     }
 
     return sendSuccess(res, 201, 'Society created successfully', {
@@ -389,6 +488,30 @@ export const updateSocietyStatus = async (req: Request, res: Response, next: Nex
           metadata: { status },
         },
       });
+    }
+
+    // ponytail: Broadcast status update (activation/suspension) so mobile apps show/hide society immediately
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('societies:refresh', {
+          action: 'UPDATED',
+          society: {
+            id: updated.id,
+            name: updated.name,
+            slug: updated.slug,
+            status: updated.status,
+          },
+        });
+        io.emit('society_created_or_updated', {
+          id: updated.id,
+          name: updated.name,
+          slug: updated.slug,
+          status: updated.status,
+        });
+      }
+    } catch (e) {
+      // Non-blocking
     }
 
     return sendSuccess(res, 200, `Society status updated to ${status}`, updated);

@@ -11,6 +11,7 @@ export interface ThemedPassShareOptions {
   greeting?: string;
   validTimeWindow?: string;
   passCode?: string;
+  otpCode?: string | null;
   note?: string;
   propertyName?: string;
   unitName?: string;
@@ -262,6 +263,32 @@ export function buildThemedHtml(options: ThemedPassShareOptions): string {
       border: 1px solid #FDE68A;
       box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
+    .otp-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+      background: #FFFBEB;
+      color: #92400E;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 5px 16px;
+      border-radius: 8px;
+      border: 1.5px solid #D97706;
+    }
+    .otp-pill .otp-lbl {
+      font-size: 10px;
+      font-weight: 800;
+      color: #B45309;
+      letter-spacing: 0.5px;
+    }
+    .otp-pill .otp-num {
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      color: #78350F;
+    }
 
     /* Visitor & Host Details */
     .details-card {
@@ -353,6 +380,13 @@ export function buildThemedHtml(options: ThemedPassShareOptions): string {
     <div class="qr-frame">
       <img class="qr-image" src="${qrImageUrl}" alt="Scan QR Pass" />
       <div class="passcode-pill">${code}</div>
+      ${options?.otpCode ? `
+      <div>
+        <div class="otp-pill">
+          <span class="otp-lbl">GATE ENTRY OTP:</span>
+          <span class="otp-num">${options.otpCode}</span>
+        </div>
+      </div>` : ''}
     </div>
 
     <!-- Details Summary -->
@@ -379,7 +413,7 @@ export function buildThemedHtml(options: ThemedPassShareOptions): string {
 
     <!-- Security Gate Footer -->
     <div class="gate-footer">
-      🛡️ <span>Fast-Track Pass</span>: Show this QR code at the security gate for instant clearance.
+      🛡️ <span>Fast-Track Pass</span>: Show QR code or share 6-digit OTP at the security gate for instant clearance.
     </div>
   </div>
 </body>

@@ -335,6 +335,35 @@ export const approveAndProvision = async (req: Request, res: Response, next: Nex
         },
       });
 
+      // ponytail: Auto-seed starter units across towers so residents can immediately register in the app
+      const towerCount = totalTowers ? Number(totalTowers) : 1;
+      const unitsCount = totalUnits ? Number(totalUnits) : (demoRequest.numberOfUnits || 20);
+      const towerLetters = ['A', 'B', 'C', 'D', 'E'].slice(0, Math.max(1, Math.min(towerCount, 5)));
+      const unitsPerTower = Math.max(4, Math.min(Math.ceil(unitsCount / towerLetters.length), 20));
+      const starterUnits: { propertyId: string; unitNumber: string; floor: number; tower: string }[] = [];
+
+      for (const letter of towerLetters) {
+        const towerName = `Tower ${letter}`;
+        const prefix = towerLetters.length > 1 ? `${letter}-` : '';
+        for (let i = 1; i <= unitsPerTower; i++) {
+          const floor = Math.ceil(i / 4);
+          const unitNumber = `${prefix}${floor}0${((i - 1) % 4) + 1}`;
+          starterUnits.push({
+            propertyId: property.id,
+            unitNumber,
+            floor,
+            tower: towerName,
+          });
+        }
+      }
+
+      if (starterUnits.length > 0) {
+        await tx.unit.createMany({
+          data: starterUnits,
+          skipDuplicates: true,
+        });
+      }
+
       // 3. Create Manager User
       const user = await tx.user.create({
         data: {
@@ -385,6 +414,31 @@ export const approveAndProvision = async (req: Request, res: Response, next: Nex
           },
         },
       });
+    }
+
+    // ponytail: Broadcast to all connected clients (mobile apps & web portals) so the society appears immediately
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('societies:refresh', {
+          action: 'CREATED',
+          society: {
+            id: result.property.id,
+            name: result.property.name,
+            slug: result.property.slug,
+            city: result.property.city,
+            address: result.property.address,
+          },
+        });
+        io.emit('society_created_or_updated', {
+          id: result.property.id,
+          name: result.property.name,
+          slug: result.property.slug,
+          status: result.property.status,
+        });
+      }
+    } catch (e) {
+      // Non-blocking error
     }
 
     return sendSuccess(res, 201, 'Society and Manager account provisioned successfully!', {

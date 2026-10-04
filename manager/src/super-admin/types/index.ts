@@ -41,6 +41,7 @@ export interface Society {
   createdAt: string;
   updatedAt: string;
   managers?: Manager[];
+  demoRequests?: DemoRequest[];
   _count?: {
     units: number;
     guards: number;

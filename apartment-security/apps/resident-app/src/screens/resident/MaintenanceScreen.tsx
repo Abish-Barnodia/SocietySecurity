@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useMaintenance, Invoice, InvoiceStatus } from '../../context/MaintenanceContext';
 import { useTheme } from '../../context/ThemeContext';
+import { downloadInvoicePdf } from '../../utils/invoicePdf';
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 const formatAmount = (n: number) => `₹${n.toLocaleString('en-IN')}`;
@@ -23,6 +24,7 @@ export default function MaintenanceScreen() {
   const styles = getStyles(colors, isDark);
   const [refreshing, setRefreshing] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,11 +38,35 @@ export default function MaintenanceScreen() {
     setRefreshing(false);
   };
 
+  const handleDownloadInvoice = async (invoice: Invoice) => {
+    setDownloadingId(invoice.id);
+    try {
+      await downloadInvoicePdf(invoice);
+    } catch (err: any) {
+      Alert.alert('Download Error', 'Could not generate invoice PDF. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const handlePay = async (invoice: Invoice) => {
     setPayingId(invoice.id);
     try {
       await payInvoice(invoice.id);
-      Alert.alert('Payment Successful', `${formatAmount(invoice.amount)} paid for ${invoice.description}.`);
+      Alert.alert(
+        'Payment Successful 🎉',
+        `${formatAmount(invoice.amount)} paid successfully for ${invoice.description}.`,
+        [
+          { text: 'Done', style: 'cancel' },
+          {
+            text: 'Download Receipt',
+            onPress: () => {
+              const updatedInv: Invoice = { ...invoice, status: 'PAID', paidAt: new Date().toISOString() };
+              handleDownloadInvoice(updatedInv);
+            },
+          },
+        ]
+      );
     } catch (error: any) {
       Alert.alert('Payment Failed', error.response?.data?.message ?? 'Please try again.');
     } finally {
@@ -74,6 +100,7 @@ export default function MaintenanceScreen() {
   const renderItem = ({ item }: { item: Invoice }) => {
     const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.PENDING;
     const payable = item.status === 'PENDING' || item.status === 'OVERDUE';
+    const isPaid = item.status === 'PAID';
     const isOverdue = item.status === 'OVERDUE';
 
     return (
@@ -88,14 +115,29 @@ export default function MaintenanceScreen() {
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={styles.amount}>{formatAmount(item.amount)}</Text>
-            <View style={[styles.badge, isOverdue && styles.badgeOverdue]}>
-              <Text style={[styles.badgeText, isOverdue && styles.badgeTextOverdue]}>{statusCfg.label}</Text>
+            <View style={[styles.badge, isPaid && styles.badgePaid, isOverdue && styles.badgeOverdue]}>
+              <Text style={[styles.badgeText, isPaid && styles.badgeTextPaid, isOverdue && styles.badgeTextOverdue]}>{statusCfg.label}</Text>
             </View>
           </View>
         </View>
 
         {payable && (
-          <View style={styles.actionRow}>
+          <View style={[styles.actionRow, { flexDirection: 'row', gap: 10 }]}>
+            <TouchableOpacity
+              style={styles.downloadOutlineBtn}
+              onPress={() => handleDownloadInvoice(item)}
+              disabled={downloadingId === item.id}
+            >
+              {downloadingId === item.id ? (
+                <ActivityIndicator size="small" color={colors.text} />
+              ) : (
+                <>
+                  <Ionicons name="receipt-outline" size={15} color={colors.text} style={{ marginRight: 6 }} />
+                  <Text style={styles.downloadOutlineText}>View Bill</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.payButton}
               onPress={() => handlePay(item)}
@@ -106,7 +148,26 @@ export default function MaintenanceScreen() {
               ) : (
                 <>
                   <Ionicons name="card-outline" size={16} color={isDark ? '#000' : '#fff'} style={{ marginRight: 6 }} />
-                  <Text style={styles.payButtonText}>Pay Now ({formatAmount(item.amount)})</Text>
+                  <Text style={styles.payButtonText}>Pay ({formatAmount(item.amount)})</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isPaid && (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.downloadButton}
+              onPress={() => handleDownloadInvoice(item)}
+              disabled={downloadingId === item.id}
+            >
+              {downloadingId === item.id ? (
+                <ActivityIndicator size="small" color="#15803d" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={16} color="#15803d" style={{ marginRight: 6 }} />
+                  <Text style={styles.downloadButtonText}>Download Receipt & Invoice (PDF)</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -243,6 +304,12 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
       backgroundColor: isDark ? '#334155' : '#f1f5f9',
     },
     badgeText: { fontSize: 11, fontWeight: '700', color: colors.text },
+    badgePaid: {
+      backgroundColor: isDark ? 'rgba(22, 163, 74, 0.2)' : '#dcfce7',
+    },
+    badgeTextPaid: {
+      color: isDark ? '#4ade80' : '#15803d',
+    },
     badgeOverdue: {
       backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#fee2e2',
     },
@@ -268,6 +335,36 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
       color: isDark ? '#0f172a' : '#ffffff',
       fontSize: 13,
       fontWeight: '700',
+    },
+    downloadButton: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(22, 163, 74, 0.15)' : '#f0fdf4',
+      borderWidth: 1,
+      borderColor: isDark ? '#166534' : '#bbf7d0',
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    downloadButtonText: {
+      color: isDark ? '#4ade80' : '#15803d',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    downloadOutlineBtn: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? '#334155' : '#f8fafc',
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    downloadOutlineText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: '600',
     },
 
     centerState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 32 },

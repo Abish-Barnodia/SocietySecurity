@@ -67,6 +67,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
         greeting: `${userProfile?.name || 'Resident'} has invited you.`,
         validTimeWindow: pass.time || 'Valid Today',
         passCode: getPassCode(),
+        otpCode: pass.otpCode,
         propertyName: propertyName,
         unitName: (userProfile as any)?.unit || 'Flat 402',
       });
@@ -121,7 +122,8 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
   const getPassCode = () => `PASS-${pass.id.substring(pass.id.length - 8).toUpperCase()}`;
 
   const shareViaSMS = async () => {
-    const message = `Hello ${pass.name}, your visitor pass for ${propertyName} is: ${getPassCode()}`;
+    const otpText = pass.otpCode ? ` | Gate OTP: ${pass.otpCode}` : '';
+    const message = `Hello ${pass.name}, your visitor pass for ${propertyName} is: ${getPassCode()}${otpText}. Show QR or provide 6-digit OTP at security gate for entry.`;
     const phoneNum = pass.phone ? pass.phone.replace(/\D/g, '') : '';
     const url = `sms:${phoneNum}?body=${encodeURIComponent(message)}`;
 
@@ -137,11 +139,10 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
     }
   };
 
-
-
   const shareViaEmail = async () => {
+    const otpText = pass.otpCode ? `\nGate Entry OTP: ${pass.otpCode}` : '';
     const subject = `Visitor Pass - ${pass.name}`;
-    const body = `Hello ${pass.name},\n\nYour visitor pass for ${propertyName} is: ${getPassCode()}.\nValid: ${pass.time}.\nGate: ${pass.gate || 'Any gate'}\n\nPlease show your pass code or QR at the gate.`;
+    const body = `Hello ${pass.name},\n\nYour visitor pass for ${propertyName} is: ${getPassCode()}.${otpText}\nValid: ${pass.time}.\nGate: ${pass.gate || 'Any gate'}\n\nPlease show your QR code or give the 6-digit OTP at the security gate for fast entry.`;
     const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     try {
       const supported = await Linking.canOpenURL(url);
@@ -158,7 +159,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
   const copyPassCode = async () => {
     try {
       await Share.share({
-        message: getPassCode(),
+        message: pass.otpCode ? `${getPassCode()} (OTP: ${pass.otpCode})` : getPassCode(),
       });
     } catch {
       Alert.alert('Could not share pass code');
@@ -241,6 +242,23 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           </View>
 
           <Text style={styles.passIdText}>{getPassCode()}</Text>
+
+          {/* 6-Digit Gate Entry OTP Banner */}
+          {pass.otpCode ? (
+            <View style={styles.otpBanner}>
+              <View style={styles.otpHeaderRow}>
+                <Ionicons name="key-outline" size={14} color="#D97706" />
+                <Text style={styles.otpBannerTitle}>GATE ENTRY OTP</Text>
+              </View>
+              <Text style={styles.otpCodeNumber}>
+                {pass.otpCode.replace(/(\d{3})(\d{3})/, '$1 $2')}
+              </Text>
+              <Text style={styles.otpBannerSub}>
+                Give this 6-digit OTP at security gate or scan QR for entry
+              </Text>
+            </View>
+          ) : null}
+
           <Text style={styles.qrSubtitle}>2-Way Pass: Scan at entry gate & exit gate</Text>
 
           {/* 2-Phase Scan Progress Tracker */}
@@ -360,6 +378,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           propertyName={propertyName}
           validTimeWindow={pass.time || 'Valid Today'}
           passCode={getPassCode()}
+          otpCode={pass.otpCode}
           qrPayload={pass.qrPayload || ''}
           note={pass.purpose}
         />
@@ -515,6 +534,43 @@ const getStyles = (colors: any, isDark: boolean) =>
       fontWeight: '800',
       color: colors.text,
       letterSpacing: 1,
+    },
+    otpBanner: {
+      width: '100%',
+      backgroundColor: isDark ? '#451a03' : '#fffbeb',
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      marginTop: 10,
+      marginBottom: 6,
+      borderWidth: 1.5,
+      borderColor: '#f59e0b',
+      alignItems: 'center',
+    },
+    otpHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 3,
+    },
+    otpBannerTitle: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: isDark ? '#fbbf24' : '#b45309',
+      letterSpacing: 1,
+    },
+    otpCodeNumber: {
+      fontSize: 24,
+      fontWeight: '900',
+      color: isDark ? '#fef08a' : '#92400e',
+      letterSpacing: 6,
+      marginVertical: 2,
+    },
+    otpBannerSub: {
+      fontSize: 11,
+      color: isDark ? '#fde68a' : '#b45309',
+      textAlign: 'center',
+      fontWeight: '500',
     },
     qrSubtitle: {
       fontSize: 12,

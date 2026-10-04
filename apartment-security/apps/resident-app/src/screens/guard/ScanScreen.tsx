@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, FlatList,
-  ActivityIndicator, Linking, Alert, TextInput, Button,
+  ActivityIndicator, Linking, Alert, TextInput, Button, Animated, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -38,6 +38,31 @@ export default function ScanScreen() {
   const [calling, setCalling] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const socket = useSocket();
+
+  const scanAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (mode === 'qr' && gate && !scanned && !submitting) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanAnim, {
+            toValue: 1,
+            duration: 1800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scanAnim, {
+            toValue: 0,
+            duration: 1800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    }
+  }, [mode, gate, scanned, submitting]);
 
   useEffect(() => {
     getCached('entry-points', () => api.get('/entries/entry-points').then((res) => res.data.data ?? []))
@@ -186,7 +211,39 @@ export default function ScanScreen() {
                       ) : submitting ? (
                         <ActivityIndicator color={colors.white} size="large" />
                       ) : (
-                        <Text style={styles.overlayText}>{t('scan_alignQr')}</Text>
+                        <View style={styles.reticleWrapper}>
+                          <View style={styles.reticle}>
+                            {/* 4 Corner Markers */}
+                            <View style={[styles.corner, styles.cornerTL]} />
+                            <View style={[styles.corner, styles.cornerTR]} />
+                            <View style={[styles.corner, styles.cornerBL]} />
+                            <View style={[styles.corner, styles.cornerBR]} />
+
+                            {/* Animated Glowing Laser Line */}
+                            <Animated.View
+                              style={[
+                                styles.laserLine,
+                                {
+                                  transform: [
+                                    {
+                                      translateY: scanAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [4, 186],
+                                      }),
+                                    },
+                                  ],
+                                },
+                              ]}
+                            >
+                              <View style={styles.laserCore} />
+                            </Animated.View>
+                          </View>
+
+                          <View style={styles.instructionPill}>
+                            <Ionicons name="scan-outline" size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                            <Text style={styles.instructionText}>{t('scan_alignQr')}</Text>
+                          </View>
+                        </View>
                       )}
                     </View>
                   </>
@@ -258,8 +315,89 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   placeholderText: { color: colors.textMuted },
 
   scannerBox: { height: 340, borderRadius: 20, overflow: 'hidden', backgroundColor: '#000' },
-  overlay: { backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  overlay: { backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
   overlayText: { color: colors.white, fontWeight: '700' },
+
+  reticleWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reticle: {
+    width: 200,
+    height: 200,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  corner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: colors.primary === '#0f172a' ? '#38bdf8' : colors.primary,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 10,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 10,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 10,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 10,
+  },
+  laserLine: {
+    position: 'absolute',
+    left: 4,
+    right: 4,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#38bdf8',
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  laserCore: {
+    height: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 2,
+    opacity: 0.9,
+    marginHorizontal: '12%',
+  },
+  instructionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  instructionText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 
   scannerPlaceholder: {
     height: 340, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,

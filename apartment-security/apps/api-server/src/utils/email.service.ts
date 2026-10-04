@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 
-export const sendEmail = async (to: string, subject: string, text: string, html?: string) => {
+export const sendEmail = async (
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+  attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
+) => {
   const hasAuth = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
 
   // Without credentials, connecting to smtp.ethereal.email is guaranteed to
@@ -12,6 +18,7 @@ export const sendEmail = async (to: string, subject: string, text: string, html?
     console.warn(`To: ${to}`);
     console.warn(`Subject: ${subject}`);
     console.warn(`Text: ${text}`);
+    if (attachments?.length) console.warn(`Attachments: ${attachments.map((a) => a.filename).join(', ')}`);
     console.warn('=================================================\n');
     return { messageId: 'mock-id' };
   }
@@ -34,6 +41,7 @@ export const sendEmail = async (to: string, subject: string, text: string, html?
     subject,
     text,
     html: html || text,
+    attachments,
   };
 
   const info = await transporter.sendMail(mailOptions);
@@ -373,6 +381,87 @@ ${societyName} Management Committee
     console.error('Failed to send resident approval confirmation email:', err);
   }
 };
+
+// ponytail: send maintenance invoice PDF email to primary resident when a charge is created
+export const sendInvoiceEmail = async (opts: {
+  to: string;
+  residentName: string;
+  societyName: string;
+  unitNumber: string;
+  tower?: string | null;
+  amount: number;
+  description: string;
+  dueDate: Date | string;
+  pdfBuffer: Buffer;
+  invoiceId: string;
+}) => {
+  const formattedDue = new Date(opts.dueDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const formattedAmount = `₹${Number(opts.amount).toLocaleString('en-IN')}`;
+  const unitLabel = opts.tower ? `Tower ${opts.tower} - Flat ${opts.unitNumber}` : `Flat ${opts.unitNumber}`;
+
+  const subject = `📄 New Maintenance Invoice: ${opts.societyName} - ${opts.description}`;
+  const text = `Hello ${opts.residentName},\n\nA new maintenance charge of ${formattedAmount} has been issued for your unit (${unitLabel}).\n\nDescription: ${opts.description}\nDue Date: ${formattedDue}\n\nPlease find your official invoice PDF attached to this email. You can pay this securely from the Resident Mobile App.\n\nThank you,\n${opts.societyName}`.trim();
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #0f172a, #1e293b); padding: 22px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 20px; font-weight: 700;">${opts.societyName}</h2>
+        <p style="margin: 6px 0 0; font-size: 13px; color: #94a3b8;">New Maintenance Charge Issued</p>
+      </div>
+
+      <div style="background: white; padding: 24px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin-top: 0; font-size: 15px; color: #334155;">
+          Dear <strong>${opts.residentName}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #475569; line-height: 22px;">
+          A new maintenance invoice has been generated for your residence (<strong>${unitLabel}</strong>).
+        </p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 8px 0; color: #64748b;">Description:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a; text-align: right;">${opts.description}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 8px 0; color: #64748b;">Amount Due:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a; text-align: right; font-size: 16px;">${formattedAmount}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Due Date:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #ea580c; text-align: right;">${formattedDue}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #15803d; margin-bottom: 16px;">
+          📎 <strong>Invoice PDF Attached:</strong> Your official invoice is attached to this email for your accounting and records.
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; line-height: 20px; margin-bottom: 0;">
+          You can pay this bill instantly using UPI, NetBanking, Debit, or Credit cards in the <strong>Resident App</strong> under <em>Maintenance & Bills</em>.
+        </p>
+      </div>
+
+      <div style="text-align: center; font-size: 12px; color: #94a3b8;">
+        This is an automated notification from ${opts.societyName} Security & Billing Portal.
+      </div>
+    </div>
+  `;
+
+  try {
+    return await sendEmail(opts.to, subject, text, html, [
+      {
+        filename: `Invoice_${opts.invoiceId.slice(-8).toUpperCase()}.pdf`,
+        content: opts.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ]);
+  } catch (err) {
+    console.error('Failed to send maintenance invoice email:', err);
+  }
+};
+
 
 
 

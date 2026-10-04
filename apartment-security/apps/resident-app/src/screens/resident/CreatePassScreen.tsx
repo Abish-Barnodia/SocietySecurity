@@ -148,6 +148,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     propertyName: string;
     validTimeWindow: string;
     passCode: string;
+    otpCode?: string | null;
     qrPayload: string;
     note?: string;
   }>({
@@ -158,6 +159,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     propertyName: 'Greenfield Heights',
     validTimeWindow: 'Today',
     passCode: 'PASS-123456',
+    otpCode: '123456',
     qrPayload: 'pass-preview',
   });
 
@@ -363,6 +365,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           propertyName: 'Greenfield Heights',
           validTimeWindow: getEntryWindowFormatted(),
           passCode: created.id.substring(created.id.length - 6).toUpperCase(),
+          otpCode: created.otpCode,
           qrPayload: created.qrPayload,
           note: inviteNote,
         };
@@ -1579,6 +1582,7 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           propertyName={activeCardData.propertyName}
           validTimeWindow={activeCardData.validTimeWindow}
           passCode={activeCardData.passCode}
+          otpCode={activeCardData.otpCode}
           qrPayload={activeCardData.qrPayload}
           note={activeCardData.note}
         />

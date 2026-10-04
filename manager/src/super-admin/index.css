@@ -2,6 +2,14 @@
 
 /* ── STRICTLY SCOPED TO SUPER ADMIN PORTAL ONLY ── */
 .super-admin-portal-root {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
+  background-color: var(--sa-bg-app);
+  color: var(--sa-text-primary);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   
@@ -260,7 +268,10 @@
 .super-admin-portal-root .sa-app-container {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100vw;
   background-color: var(--sa-bg-app);
+  overflow-x: hidden;
 }
 
 /* Sharp Border-Lined Sidebar */
@@ -279,15 +290,21 @@
 
 .super-admin-portal-root .sa-main-content {
   flex: 1;
+  min-width: 0;
+  width: 0;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: var(--sa-bg-app);
+  overflow-x: hidden;
   transition: margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Clean Line-Bordered Topbar */
 .super-admin-portal-root .sa-topbar {
   height: 64px;
+  width: 100%;
+  box-sizing: border-box;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -303,10 +320,12 @@
 }
 
 .super-admin-portal-root .sa-page-body {
-  padding: 28px;
+  padding: 24px 28px;
   flex: 1;
-  max-width: 1440px;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* Figma-Grade Sharp Card Design */
@@ -501,6 +520,9 @@
 
 /* Figma-Grade Data Table */
 .super-admin-portal-root .data-table-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
   border: 1px solid var(--sa-border-color);
   border-radius: var(--sa-radius-md);

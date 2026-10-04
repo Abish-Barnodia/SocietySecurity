@@ -7,6 +7,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
 import { LANGUAGES } from '../i18n/translations';
 import api from '../utils/api';
+import LogoutConfirmModal from './LogoutConfirmModal';
 
 export type GuardMe = {
   name: string;
@@ -30,11 +31,24 @@ export default function GuardProfileModal({ visible, onClose }: {
   const { t, language, setLanguage } = useLanguage();
   const styles = getStyles(colors);
   const [profile, setProfile] = useState<GuardMe | null>(null);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     api.get('/guards/me').then((res) => setProfile(res.data.data ?? null)).catch(() => {});
   }, [visible]);
+
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+      setLogoutModalVisible(false);
+    }
+  };
 
   const Row = ({ label, value }: { label: string; value: string }) => (
     <View style={styles.row}>
@@ -111,10 +125,21 @@ export default function GuardProfileModal({ visible, onClose }: {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={() => setLogoutModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} style={{ marginRight: 8 }} />
               <Text style={styles.logoutText}>{t('profile_logout')}</Text>
             </TouchableOpacity>
+
+            <LogoutConfirmModal
+              visible={logoutModalVisible}
+              loading={isLoggingOut}
+              onCancel={() => setLogoutModalVisible(false)}
+              onConfirm={handleConfirmLogout}
+            />
           </ScrollView>
         )}
       </View>
@@ -166,8 +191,9 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   languagePillTextActive: { color: colors.white },
 
   logoutButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8,
     paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, borderColor: colors.dangerLight,
+    minWidth: 160,
   },
   logoutText: { color: colors.danger, fontWeight: '700', fontSize: 14 },
 });

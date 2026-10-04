@@ -10,6 +10,7 @@ import {
   cancelPaymentOrder,
   createInvoice,
   verifyPaymentPublic,
+  downloadInvoicePDF,
 } from './maintenance.controller';
 
 const router = Router();
@@ -18,6 +19,9 @@ const router = Router();
 router.post('/invoices/:id/verify-public', verifyPaymentPublic);
 
 router.use(authenticate);
+
+// Shared PDF download route
+router.get('/invoices/:id/pdf', requireRole('RESIDENT', 'MANAGER', 'COMMITTEE'), downloadInvoicePDF);
 
 // Resident routes
 router.get('/invoices', requireRole('RESIDENT'), getMyInvoices);

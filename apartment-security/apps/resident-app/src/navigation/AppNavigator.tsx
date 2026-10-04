@@ -31,6 +31,9 @@ import DomesticWorkersScreen from '../screens/resident/DomesticWorkersScreen';
 import WorkerFormScreen from '../screens/resident/WorkerFormScreen';
 import EventsScreen from '../screens/resident/EventsScreen';
 import MaintenanceScreen from '../screens/resident/MaintenanceScreen';
+import ResidentChatScreen from '../screens/resident/ResidentChatScreen';
+import InAppDmBanner from '../components/InAppDmBanner';
+import { View } from 'react-native';
 
 // Shared Screens
 import AlertsScreen from '../screens/shared/AlertsScreen';
@@ -44,9 +47,10 @@ import GuardDetailsScreen from '../screens/guard/GuardDetailsScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ResidentRegistrationFlow from '../screens/resident/ResidentRegistrationFlow';
 import ApprovalPendingScreen from '../screens/resident/ApprovalPendingScreen';
-
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
 
 export type RootStackParamList = {
+  Welcome: undefined;
   Register: undefined;
   Login: undefined;
   ForgotPassword: undefined;
@@ -73,6 +77,7 @@ export type RootStackParamList = {
   WorkerForm: { workerId?: string };
   Events: undefined;
   Maintenance: undefined;
+  ResidentChat: { initialPartnerId?: string; initialPartnerName?: string; initialPartnerUnit?: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -158,13 +163,23 @@ export default function AppNavigator() {
   if (isLoading) return null;
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <View style={{ flex: 1 }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         <Stack.Group screenOptions={{ headerShown: false, animation: 'fade' }}>
+          <Stack.Screen name="Welcome">
+            {(props) => (
+              <WelcomeScreen
+                onNewUser={() => props.navigation.navigate('Register')}
+                onExistingUser={() => props.navigation.navigate('Login')}
+              />
+            )}
+          </Stack.Screen>
           <Stack.Screen name="Register">
             {(props) => (
               <ResidentRegistrationFlow
                 {...props}
+                onBack={() => props.navigation.navigate('Welcome')}
                 onGoToLogin={() => props.navigation.navigate('Login')}
                 onCompleteRegistration={(data) =>
                   props.navigation.navigate('ApprovalPending', data)
@@ -178,6 +193,7 @@ export default function AppNavigator() {
                 {...props}
                 appTitle="SOCIETY SECURITY"
                 allowSignup={false}
+                onBack={() => props.navigation.navigate('Welcome')}
                 onForgotPassword={() => props.navigation.navigate('ForgotPassword')}
                 onGoToRegister={() => props.navigation.navigate('Register')}
               />
@@ -248,8 +264,11 @@ export default function AppNavigator() {
           <Stack.Screen name="WorkerForm" component={WorkerFormScreen} options={{ headerShown: true, title: 'Worker' }} />
           <Stack.Screen name="Events" component={EventsScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Maintenance" component={MaintenanceScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ResidentChat" component={ResidentChatScreen} options={{ headerShown: false }} />
         </>
       )}
     </Stack.Navigator>
+    <InAppDmBanner />
+    </View>
   );
 }

@@ -14,8 +14,24 @@ export const Societies: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSociety, setSelectedSociety] = useState<Society | null>(null);
+  const [zoomedDocUrl, setZoomedDocUrl] = useState<string | null>(null);
   const [statusTarget, setStatusTarget] = useState<{ society: Society; nextStatus: SocietyStatus } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  const isImageFile = (url?: string | null, name?: string | null) => {
+    if (!url) return false;
+    const lower = (url + ' ' + (name || '')).toLowerCase();
+    return (
+      lower.includes('.jpg') ||
+      lower.includes('.jpeg') ||
+      lower.includes('.png') ||
+      lower.includes('.webp') ||
+      lower.includes('.gif') ||
+      lower.includes('image/') ||
+      lower.startsWith('data:image/') ||
+      !lower.includes('.pdf')
+    );
+  };
 
   const [newSociety, setNewSociety] = useState({
     name: '',
@@ -756,6 +772,323 @@ export const Societies: React.FC = () => {
           </div>
         }
       />
+
+      {/* Comprehensive Society Details Modal */}
+      <Modal
+        isOpen={Boolean(selectedSociety)}
+        onClose={() => setSelectedSociety(null)}
+        title={selectedSociety ? `🏢 ${selectedSociety.name} — Details` : 'Society Details'}
+        maxWidth="740px"
+      >
+        {selectedSociety && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Header info */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  {selectedSociety.name}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                  {[selectedSociety.address, selectedSociety.city, selectedSociety.pincode].filter(Boolean).join(', ')}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                <StatusBadge status={selectedSociety.status} />
+                <span style={{
+                  fontSize: '0.725rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-xs)',
+                  background: 'var(--indigo-bg)',
+                  color: 'var(--indigo)',
+                  border: '1px solid var(--indigo-border)',
+                }}>
+                  {selectedSociety.subscriptionPlan} Tier
+                </span>
+              </div>
+            </div>
+
+            {/* Uploaded Verification Photo / Document Section */}
+            {selectedSociety.demoRequests && selectedSociety.demoRequests.length > 0 && selectedSociety.demoRequests[0].documentUrl ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                padding: '16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(0, 200, 150, 0.05)',
+                border: '1px solid rgba(0, 200, 150, 0.25)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Icon
+                      icon={isImageFile(selectedSociety.demoRequests[0].documentUrl, selectedSociety.demoRequests[0].documentName) ? "solar:gallery-bold" : "solar:document-text-bold"}
+                      width="20"
+                      color="#00A67C"
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      Registration Verification Photo / Document
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {isImageFile(selectedSociety.demoRequests[0].documentUrl, selectedSociety.demoRequests[0].documentName) && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setZoomedDocUrl(selectedSociety.demoRequests![0].documentUrl!)}
+                        style={{ fontSize: '0.75rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <Icon icon="solar:magnifer-zoom-in-bold" width="14" />
+                        Zoom Photo
+                      </button>
+                    )}
+                    <a
+                      href={selectedSociety.demoRequests[0].documentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem', padding: '4px 10px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Icon icon="solar:link-bold" width="14" />
+                      Open Full Size
+                    </a>
+                  </div>
+                </div>
+
+                {/* Inline Photo Preview */}
+                {isImageFile(selectedSociety.demoRequests[0].documentUrl, selectedSociety.demoRequests[0].documentName) && (
+                  <div
+                    onClick={() => setZoomedDocUrl(selectedSociety.demoRequests![0].documentUrl!)}
+                    style={{
+                      position: 'relative',
+                      cursor: 'pointer',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      maxHeight: '220px',
+                      background: '#0f172a',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '1px solid rgba(0, 200, 150, 0.2)',
+                    }}
+                    title="Click to zoom verification photo"
+                  >
+                    <img
+                      src={selectedSociety.demoRequests[0].documentUrl}
+                      alt={selectedSociety.demoRequests[0].documentName || 'Registration verification photo'}
+                      style={{ width: '100%', maxHeight: '220px', objectFit: 'contain' }}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '8px',
+                      right: '8px',
+                      background: 'rgba(0,0,0,0.7)',
+                      backdropFilter: 'blur(4px)',
+                      color: '#fff',
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}>
+                      <Icon icon="solar:magnifer-zoom-in-bold" width="12" />
+                      Click to Zoom
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Doc Name: <strong>{selectedSociety.demoRequests[0].documentName || 'Verification ID'}</strong></span>
+                  <span>Submitted by: <strong>{selectedSociety.demoRequests[0].contactName}</strong> ({selectedSociety.demoRequests[0].phone})</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                fontSize: '0.8rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <Icon icon="solar:info-circle-linear" width="18" color="var(--text-dim)" />
+                No verification document/photo attached to this society.
+              </div>
+            )}
+
+            {/* Quick Metrics Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <div className="card" style={{ padding: '12px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedSociety.totalUnits}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginTop: '2px' }}>Total Units</div>
+              </div>
+              <div className="card" style={{ padding: '12px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedSociety.totalTowers || 1}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginTop: '2px' }}>Towers</div>
+              </div>
+              <div className="card" style={{ padding: '12px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedSociety._count?.guards || 0}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginTop: '2px' }}>Guards</div>
+              </div>
+              <div className="card" style={{ padding: '12px', textAlign: 'center', background: 'var(--bg-secondary)' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedSociety._count?.entryPoints || 1}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textTransform: 'uppercase', marginTop: '2px' }}>Gates</div>
+              </div>
+            </div>
+
+            {/* Assigned Managers */}
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.5px' }}>
+                Assigned Managers
+              </div>
+              {selectedSociety.managers && selectedSociety.managers.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selectedSociety.managers.map((m) => (
+                    <div
+                      key={m.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          background: 'var(--primary)',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                        }}>
+                          {m.name.substring(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{m.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                            {m.user?.email || 'No email'} • {m.user?.phone || 'No phone'}
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: m.user?.isActive ? 'rgba(0, 200, 150, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: m.user?.isActive ? '#00A67C' : '#ef4444', fontWeight: 600 }}>
+                        {m.user?.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>No manager currently assigned.</div>
+              )}
+            </div>
+
+            {/* Portal Link */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border-color)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Icon icon="solar:global-bold" width="18" color="var(--primary)" />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Portal URL:</span>
+                <code style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>/login?slug={selectedSociety.slug}</code>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(`${window.location.protocol}//${window.location.hostname}:5173/login?slug=${selectedSociety.slug}`);
+                  alert('Manager portal URL copied!');
+                }}
+              >
+                <Icon icon="solar:copy-bold" width="14" />
+                Copy Link
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <button className="btn btn-primary" onClick={() => setSelectedSociety(null)} style={{ minWidth: '100px' }}>
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Lightbox Zoom Modal for Society Photo */}
+      <Modal
+        isOpen={Boolean(zoomedDocUrl)}
+        onClose={() => setZoomedDocUrl(null)}
+        title={selectedSociety ? `${selectedSociety.name} — Photo Full View` : 'Photo Preview'}
+        maxWidth="800px"
+      >
+        {zoomedDocUrl && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center' }}>
+            <div style={{
+              width: '100%',
+              maxHeight: '75vh',
+              overflow: 'auto',
+              borderRadius: '8px',
+              background: '#090d16',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+            }}>
+              <img
+                src={zoomedDocUrl}
+                alt="Society Registration Photo"
+                style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                {selectedSociety?.name} • Verification Image
+              </span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href={zoomedDocUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Icon icon="solar:arrow-right-up-bold" width="14" />
+                  Open in New Tab
+                </a>
+                <button className="btn btn-primary btn-sm" onClick={() => setZoomedDocUrl(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

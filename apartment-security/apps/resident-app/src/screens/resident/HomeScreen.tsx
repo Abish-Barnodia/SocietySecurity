@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import * as Sharing from 'expo-sharing';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
+import { useSocket } from '../../context/SocketContext';
+import api from '../../utils/api';
 
 interface CommunityComment {
   id: string;
@@ -96,6 +98,39 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
   const insets = useSafeAreaInsets();
+  const socket = useSocket();
+
+  const [unreadDmCount, setUnreadDmCount] = useState(0);
+
+  const fetchUnreadDmCount = useCallback(async () => {
+    try {
+      const res = await api.get('/community/dm/summary/conversations');
+      if (res.data?.data?.totalUnreadCount !== undefined) {
+        setUnreadDmCount(res.data.data.totalUnreadCount);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadDmCount();
+  }, [fetchUnreadDmCount]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleDmUpdate = () => {
+      fetchUnreadDmCount();
+    };
+    socket.on('dm:message', handleDmUpdate);
+    socket.on('dm:read', handleDmUpdate);
+    socket.on('dm:delete', handleDmUpdate);
+    return () => {
+      socket.off('dm:message', handleDmUpdate);
+      socket.off('dm:read', handleDmUpdate);
+      socket.off('dm:delete', handleDmUpdate);
+    };
+  }, [socket, fetchUnreadDmCount]);
 
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const [moreServicesOpen, setMoreServicesOpen] = useState(false);
@@ -297,8 +332,14 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
         },
         {
           id: 'c5',
-          label: 'Community Chat',
+          label: 'Resident & Guard Chat',
           icon: 'chatbubbles-outline',
+          screen: 'ResidentChat',
+        },
+        {
+          id: 'c6',
+          label: 'Community Feed',
+          icon: 'newspaper-outline',
           screen: 'Community',
         },
       ],
@@ -910,7 +951,26 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
             <Text style={styles.quickActionLabel} numberOfLines={1}>Amenities</Text>
           </TouchableOpacity>
 
-          {/* 5. Domestic Workers */}
+          {/* 5. Resident & Guard Chat */}
+          <TouchableOpacity
+            style={styles.quickActionTile}
+            onPress={() => navigateTo('ResidentChat')}
+            activeOpacity={0.75}
+          >
+            {unreadDmCount > 0 && (
+              <View style={styles.quickActionBadgePillRed}>
+                <Text style={styles.quickActionBadgeText}>{unreadDmCount > 99 ? '99+' : unreadDmCount}</Text>
+              </View>
+            )}
+            <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#0284c725' : '#e0f2fe' }]}>
+              <Ionicons name="chatbubbles" size={24} color={colors.primary} />
+            </View>
+            <Text style={[styles.quickActionLabel, { color: colors.primary, fontWeight: '700' }]} numberOfLines={1}>
+              Chat
+            </Text>
+          </TouchableOpacity>
+
+          {/* 6. Domestic Workers */}
           <TouchableOpacity
             style={styles.quickActionTile}
             onPress={() => navigateTo('DomesticWorkers')}
@@ -922,7 +982,7 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
             <Text style={styles.quickActionLabel} numberOfLines={1}>Workers</Text>
           </TouchableOpacity>
 
-          {/* 6. Household */}
+          {/* 7. Household */}
           <TouchableOpacity
             style={styles.quickActionTile}
             onPress={() => navigateTo('Household')}
@@ -932,18 +992,6 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
               <Ionicons name="people-outline" size={24} color={colors.text} />
             </View>
             <Text style={styles.quickActionLabel} numberOfLines={1}>Household</Text>
-          </TouchableOpacity>
-
-          {/* 7. Events / Calendar */}
-          <TouchableOpacity
-            style={styles.quickActionTile}
-            onPress={() => navigateTo('Events')}
-            activeOpacity={0.75}
-          >
-            <View style={styles.quickActionIconBox}>
-              <Ionicons name="calendar-outline" size={24} color={colors.text} />
-            </View>
-            <Text style={styles.quickActionLabel} numberOfLines={1}>Events</Text>
           </TouchableOpacity>
 
           {/* 8. View More (+) */}
@@ -1843,10 +1891,14 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.entryActionBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                    style={[
+                      styles.entryActionBtn,
+                      { backgroundColor: isDark ? '#38bdf8' : '#0f172a', borderColor: isDark ? '#38bdf8' : '#0f172a' },
+                    ]}
                     onPress={() => setSelectedEntry(null)}
                   >
-                    <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>Done</Text>
+                    <Ionicons name="checkmark-circle-outline" size={16} color={isDark ? '#0f172a' : '#ffffff'} style={{ marginRight: 6 }} />
+                    <Text style={{ color: isDark ? '#0f172a' : '#ffffff', fontWeight: '700', fontSize: 13 }}>Done</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2405,9 +2457,27 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
     paddingVertical: 1.5,
     borderRadius: 6,
   },
+  quickActionBadgePillRed: {
+    position: 'absolute',
+    top: -6,
+    right: 6,
+    zIndex: 10,
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 4,
+  },
   quickActionBadgeText: {
     color: 'white',
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '800',
   },
   quickActionLabel: {

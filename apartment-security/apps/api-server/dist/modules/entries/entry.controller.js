@@ -32,9 +32,6 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllEntries = exports.getUnitEntries = exports.getUnitsForGuard = exports.getFrequentVisitors = exports.getRecentEntries = exports.getEntryPoints = exports.logExit = exports.logEntry = void 0;
 const prisma_1 = require("../../config/prisma");
@@ -44,16 +41,11 @@ const audit_util_1 = require("../../utils/audit.util");
 const qr_util_1 = require("../../utils/qr.util");
 const parking_util_1 = require("../../utils/parking.util");
 const server_1 = require("../../server");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const logEntry = async (req, res, next) => {
     try {
         const { entryPointId, method, vehicleNumber, qrPayload, otpCode, notes, gatePhotoUrl } = req.body;
         let { unitId, visitorName, visitorPhone } = req.body;
-        // Every method except QR_SCAN still needs the guard to tell us who/where —
-        // a QR scan is fully self-describing once the signed pass resolves, so
-        // the guard app never has to (and can't, without the HMAC secret) know
-        // the unit/visitor identity up front.
-        if (method !== 'QR_SCAN' && (!unitId || !visitorName)) {
+        if (method !== 'QR_SCAN' && method !== 'OTP' && (!unitId || !visitorName)) {
             return next(new error_middleware_1.AppError('unitId and visitorName are required for this method', 400));
         }
         const guard = await prisma_1.prisma.guard.findUnique({ where: { userId: req.user.userId } });
@@ -62,84 +54,212 @@ const logEntry = async (req, res, next) => {
         let resolvedPassId = null;
         let status = 'APPROVED';
         let denialReason = null;
-        // Only set for a valid QR scan that needs resident approval — carries the
-        // context needed after entry.create() to open the WalkinApproval ticket
-        // and notify the resident. Never set for MANUAL_GUARD, so that existing
-        // walk-in behavior (no resident-approval ticket here) is untouched.
         let qrApproval = null;
-        if (method === 'QR_SCAN') {
-            if (!qrPayload)
-                return next(new error_middleware_1.AppError('QR Payload required for QR scan', 400));
-            const parsedQr = (0, qr_util_1.verifySignedQRPayload)(qrPayload);
-            const pass = parsedQr
-                ? await prisma_1.prisma.pass.findUnique({
+        if (method === 'QR_SCAN' || method === 'OTP') {
+            const candidateCode = (qrPayload || otpCode || req.body.passId || '').trim();
+            if (!candidateCode) {
+                return next(new error_middleware_1.AppError('QR Payload or OTP code required', 400));
+            }
+            let pass = null;
+            // 1. Try cryptographic signed QR payload
+            const parsedQr = (0, qr_util_1.verifySignedQRPayload)(candidateCode);
+            if (parsedQr?.passId) {
+                pass = await prisma_1.prisma.pass.findUnique({
                     where: { id: parsedQr.passId },
                     include: {
                         unit: { include: { residents: { include: { user: true } } } },
                         resident: { include: { user: true } },
                     },
-                })
-                : null;
-            // No signature, or the signed passId doesn't correspond to any real
-            // pass — there's no unit/resident to attach this attempt to at all,
-            // so there's nothing meaningful to persist as an Entry.
+                });
+            }
+            // 2. If not a signed QR, search by 6-digit OTP or Pass ID / Code
             if (!pass) {
-                return (0, response_util_1.sendSuccess)(res, 200, 'Entry logged as DENIED', { status: 'DENIED', reason: 'Invalid or unrecognized QR code' });
+                const cleanCode = candidateCode.replace(/^OTP:\s*/i, '').replace(/^PASS-\s*/i, '').trim();
+                // Check active pass by exact 6-digit OTP
+                pass = await prisma_1.prisma.pass.findFirst({
+                    where: {
+                        otpCode: cleanCode,
+                        status: 'ACTIVE',
+                    },
+                    include: {
+                        unit: { include: { residents: { include: { user: true } } } },
+                        resident: { include: { user: true } },
+                    },
+                    orderBy: { createdAt: 'desc' },
+                });
+                // Also check by ID / suffix if not found by OTP
+                if (!pass) {
+                    pass = await prisma_1.prisma.pass.findFirst({
+                        where: {
+                            OR: [
+                                { id: cleanCode },
+                                { id: candidateCode },
+                                { id: { endsWith: cleanCode } },
+                            ],
+                            status: 'ACTIVE',
+                        },
+                        include: {
+                            unit: { include: { residents: { include: { user: true } } } },
+                            resident: { include: { user: true } },
+                        },
+                        orderBy: { createdAt: 'desc' },
+                    });
+                }
+                // Check if there is an expired/revoked/suspended pass for meaningful denial message
+                if (!pass) {
+                    const matchedAny = await prisma_1.prisma.pass.findFirst({
+                        where: {
+                            OR: [
+                                { otpCode: cleanCode },
+                                { id: cleanCode },
+                                { id: candidateCode },
+                                { id: { endsWith: cleanCode } },
+                            ],
+                        },
+                        orderBy: { createdAt: 'desc' },
+                    });
+                    if (matchedAny) {
+                        return (0, response_util_1.sendSuccess)(res, 200, 'Entry logged as DENIED', {
+                            status: 'DENIED',
+                            reason: `Pass is ${matchedAny.status.toLowerCase()}`,
+                        });
+                    }
+                }
+            }
+            if (!pass) {
+                return (0, response_util_1.sendSuccess)(res, 200, 'Entry logged as DENIED', {
+                    status: 'DENIED',
+                    reason: 'Invalid or unrecognized QR code / OTP',
+                });
             }
             const entryPoint = await prisma_1.prisma.entryPoint.findUnique({ where: { id: entryPointId } });
             const now = new Date();
-            // From here on a real pass (and therefore a real unit) exists, so
-            // every outcome — including denials — gets a proper audit-trail Entry.
             unitId = pass.unitId;
             visitorName = pass.visitorName;
             visitorPhone = pass.visitorPhone;
-            if (pass.status !== 'ACTIVE')
+            // Check if visitor is ALREADY INSIDE (Active open entry without exitAt)
+            // If so, this QR / OTP entry is the EXIT SCAN (leaving the building)!
+            const openEntry = await prisma_1.prisma.entry.findFirst({
+                where: {
+                    passId: pass.id,
+                    status: 'APPROVED',
+                    exitAt: null,
+                },
+                include: {
+                    entryPoint: true,
+                },
+                orderBy: { entryAt: 'desc' },
+            });
+            if (openEntry) {
+                // ========== PHASE 2: EXIT SCAN (Leaving the building) ==========
+                const exitAt = now;
+                const entryAt = new Date(openEntry.entryAt);
+                const durationMs = Math.max(0, exitAt.getTime() - entryAt.getTime());
+                const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+                const durationHours = (durationMinutes / 60).toFixed(1);
+                const durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${durationHours}h (${durationMinutes}m)`;
+                // 1. Mark entry as exited
+                await prisma_1.prisma.entry.update({
+                    where: { id: openEntry.id },
+                    data: { exitAt },
+                });
+                // 2. Expire pass after successful exit (2 of 2 scans used)
+                if (pass.type === 'ONE_TIME' || pass.type === 'DELIVERY' || pass.type === 'CONTRACTOR') {
+                    await prisma_1.prisma.pass.update({
+                        where: { id: pass.id },
+                        data: { status: 'EXPIRED' },
+                    });
+                }
+                // 3. Record PassUsageHistory outcome as EXITED
+                await prisma_1.prisma.passUsageHistory.create({
+                    data: {
+                        passId: pass.id,
+                        entryId: openEntry.id,
+                        outcome: 'EXITED',
+                    },
+                });
+                // 4. Release allocated parking
+                await (0, parking_util_1.releaseParkingSlot)(openEntry.id);
+                // 5. Notify resident via Real-time Socket & Push Notification
+                server_1.io?.to(`unit_${pass.unitId}`).emit('visitor_exit_logged', {
+                    entryId: openEntry.id,
+                    passId: pass.id,
+                    visitorName: pass.visitorName,
+                    entryAt: entryAt.toISOString(),
+                    exitAt: exitAt.toISOString(),
+                    durationMinutes,
+                    durationFormatted,
+                    gateName: entryPoint?.name || 'Gate',
+                    unitNumber: pass.unit.unitNumber,
+                    tower: pass.unit.tower,
+                });
+                const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+                await triggerAlert({
+                    priority: 'P3',
+                    title: 'Visitor Left Building',
+                    body: `${pass.visitorName} has left via ${entryPoint?.name || 'Gate'} (Duration: ${durationFormatted}). Pass completed & expired.`,
+                    targetUserIds: pass.unit.residents.map((r) => r.userId),
+                    propertyId: guard.propertyId,
+                    entryId: openEntry.id,
+                });
+                await (0, audit_util_1.auditLog)(req.user.userId, 'LOG_EXIT_SCAN', 'Entry', openEntry.id);
+                return (0, response_util_1.sendSuccess)(res, 200, 'Visitor exit verified and logged. Pass completed & expired.', {
+                    id: openEntry.id,
+                    status: 'APPROVED',
+                    direction: 'EXIT',
+                    isExit: true,
+                    visitorName: pass.visitorName,
+                    visitorPhone: pass.visitorPhone,
+                    vehicleNumber: openEntry.vehicleNumber || vehicleNumber,
+                    unit: { unitNumber: pass.unit.unitNumber, tower: pass.unit.tower },
+                    gateName: entryPoint?.name,
+                    entryAt: openEntry.entryAt,
+                    exitAt,
+                    durationFormatted,
+                    durationMinutes,
+                    passStatus: 'EXPIRED',
+                    message: `Visitor exit logged. Stay duration: ${durationFormatted}. Pass is now expired (2/2 entries used).`,
+                });
+            }
+            // ========== PHASE 1: ENTRY SCAN (Entering the building) ==========
+            const alreadyExited = await prisma_1.prisma.passUsageHistory.findFirst({
+                where: { passId: pass.id, outcome: 'EXITED' },
+            });
+            if (alreadyExited && (pass.type === 'ONE_TIME' || pass.type === 'DELIVERY')) {
+                denialReason = 'Pass has already been completed and visitor exited (Pass expired)';
+            }
+            else if (pass.status !== 'ACTIVE') {
                 denialReason = `Pass is ${pass.status.toLowerCase()}`;
-            else if (now < pass.validFrom)
+            }
+            else if (now < pass.validFrom) {
                 denialReason = 'Pass is not valid yet';
-            else if (now > pass.validUntil)
+            }
+            else if (now > pass.validUntil) {
                 denialReason = 'Pass has expired';
-            else if (!entryPoint || entryPoint.propertyId !== guard.propertyId)
+            }
+            else if (!entryPoint || entryPoint.propertyId !== guard.propertyId) {
                 denialReason = 'Gate does not belong to your property';
-            else if (pass.unit.propertyId !== guard.propertyId)
+            }
+            else if (pass.unit.propertyId !== guard.propertyId) {
                 denialReason = 'Pass does not belong to your property';
-            else if (pass.entryPointIds.length > 0 && !pass.entryPointIds.includes(entryPointId))
+            }
+            else if (pass.entryPointIds.length > 0 && !pass.entryPointIds.includes(entryPointId)) {
                 denialReason = 'Pass is not valid at this gate';
-            else if (pass.type === 'ONE_TIME' &&
-                (await prisma_1.prisma.passUsageHistory.findFirst({
-                    where: { passId: pass.id, outcome: { in: ['CLEARED', 'PENDING'] } },
-                }))) {
-                denialReason = 'Pass has already been used';
             }
             if (denialReason) {
                 status = 'DENIED';
             }
             else {
                 resolvedPassId = pass.id;
-                status = 'PENDING_APPROVAL';
+                status = 'APPROVED'; // Pre-approved pass clear for entry
                 qrApproval = { pass, unit: pass.unit, entryPoint };
             }
         }
-        else if (method === 'OTP') {
-            if (!otpCode || !req.body.passId)
-                return next(new error_middleware_1.AppError('OTP and Pass ID required', 400));
-            const pass = await prisma_1.prisma.pass.findUnique({ where: { id: req.body.passId } });
-            if (!pass || pass.status !== 'ACTIVE' || !pass.otpCode)
-                status = 'DENIED';
-            else {
-                const isValid = await bcryptjs_1.default.compare(otpCode, pass.otpCode);
-                if (!isValid)
-                    status = 'DENIED';
-                else
-                    resolvedPassId = pass.id;
-            }
-        }
         else if (method === 'MANUAL_GUARD') {
-            // Manual guard entry usually implies walk-in, so status might be pending if it requires resident approval
-            // We will handle walk-in flows in another module, but here we just log it as pending.
-            status = 'PENDING_APPROVAL';
+            // Manual guard entry for walk-in or delivery
+            status = 'APPROVED';
         }
-        const { entry, walkinCreated } = await prisma_1.prisma.$transaction(async (tx) => {
+        const { entry } = await prisma_1.prisma.$transaction(async (tx) => {
             const createdEntry = await tx.entry.create({
                 data: {
                     unitId,
@@ -152,81 +272,55 @@ const logEntry = async (req, res, next) => {
                     passId: resolvedPassId,
                     status: status,
                     notes,
-                    gatePhotoUrl
-                }
+                    gatePhotoUrl,
+                },
             });
             if (resolvedPassId) {
-                const outcome = status === 'PENDING_APPROVAL' ? 'PENDING' : (status === 'APPROVED' ? 'CLEARED' : 'DENIED');
+                const outcome = status === 'APPROVED' ? 'ENTERED' : (status === 'PENDING_APPROVAL' ? 'PENDING' : 'DENIED');
                 await tx.passUsageHistory.create({
-                    data: { passId: resolvedPassId, entryId: createdEntry.id, outcome }
+                    data: { passId: resolvedPassId, entryId: createdEntry.id, outcome },
                 });
             }
-            let walkinTicket = null;
-            if (qrApproval) {
-                const { pass } = qrApproval;
-                const timeoutAt = new Date(Date.now() + 120000);
-                walkinTicket = await tx.walkinApproval.create({
-                    data: {
-                        entryId: createdEntry.id,
-                        residentId: pass.residentId,
-                        visitorName,
-                        purpose: pass.purpose ?? '',
-                        timeoutAt,
-                    }
-                });
-            }
-            return { entry: createdEntry, walkinCreated: walkinTicket };
+            return { entry: createdEntry };
         });
         let enriched = denialReason ? { reason: denialReason } : {};
-        if (qrApproval) {
+        if (qrApproval && status === 'APPROVED') {
             const { pass, unit, entryPoint } = qrApproval;
-            const timeoutAt = walkinCreated.timeoutAt;
-            server_1.io?.to(`unit_${unitId}`).emit('visitor_approval_request', {
+            // Notify resident that visitor has entered and live timer has started
+            server_1.io?.to(`unit_${unitId}`).emit('visitor_entry_logged', {
                 entryId: entry.id,
+                passId: pass.id,
                 visitorName,
                 visitorPhone,
                 visitorPhoto: pass.visitorPhoto,
                 purpose: pass.purpose,
                 vehicleNumber,
-                expectedTime: pass.validUntil,
                 apartment: unit.unitNumber,
                 tower: unit.tower,
-                gateName: entryPoint.name,
-                timeoutAt,
+                gateName: entryPoint?.name || 'Gate',
+                entryAt: entry.entryAt.toISOString(),
             });
             const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
-            // Every household member gets the ringing alert, not just the resident
-            // the pass happens to be booked under — whoever's phone is in hand
-            // should be able to answer the door.
             await triggerAlert({
-                priority: 'P2',
-                title: 'Visitor at your gate',
-                body: `${visitorName} scanned in — approve or deny within 2 minutes.`,
+                priority: 'P3',
+                title: 'Visitor Entered Building',
+                body: `${visitorName} has entered via ${entryPoint?.name || 'Gate'}. Visit timer started. Destination: Tower ${unit.tower || ''} Flat ${unit.unitNumber}.`,
                 targetUserIds: unit.residents.map((r) => r.userId),
                 propertyId: guard.propertyId,
                 entryId: entry.id,
                 imageUrl: pass.visitorPhoto ?? undefined,
-                dataOnly: true,
-                extraData: {
-                    type: 'VISITOR_APPROVAL',
-                    visitorName,
-                    timeoutAt: timeoutAt.toISOString(),
-                    gateName: entryPoint.name,
-                    apartment: unit.unitNumber,
-                    tower: unit.tower ?? '',
-                },
             });
             enriched = {
                 visitorPhoto: pass.visitorPhoto,
-                residentPhone: pass.resident.user.phone,
+                residentPhone: pass.resident?.user?.phone,
                 unit: { unitNumber: unit.unitNumber, tower: unit.tower },
-                gateName: entryPoint.name,
-                timeoutAt,
+                gateName: entryPoint?.name,
+                direction: 'ENTRY',
+                isEntry: true,
+                entryAt: entry.entryAt,
+                message: `${visitorName} entered building. Timer started (1/2 scans used).`,
             };
         }
-        // Runs after the resident-facing notification (above) rather than before —
-        // parking assignment is a bonus on top of entry logging, never a reason
-        // to delay telling the resident someone's waiting at the gate.
         await (0, parking_util_1.assignParkingSlot)(entry.id, guard.propertyId, vehicleNumber);
         await (0, audit_util_1.auditLog)(req.user.userId, 'LOG_ENTRY', 'Entry', entry.id);
         return (0, response_util_1.sendSuccess)(res, 201, `Entry logged as ${status}`, { ...entry, ...enriched });
@@ -240,16 +334,63 @@ const logExit = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { exitAt } = req.body;
-        const entry = await prisma_1.prisma.entry.findUnique({ where: { id } });
+        const entry = await prisma_1.prisma.entry.findUnique({
+            where: { id },
+            include: {
+                pass: true,
+                unit: { include: { residents: { select: { userId: true } } } },
+                entryPoint: true,
+            },
+        });
         if (!entry)
             return next(new error_middleware_1.AppError('Entry not found', 404));
+        const exitTime = exitAt ? new Date(exitAt) : new Date();
+        const durationMs = Math.max(0, exitTime.getTime() - new Date(entry.entryAt).getTime());
+        const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+        const durationHours = (durationMinutes / 60).toFixed(1);
+        const durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${durationHours}h (${durationMinutes}m)`;
         const updated = await prisma_1.prisma.entry.update({
             where: { id },
-            data: { exitAt: exitAt ? new Date(exitAt) : new Date() }
+            data: { exitAt: exitTime },
         });
+        if (entry.passId) {
+            if (entry.pass?.type === 'ONE_TIME' || entry.pass?.type === 'DELIVERY' || entry.pass?.type === 'CONTRACTOR') {
+                await prisma_1.prisma.pass.update({
+                    where: { id: entry.passId },
+                    data: { status: 'EXPIRED' },
+                });
+            }
+            await prisma_1.prisma.passUsageHistory.create({
+                data: { passId: entry.passId, entryId: id, outcome: 'EXITED' },
+            });
+        }
         await (0, parking_util_1.releaseParkingSlot)(id);
+        // Notify resident via socket
+        server_1.io?.to(`unit_${entry.unitId}`).emit('visitor_exit_logged', {
+            entryId: id,
+            passId: entry.passId,
+            visitorName: entry.visitorName,
+            entryAt: entry.entryAt.toISOString(),
+            exitAt: exitTime.toISOString(),
+            durationMinutes,
+            durationFormatted,
+            gateName: entry.entryPoint?.name || 'Gate',
+            unitNumber: entry.unit?.unitNumber,
+            tower: entry.unit?.tower,
+        });
+        const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+        if (entry.unit?.residents && entry.unit.residents.length > 0) {
+            await triggerAlert({
+                priority: 'P3',
+                title: 'Visitor Left Building',
+                body: `${entry.visitorName} has left the building (Total duration: ${durationFormatted}).`,
+                targetUserIds: entry.unit.residents.map((r) => r.userId),
+                propertyId: req.user?.propertyId || '',
+                entryId: id,
+            });
+        }
         await (0, audit_util_1.auditLog)(req.user.userId, 'LOG_EXIT', 'Entry', id);
-        return (0, response_util_1.sendSuccess)(res, 200, 'Exit logged', updated);
+        return (0, response_util_1.sendSuccess)(res, 200, 'Exit logged', { ...updated, durationMinutes, durationFormatted });
     }
     catch (err) {
         next(err);

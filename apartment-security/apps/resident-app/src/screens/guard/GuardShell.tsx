@@ -7,13 +7,14 @@ import ScanScreen from './ScanScreen';
 import WalkInScreen from './WalkInScreen';
 import AlertsScreen from './AlertsScreen';
 import ShiftHandoverScreen from './ShiftHandoverScreen';
+import ResidentChatScreen from './ResidentChatScreen';
 import OfflineBanner from '../../components/guard/OfflineBanner';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ThemeColors } from '../../theme/colors';
 import { TranslationKey } from '../../i18n/translations';
 
-type Tab = 'home' | 'scan' | 'walkin' | 'handover' | 'alerts';
+type Tab = 'home' | 'scan' | 'walkin' | 'handover' | 'alerts' | 'chat';
 
 const TAB_CONFIG: { key: Tab; icon: keyof typeof Ionicons.glyphMap; labelKey: TranslationKey }[] = [
   { key: 'home', icon: 'home', labelKey: 'tab_home' },
@@ -39,6 +40,7 @@ export default function GuardShell() {
         {tab === 'walkin' && <WalkInScreen navigation={{ goBack: () => setTab('home') }} />}
         {tab === 'handover' && <ShiftHandoverScreen onNavigate={setTab} />}
         {tab === 'alerts' && <AlertsScreen />}
+        {tab === 'chat' && <ResidentChatScreen onBack={() => setTab('home')} />}
       </View>
 
       <View style={styles.tabBar}>

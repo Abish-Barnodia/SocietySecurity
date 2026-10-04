@@ -293,7 +293,7 @@ export default function IncidentAlertModal({
                   <View style={styles.photoIconCircle}>
                     <Ionicons name="camera-outline" size={20} color={colors.primary} />
                   </View>
-                  <Text style={styles.photoBoxText}>{t('vehicle_tapCapture')}</Text>
+                  <Text style={styles.photoBoxText}>{t('incident_tapCapture')}</Text>
                 </View>
               )}
             </TouchableOpacity>

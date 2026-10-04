@@ -5,6 +5,8 @@ import { razorpay } from '../../config/razorpay';
 import { env } from '../../config/env';
 import { sendSuccess } from '../../utils/response.util';
 import { AppError } from '../../middlewares/error.middleware';
+import { generateInvoicePDFBuffer } from '../../utils/pdf.util';
+import { queueInvoiceEmail } from '../../queues/notification.queue';
 
 // Manager: all invoices raised for the property
 export const getAllInvoices = async (req: Request, res: Response, next: NextFunction) => {
@@ -21,6 +23,7 @@ export const getAllInvoices = async (req: Request, res: Response, next: NextFunc
         payments: true,
         unit: { select: { unitNumber: true, tower: true } },
         resident: { select: { name: true } },
+        property: { select: { name: true, address: true } },
       },
       orderBy: { dueDate: 'desc' },
     });
@@ -40,7 +43,12 @@ export const getMyInvoices = async (req: Request, res: Response, next: NextFunct
 
     const invoices = await prisma.invoice.findMany({
       where: { unitId: resident.unit.id },
-      include: { payments: true },
+      include: {
+        payments: true,
+        unit: { select: { unitNumber: true, tower: true } },
+        resident: { select: { name: true } },
+        property: { select: { name: true, address: true } },
+      },
       orderBy: { dueDate: 'desc' },
     });
 
@@ -184,7 +192,14 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
       return tx.invoice.update({ where: { id: invoice.id }, data: { status: 'PAID', paidAt: new Date() } });
     });
 
-    const finalInvoice = updatedInvoice ?? (await prisma.invoice.findUnique({ where: { id: invoice.id } }));
+    const finalInvoice = await prisma.invoice.findUnique({
+      where: { id: invoice.id },
+      include: {
+        payments: true,
+        unit: { select: { unitNumber: true, tower: true } },
+        resident: { select: { name: true } },
+      },
+    });
 
     const io = req.app.get('io');
     io?.to(`property:${invoice.propertyId}`).emit('invoice:update', finalInvoice);
@@ -293,7 +308,14 @@ export const verifyPaymentPublic = async (req: Request, res: Response, next: Nex
       return tx.invoice.update({ where: { id: invoiceId }, data: { status: 'PAID', paidAt: new Date() } });
     });
 
-    const finalInvoice = updatedInvoice ?? (await prisma.invoice.findUnique({ where: { id: invoiceId } }));
+    const finalInvoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        payments: true,
+        unit: { select: { unitNumber: true, tower: true } },
+        resident: { select: { name: true } },
+      },
+    });
 
     if (finalInvoice) {
       const io = req.app.get('io');
@@ -331,11 +353,29 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
     });
     if (!manager) return next(new AppError('Manager not found', 404));
 
+    const property = await prisma.property.findUnique({
+      where: { id: manager.propertyId },
+      select: { name: true, address: true },
+    });
+
     // Only units that actually belong to this manager's property — a
     // tampered unitId can't be used to raise a bill on another property.
     const units = await prisma.unit.findMany({
       where: { id: { in: unitIds }, propertyId: manager.propertyId },
-      select: { id: true, residents: { where: { isPrimary: true }, select: { id: true }, take: 1 } },
+      select: {
+        id: true,
+        unitNumber: true,
+        tower: true,
+        residents: {
+          where: { isPrimary: true },
+          select: {
+            id: true,
+            name: true,
+            user: { select: { email: true } },
+          },
+          take: 1,
+        },
+      },
     });
     if (units.length === 0) return next(new AppError('No valid units found for this property', 400));
 
@@ -351,6 +391,12 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
             description,
             dueDate: due,
           },
+          include: {
+            payments: true,
+            unit: { select: { unitNumber: true, tower: true } },
+            resident: { select: { name: true } },
+            property: { select: { name: true, address: true } },
+          },
         })
       )
     );
@@ -358,6 +404,83 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
     const io = req.app.get('io');
     created.forEach((invoice) => io?.to(`property:${manager.propertyId}`).emit('invoice:new', invoice));
 
+    // ponytail: send invoice PDF via SMTP email to all primary family members with registered emails
+    (async () => {
+      for (const inv of created) {
+        const matchingUnit = units.find((u) => u.id === inv.unitId);
+        const primaryRes = matchingUnit?.residents[0];
+        const email = primaryRes?.user?.email;
+        if (!email) continue;
+
+        try {
+          const pdfBuffer = await generateInvoicePDFBuffer({
+            invoiceId: inv.id,
+            societyName: property?.name || 'Society Security',
+            societyAddress: property?.address,
+            residentName: primaryRes.name,
+            unitNumber: matchingUnit?.unitNumber || '',
+            tower: matchingUnit?.tower,
+            amount: inv.amount,
+            description: inv.description,
+            dueDate: inv.dueDate,
+            status: inv.status,
+          });
+
+          await queueInvoiceEmail({
+            to: email,
+            residentName: primaryRes.name,
+            societyName: property?.name || 'Society Security',
+            unitNumber: matchingUnit?.unitNumber || '',
+            tower: matchingUnit?.tower,
+            amount: inv.amount,
+            description: inv.description,
+            dueDate: inv.dueDate,
+            pdfBuffer,
+            invoiceId: inv.id,
+          });
+        } catch (mailErr) {
+          console.error(`Failed to dispatch invoice PDF email for invoice ${inv.id} to ${email}:`, mailErr);
+        }
+      }
+    })().catch((err) => console.error('Invoice email dispatch error:', err));
+
     return sendSuccess(res, 201, `${created.length} invoice(s) created`, created);
+  } catch (err) { next(err); }
+};
+
+// Stream/Download official PDF invoice
+export const downloadInvoicePDF = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = String(req.params.id);
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        property: { select: { name: true, address: true } },
+        unit: { select: { unitNumber: true, tower: true } },
+        resident: { select: { name: true } },
+        payments: true,
+      },
+    });
+    if (!invoice) return next(new AppError('Invoice not found', 404));
+
+    const latestSuccess = invoice.payments.find((p) => p.status === 'SUCCESS');
+    const pdfBuffer = await generateInvoicePDFBuffer({
+      invoiceId: invoice.id,
+      societyName: invoice.property?.name || 'Society Security',
+      societyAddress: invoice.property?.address,
+      residentName: invoice.resident?.name || 'Resident',
+      unitNumber: invoice.unit?.unitNumber || '',
+      tower: invoice.unit?.tower,
+      amount: invoice.amount,
+      description: invoice.description,
+      dueDate: invoice.dueDate,
+      status: invoice.status,
+      paidAt: invoice.paidAt || latestSuccess?.paidAt,
+      transactionId: latestSuccess?.transactionId,
+    });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.id.slice(-8).toUpperCase()}.pdf"`);
+    return res.status(200).send(pdfBuffer);
   } catch (err) { next(err); }
 };

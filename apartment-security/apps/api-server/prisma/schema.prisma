@@ -246,6 +246,10 @@ model Pass {
   unit           Unit               @relation(fields: [unitId], references: [id])
   usageHistory   PassUsageHistory[]
   recurringRule  RecurringRule?
+
+  @@index([unitId, status])
+  @@index([otpCode, status])
+  @@index([status, validUntil])
 }
 
 model RecurringRule {
@@ -554,6 +558,9 @@ model Invoice {
   resident    Resident?     @relation(fields: [residentId], references: [id])
   unit        Unit          @relation(fields: [unitId], references: [id])
   payments    Payment[]
+
+  @@index([propertyId, status, dueDate])
+  @@index([unitId, status])
 }
 
 model Payment {
@@ -566,6 +573,8 @@ model Payment {
   status          String
   paidAt          DateTime @default(now())
   invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId, status])
 }
 
 model ChatMessage {

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPassword = exports.forgotPassword = exports.loginEmail = exports.signupEmail = exports.updateManagerAlertPreferences = exports.updateMyManagerProfile = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = exports.getPublicSocieties = void 0;
+exports.resetPassword = exports.forgotPassword = exports.checkApprovalStatus = exports.loginEmail = exports.signupEmail = exports.updateManagerAlertPreferences = exports.updateMyManagerProfile = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = exports.getPublicSocieties = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../config/prisma");
 const otp_util_1 = require("../../utils/otp.util");
@@ -439,6 +439,18 @@ const loginEmail = async (req, res, next) => {
                 }
             }
         }
+        // For residents: verify they are approved before letting them log into the app
+        if (user.role === 'RESIDENT') {
+            const resident = await prisma_1.prisma.resident.findUnique({
+                where: { userId: user.id },
+            });
+            if (resident && resident.status === 'PENDING') {
+                return next(new error_middleware_1.AppError('Your account verification is still pending approval by your society manager.', 403));
+            }
+            if (resident && resident.status === 'REJECTED') {
+                return next(new error_middleware_1.AppError('Your registration request was rejected by your society management.', 403));
+            }
+        }
         const payload = { userId: user.id, role: user.role, ...(managerSessionToken ? { managerSessionToken } : {}) };
         const accessToken = (0, jwt_util_1.signAccessToken)(payload);
         const refreshToken = (0, jwt_util_1.signRefreshToken)(payload);
@@ -459,6 +471,52 @@ const loginEmail = async (req, res, next) => {
     }
 };
 exports.loginEmail = loginEmail;
+const checkApprovalStatus = async (req, res, next) => {
+    try {
+        const { email, phone, userId } = req.query;
+        let user = null;
+        if (email) {
+            user = await prisma_1.prisma.user.findFirst({
+                where: { email: { equals: String(email).trim().toLowerCase(), mode: 'insensitive' } },
+                include: { resident: { include: { unit: { include: { property: true } } } } },
+            });
+        }
+        else if (phone) {
+            user = await prisma_1.prisma.user.findUnique({
+                where: { phone: String(phone).trim() },
+                include: { resident: { include: { unit: { include: { property: true } } } } },
+            });
+        }
+        else if (userId) {
+            user = await prisma_1.prisma.user.findUnique({
+                where: { id: String(userId) },
+                include: { resident: { include: { unit: { include: { property: true } } } } },
+            });
+        }
+        if (!user) {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Status retrieved', {
+                registered: false,
+                status: 'NOT_REGISTERED',
+                message: 'No registration found with these details.',
+            });
+        }
+        const resident = user.resident;
+        const status = resident?.status || 'PENDING';
+        return (0, response_util_1.sendSuccess)(res, 200, 'Status retrieved', {
+            registered: true,
+            status, // 'PENDING' | 'APPROVED' | 'REJECTED'
+            name: resident?.name || user.email,
+            flat: resident?.unit?.unitNumber,
+            tower: resident?.unit?.tower,
+            society: resident?.unit?.property?.name,
+            submittedAt: resident?.createdAt,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.checkApprovalStatus = checkApprovalStatus;
 // Password reset supports both Supabase Auth mailer (if configured) and
 // native OTP generation + direct SMTP email delivery via Gmail/Nodemailer.
 // In either case, the password stored in our User.passwordHash is updated.

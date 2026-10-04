@@ -29,8 +29,23 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [provisionedData, setProvisionedData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
   const [copied, setCopied] = useState(false);
+  const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null);
+
+  const isImageFile = (url?: string | null, name?: string | null) => {
+    if (!url) return false;
+    const lower = (url + ' ' + (name || '')).toLowerCase();
+    return (
+      lower.includes('.jpg') ||
+      lower.includes('.jpeg') ||
+      lower.includes('.png') ||
+      lower.includes('.webp') ||
+      lower.includes('.gif') ||
+      lower.includes('image/') ||
+      lower.startsWith('data:image/') ||
+      !lower.includes('.pdf')
+    );
+  };
 
   // Sync state when demoRequest changes
   React.useEffect(() => {
@@ -42,6 +57,7 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
       setProvisionedData(null);
       setError(null);
       setCopied(false);
+      setZoomedPhotoUrl(null);
 
       // Extract address, pin, and plan if encoded in message
       const msg = demoRequest.message || '';
@@ -275,41 +291,116 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
           {demoRequest.documentUrl && (
             <div style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 14px',
-              borderRadius: '8px',
-              background: 'rgba(0, 200, 150, 0.08)',
+              flexDirection: 'column',
+              gap: '10px',
+              padding: '14px',
+              borderRadius: '10px',
+              background: 'rgba(0, 200, 150, 0.06)',
               border: '1px solid rgba(0, 200, 150, 0.25)',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Icon icon="solar:document-text-bold" width="22" color="#00A67C" />
-                <div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {demoRequest.documentName || 'Verification Document (Aadhaar / ID)'}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                    Submitted with demo inquiry for identity & property verification
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Icon
+                    icon={isImageFile(demoRequest.documentUrl, demoRequest.documentName) ? "solar:gallery-bold" : "solar:document-text-bold"}
+                    width="22"
+                    color="#00A67C"
+                  />
+                  <div>
+                    <div style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {demoRequest.documentName || 'Verification Photo / Document'}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                      Uploaded during demo request submission for identity & society verification
+                    </div>
                   </div>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {isImageFile(demoRequest.documentUrl, demoRequest.documentName) && (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setZoomedPhotoUrl(demoRequest.documentUrl!)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                      }}
+                    >
+                      <Icon icon="solar:magnifer-zoom-in-bold" width="14" />
+                      Zoom Photo
+                    </button>
+                  )}
+                  <a
+                    href={demoRequest.documentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    <Icon icon="solar:link-bold" width="14" />
+                    Open Full Size
+                  </a>
+                </div>
               </div>
-              <a
-                href={demoRequest.documentUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-secondary btn-sm"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 600,
-                  textDecoration: 'none',
-                  fontSize: '0.75rem',
-                }}
-              >
-                <Icon icon="solar:link-bold" width="14" />
-                View Document
-              </a>
+
+              {/* Inline Photo / Image Preview */}
+              {isImageFile(demoRequest.documentUrl, demoRequest.documentName) && (
+                <div
+                  onClick={() => setZoomedPhotoUrl(demoRequest.documentUrl!)}
+                  style={{
+                    position: 'relative',
+                    cursor: 'pointer',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    maxHeight: '180px',
+                    background: '#0f172a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid rgba(0, 200, 150, 0.2)',
+                  }}
+                  title="Click to view full screen"
+                >
+                  <img
+                    src={demoRequest.documentUrl}
+                    alt={demoRequest.documentName || 'Uploaded verification photo'}
+                    style={{
+                      width: '100%',
+                      maxHeight: '180px',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '8px',
+                    right: '8px',
+                    background: 'rgba(0,0,0,0.7)',
+                    backdropFilter: 'blur(4px)',
+                    color: '#fff',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}>
+                    <Icon icon="solar:magnifer-zoom-in-bold" width="12" />
+                    Click to Zoom
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -451,6 +542,56 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
           </div>
         </form>
       )}
+
+      {/* Full Photo Zoom Modal */}
+      <Modal
+        isOpen={Boolean(zoomedPhotoUrl)}
+        onClose={() => setZoomedPhotoUrl(null)}
+        title={demoRequest?.documentName || 'Verification Photo Preview'}
+        maxWidth="800px"
+      >
+        {zoomedPhotoUrl && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center' }}>
+            <div style={{
+              width: '100%',
+              maxHeight: '75vh',
+              overflow: 'auto',
+              borderRadius: '8px',
+              background: '#090d16',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+            }}>
+              <img
+                src={zoomedPhotoUrl}
+                alt="Verification Full View"
+                style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                {demoRequest?.societyName} • Submitted by {demoRequest?.contactName}
+              </span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href={zoomedPhotoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Icon icon="solar:arrow-right-up-bold" width="14" />
+                  Open in New Tab
+                </a>
+                <button className="btn btn-primary btn-sm" onClick={() => setZoomedPhotoUrl(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </Modal>
   );
 };

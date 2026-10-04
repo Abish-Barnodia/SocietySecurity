@@ -13,6 +13,15 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 
 export type InvoiceStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 
+export type InvoicePayment = {
+  id: string;
+  transactionId?: string | null;
+  razorpayOrderId?: string | null;
+  status: string;
+  paidAt: string;
+  amount?: number;
+};
+
 export type Invoice = {
   id: string;
   amount: number;
@@ -20,15 +29,23 @@ export type Invoice = {
   dueDate: string;
   status: InvoiceStatus;
   paidAt?: string | null;
+  unit?: { unitNumber: string; tower?: string | null } | null;
+  resident?: { name: string } | null;
+  property?: { name: string; address?: string } | null;
+  payments?: InvoicePayment[];
 };
 
 const mapInvoice = (raw: any): Invoice => ({
   id: raw.id,
-  amount: raw.amount,
+  amount: Number(raw.amount) || 0,
   description: raw.description,
   dueDate: raw.dueDate,
   status: raw.status,
   paidAt: raw.paidAt ?? null,
+  unit: raw.unit ?? null,
+  resident: raw.resident ?? null,
+  property: raw.property ?? null,
+  payments: Array.isArray(raw.payments) ? raw.payments : [],
 });
 
 type MaintenanceContextType = {

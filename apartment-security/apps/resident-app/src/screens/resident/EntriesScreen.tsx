@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useData, Entry, Pass } from '../../context/DataContext';
+import { ListSkeleton } from '../../components/SkeletonLoader';
 
 type CategoryFilter = 'ALL' | 'CAB' | 'DELIVERY' | 'GUEST' | 'DAILY_HELP' | 'PARCEL' | 'VEHICLE' | 'KID' | 'OTHERS';
 type DateFilter = 'ALL' | 'TODAY' | 'YESTERDAY' | 'EARLIER';
@@ -37,6 +38,7 @@ export default function EntriesScreen() {
   const navigation = useNavigation<any>();
   const { entries, fetchEntries, entriesLastFetchedAt, passes, fetchPasses, notifyGuardsOverstay, revokePass } = useData();
 
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [detailsEntry, setDetailsEntry] = useState<Entry | null>(null);
   const [rateEntry, setRateEntry] = useState<Entry | null>(null);
@@ -56,11 +58,19 @@ export default function EntriesScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let isCurrent = true;
+      if (entries.length === 0) setLoading(true);
       if (Date.now() - entriesLastFetchedAt.current > 15000) {
-        fetchEntries();
-        fetchPasses();
+        Promise.all([fetchEntries(), fetchPasses()]).finally(() => {
+          if (isCurrent) setLoading(false);
+        });
+      } else {
+        setLoading(false);
       }
-    }, [fetchEntries, fetchPasses, entriesLastFetchedAt])
+      return () => {
+        isCurrent = false;
+      };
+    }, [fetchEntries, fetchPasses, entriesLastFetchedAt, entries.length])
   );
 
   const handleRefresh = async () => {
@@ -395,7 +405,9 @@ export default function EntriesScreen() {
         )}
 
         {/* LOGS LIST */}
-        {filteredEntries.length === 0 ? (
+        {loading && !refreshing ? (
+          <ListSkeleton count={4} />
+        ) : filteredEntries.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconCircle}>
               <Ionicons name="document-text-outline" size={38} color={colors.primary} />

@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Alert } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../context/ThemeContext';
 import { useData, Pass } from '../../context/DataContext';
+import { ListSkeleton } from '../../components/SkeletonLoader';
 
 const TABS = ['All', 'Active', 'Suspended', 'Past'] as const;
 type TabType = typeof TABS[number];
@@ -23,8 +25,29 @@ function getPassIconName(pass: Pass): keyof typeof Ionicons.glyphMap {
 export default function PassesScreen({ navigation }: { navigation: any }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { passes, suspendPass, revokePass } = useData();
+  const { passes, fetchPasses, suspendPass, revokePass } = useData();
   const [activeTab, setActiveTab] = useState<TabType>('All');
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isCurrent = true;
+      if (passes.length === 0) setLoading(true);
+      fetchPasses().finally(() => {
+        if (isCurrent) setLoading(false);
+      });
+      return () => {
+        isCurrent = false;
+      };
+    }, [fetchPasses, passes.length])
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchPasses();
+    setRefreshing(false);
+  };
 
   const handleSuspend = (id: string, passName: string) => {
     Alert.alert('Suspend Pass', `Are you sure you want to pause pass for "${passName}"?`, [
@@ -88,24 +111,28 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
       </View>
 
       {/* PASSES LIST */}
-      <FlatList
-        data={filteredPasses}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="qr-code-outline" size={38} color={colors.text} />
+      {loading && !refreshing ? (
+        <ListSkeleton count={4} />
+      ) : (
+        <FlatList
+          data={filteredPasses}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="qr-code-outline" size={38} color={colors.text} />
+              </View>
+              <Text style={styles.emptyTitle}>No Passes Found</Text>
+              <Text style={styles.emptySub}>
+                {activeTab === 'All'
+                  ? 'Create a pre-approved guest, cab, or delivery pass to get started.'
+                  : `No ${activeTab.toLowerCase()} passes available right now.`}
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>No Passes Found</Text>
-            <Text style={styles.emptySub}>
-              {activeTab === 'All'
-                ? 'Create a pre-approved guest, cab, or delivery pass to get started.'
-                : `No ${activeTab.toLowerCase()} passes available right now.`}
-            </Text>
-          </View>
-        }
+          }
         renderItem={({ item }) => {
           const isActive = item.status === 'Active';
           const isSuspended = item.status === 'Suspended';
@@ -179,6 +206,15 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
                     {item.gate || 'All society gates pre-approved'}
                   </Text>
                 </View>
+
+                {item.otpCode ? (
+                  <View style={styles.detailLine}>
+                    <Ionicons name="key-outline" size={14} color="#d97706" />
+                    <Text style={[styles.detailLineText, { color: isDark ? '#fbbf24' : '#b45309', fontWeight: '800' }]} numberOfLines={1}>
+                      OTP: {item.otpCode}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* ACTION BUTTONS ROW (Entries & Home style) */}
@@ -217,6 +253,7 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
           );
         }}
       />
+      )}
 
       {/* FLOATING ACTION BUTTON */}
       <TouchableOpacity

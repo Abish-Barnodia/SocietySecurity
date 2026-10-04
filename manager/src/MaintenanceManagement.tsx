@@ -53,12 +53,14 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { 
 // Razorpay attempt lives on the Payment row instead. Blend the two into one
 // status the table can filter and display on.
 const effectiveStatus = (inv: Invoice): 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED' | 'FAILED' => {
+  if (!inv) return 'PENDING';
   if (inv.status !== 'PENDING') return inv.status;
-  const latestPayment = [...inv.payments].sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0];
+  const payments = Array.isArray(inv.payments) ? inv.payments : [];
+  const latestPayment = [...payments].sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0];
   return latestPayment?.status === 'FAILED' ? 'FAILED' : 'PENDING';
 };
 
-const latestSuccessfulPayment = (inv: Invoice) => inv.payments.find((p) => p.status === 'SUCCESS');
+const latestSuccessfulPayment = (inv: Invoice) => (Array.isArray(inv?.payments) ? inv.payments.find((p) => p.status === 'SUCCESS') : undefined);
 
 const FILTERS: { key: string; label: string }[] = [
   { key: 'ALL', label: 'All' },
@@ -111,7 +113,12 @@ const MaintenanceManagement: React.FC = () => {
     socketRef.current = socket;
 
     const upsert = (raw: Invoice) => {
-      setInvoices((prev) => (prev.some((i) => i.id === raw.id) ? prev.map((i) => (i.id === raw.id ? raw : i)) : [raw, ...prev]));
+      if (!raw?.id) return;
+      const normalized: Invoice = {
+        ...raw,
+        payments: Array.isArray(raw.payments) ? raw.payments : [],
+      };
+      setInvoices((prev) => (prev.some((i) => i.id === normalized.id) ? prev.map((i) => (i.id === normalized.id ? normalized : i)) : [normalized, ...prev]));
     };
     socket.on('invoice:new', upsert);
     socket.on('invoice:update', upsert);

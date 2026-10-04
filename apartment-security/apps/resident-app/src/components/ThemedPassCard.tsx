@@ -10,6 +10,7 @@ export interface ThemedPassProps {
   propertyName?: string;
   validTimeWindow: string;
   passCode: string;
+  otpCode?: string | null;
   qrPayload: string;
   note?: string;
 }
@@ -46,6 +47,7 @@ export const ThemedPassCard = React.forwardRef<View, ThemedPassProps>(
       propertyName = 'Greenfield Heights',
       validTimeWindow,
       passCode,
+      otpCode,
       qrPayload,
       note,
     },
@@ -99,10 +101,17 @@ export const ThemedPassCard = React.forwardRef<View, ThemedPassProps>(
                 )}
               </View>
 
-              {/* Passcode Badge */}
+              {/* Passcode Badge & 6-Digit OTP */}
               <View style={styles.passcodeBadge}>
                 <Text style={styles.passcodeText}>{passCode}</Text>
               </View>
+
+              {otpCode ? (
+                <View style={styles.otpPill}>
+                  <Text style={styles.otpPillLabel}>GATE ENTRY OTP</Text>
+                  <Text style={styles.otpPillValue}>{otpCode}</Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Details Glass Card */}
@@ -252,15 +261,39 @@ const styles = StyleSheet.create({
     marginTop: 10,
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 16,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
   passcodeText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#78350F',
+    letterSpacing: 2.5,
+  },
+  otpPill: {
+    marginTop: 6,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#D97706',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  otpPillLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  otpPillValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#92400E',
     letterSpacing: 3,
   },
   detailsGlassCard: {

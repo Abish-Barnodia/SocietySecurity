@@ -27,6 +27,24 @@ const METHOD_LABEL_KEY: Record<EntryDetail['method'], TranslationKey> = {
   VEHICLE_ANPR: 'handover_methodVehicle',
 };
 
+function formatInsideDuration(entryAt: string, exitAt: string | null): string {
+  const start = new Date(entryAt).getTime();
+  const end = exitAt ? new Date(exitAt).getTime() : Date.now();
+  const diffMs = Math.max(0, end - start);
+  const totalMins = Math.floor(diffMs / 60000);
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+
+  if (hours === 0 && mins === 0) {
+    return exitAt ? '< 1 min' : 'Just entered';
+  }
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hr${hours > 1 ? 's' : ''}`);
+  if (mins > 0) parts.push(`${mins} min${mins > 1 ? 's' : ''}`);
+  const durationStr = parts.join(' ');
+  return exitAt ? durationStr : `${durationStr} (active)`;
+}
+
 export default function EntryDetailModal({ entry, onClose }: { entry: EntryDetail | null; onClose: () => void }) {
   const { colors } = useTheme();
   const { t } = useLanguage();
@@ -60,24 +78,31 @@ export default function EntryDetailModal({ entry, onClose }: { entry: EntryDetai
                 <Text style={styles.metaLabel}>{t('entry_method')}</Text>
                 <Text style={styles.metaValue}>{t(METHOD_LABEL_KEY[entry.method])}</Text>
               </View>
-              <View style={[styles.metaRow, { borderBottomWidth: entry.exitAt ? 1 : 0 }]}>
+              <View style={styles.metaRow}>
                 <Text style={styles.metaLabel}>{t('entry_enteredAt')}</Text>
                 <Text style={styles.metaValue}>
                   {new Date(entry.entryAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                 </Text>
               </View>
               {entry.exitAt ? (
-                <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.metaRow}>
                   <Text style={styles.metaLabel}>{t('entry_exitedAt')}</Text>
                   <Text style={styles.metaValue}>
                     {new Date(entry.exitAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                   </Text>
                 </View>
               ) : (
-                <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.metaRow}>
+                  <Text style={styles.metaLabel}>{t('entry_exitedAt')}</Text>
                   <Text style={[styles.metaValue, { color: colors.success }]}>{t('entry_stillInside')}</Text>
                 </View>
               )}
+              <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
+                <Text style={styles.metaLabel}>{t('entry_insideTime')}</Text>
+                <Text style={[styles.metaValue, !entry.exitAt && { color: colors.success }]}>
+                  {formatInsideDuration(entry.entryAt, entry.exitAt)}
+                </Text>
+              </View>
             </View>
           </View>
         )}

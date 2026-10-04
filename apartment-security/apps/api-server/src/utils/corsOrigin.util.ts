@@ -10,6 +10,13 @@ export function isKnownOrigin(origin: string): boolean {
   if (env.NODE_ENV === 'development' && /^http:\/\/localhost:\d+$/.test(origin)) {
     return true;
   }
-  const allowed = [env.CLIENT_RESIDENT_APP_URL, env.CLIENT_GUARD_APP_URL, env.CLIENT_MANAGER_URL];
-  return allowed.includes(origin) || origin.endsWith('.vercel.app');
+  const customOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+  const allowed = [
+    env.CLIENT_RESIDENT_APP_URL,
+    env.CLIENT_GUARD_APP_URL,
+    env.CLIENT_MANAGER_URL,
+    ...customOrigins,
+  ].filter(Boolean);
+
+  return allowed.includes(origin);
 }

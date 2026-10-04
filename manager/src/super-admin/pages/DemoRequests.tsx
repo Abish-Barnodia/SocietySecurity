@@ -5,6 +5,7 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { ProvisionSocietyModal } from '../components/societies/ProvisionSocietyModal';
 import { Pagination } from '../components/common/Pagination';
 import { TableSkeleton } from '../components/common/Skeleton';
+import { Modal } from '../components/common/Modal';
 import { Icon } from '@iconify/react';
 
 interface DemoRequestsProps {
@@ -17,6 +18,22 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [provisioningDemo, setProvisioningDemo] = useState<DemoRequest | null>(null);
+  const [zoomedDoc, setZoomedDoc] = useState<{ url: string; name: string; society: string; contact: string } | null>(null);
+
+  const isImageFile = (url?: string | null, name?: string | null) => {
+    if (!url) return false;
+    const lower = (url + ' ' + (name || '')).toLowerCase();
+    return (
+      lower.includes('.jpg') ||
+      lower.includes('.jpeg') ||
+      lower.includes('.png') ||
+      lower.includes('.webp') ||
+      lower.includes('.gif') ||
+      lower.includes('image/') ||
+      lower.startsWith('data:image/') ||
+      !lower.includes('.pdf')
+    );
+  };
 
   // Pagination state
   const [page, setPage] = useState<number>(1);
@@ -145,29 +162,79 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                     </td>
                     <td>
                       {demo.documentUrl ? (
-                        <a
-                          href={demo.documentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-secondary btn-sm"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.75rem',
-                            padding: '4px 8px',
-                            color: '#00A67C',
-                            background: 'rgba(0, 200, 150, 0.08)',
-                            border: '1px solid rgba(0, 200, 150, 0.25)',
-                            borderRadius: '6px',
-                            textDecoration: 'none',
-                            fontWeight: 600,
-                          }}
-                          title={demo.documentName || 'View Document'}
-                        >
-                          <Icon icon="solar:document-text-bold" width="15" />
-                          <span>View Doc</span>
-                        </a>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {isImageFile(demo.documentUrl, demo.documentName) ? (
+                            <button
+                              type="button"
+                              onClick={() => setZoomedDoc({
+                                url: demo.documentUrl!,
+                                name: demo.documentName || 'Uploaded Verification Photo',
+                                society: demo.societyName,
+                                contact: demo.contactName,
+                              })}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '6px',
+                                overflow: 'hidden',
+                                padding: 0,
+                                border: '1px solid rgba(0, 200, 150, 0.3)',
+                                background: '#0f172a',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              title="Click to zoom photo"
+                            >
+                              <img
+                                src={demo.documentUrl}
+                                alt="Verification thumbnail"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            </button>
+                          ) : (
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '6px',
+                              background: 'rgba(0, 200, 150, 0.1)',
+                              border: '1px solid rgba(0, 200, 150, 0.3)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#00A67C',
+                              flexShrink: 0,
+                            }}>
+                              <Icon icon="solar:document-text-bold" width="18" />
+                            </div>
+                          )}
+
+                          <a
+                            href={demo.documentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-secondary btn-sm"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.725rem',
+                              padding: '3px 7px',
+                              color: '#00A67C',
+                              background: 'rgba(0, 200, 150, 0.08)',
+                              border: '1px solid rgba(0, 200, 150, 0.25)',
+                              borderRadius: '6px',
+                              textDecoration: 'none',
+                              fontWeight: 600,
+                            }}
+                            title={demo.documentName || 'Open Document in New Tab'}
+                          >
+                            <Icon icon="solar:link-bold" width="13" />
+                            <span>{isImageFile(demo.documentUrl, demo.documentName) ? 'Photo' : 'Doc'}</span>
+                          </a>
+                        </div>
                       ) : (
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>—</span>
                       )}
@@ -254,6 +321,56 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
           }}
         />
       )}
+
+      {/* Lightbox Zoom Modal for Demo Request Verification Docs & Photos */}
+      <Modal
+        isOpen={Boolean(zoomedDoc)}
+        onClose={() => setZoomedDoc(null)}
+        title={zoomedDoc?.name || 'Verification Photo Preview'}
+        maxWidth="800px"
+      >
+        {zoomedDoc && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center' }}>
+            <div style={{
+              width: '100%',
+              maxHeight: '75vh',
+              overflow: 'auto',
+              borderRadius: '8px',
+              background: '#090d16',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+            }}>
+              <img
+                src={zoomedDoc.url}
+                alt="Verification full preview"
+                style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                {zoomedDoc.society} • Submitted by {zoomedDoc.contact}
+              </span>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href={zoomedDoc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-secondary btn-sm"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Icon icon="solar:arrow-right-up-bold" width="14" />
+                  Open in New Tab
+                </a>
+                <button className="btn btn-primary btn-sm" onClick={() => setZoomedDoc(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

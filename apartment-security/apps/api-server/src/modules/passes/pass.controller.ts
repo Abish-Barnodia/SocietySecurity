@@ -30,13 +30,8 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
       return next(new AppError('Unauthorized to create passes', 403));
     }
 
-    // For DELIVERY type, we optionally create an OTP
-    let otpPlaintext = null;
-    let otpHash = null;
-    if (type === 'DELIVERY') {
-        otpPlaintext = Math.floor(100000 + Math.random() * 900000).toString();
-        otpHash = await bcrypt.hash(otpPlaintext, 10);
-    }
+    // Generate a 6-digit Entry OTP code for every pass
+    const otpPlaintext = Math.floor(100000 + Math.random() * 900000).toString();
 
     const updatedPass = await prisma.$transaction(async (tx) => {
       const pass = await tx.pass.create({
@@ -50,7 +45,7 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
           validFrom: new Date(validFrom),
           validUntil: new Date(validUntil),
           entryPointIds: entryPointIds || [],
-          otpCode: otpHash,
+          otpCode: otpPlaintext,
           ...(recurringRule && {
             recurringRule: {
               create: recurringRule
@@ -129,14 +124,21 @@ export const revokePass = async (req: Request, res: Response, next: NextFunction
   try {
     const id = req.params.id as string;
     
-    const pass = await prisma.pass.findUnique({ where: { id } });
+    const pass = await prisma.pass.findUnique({
+      where: { id },
+      include: { unit: true },
+    });
     if (!pass) return next(new AppError('Pass not found', 404));
 
-    // Residents may only revoke their own unit's passes; managers can revoke any
+    // Residents may only revoke their own unit's passes; managers only within their property
     if (req.user!.role === 'RESIDENT') {
       const resident = await prisma.resident.findUnique({ where: { userId: req.user!.userId } });
       if (!resident || pass.unitId !== resident.unitId) {
         return next(new AppError('Forbidden: You do not own this pass', 403));
+      }
+    } else if (req.user!.role === 'MANAGER') {
+      if (pass.unit.propertyId !== req.user!.propertyId) {
+        return next(new AppError('Forbidden: You cannot modify passes for other properties', 403));
       }
     }
 
@@ -144,6 +146,12 @@ export const revokePass = async (req: Request, res: Response, next: NextFunction
       where: { id },
       data: { status: 'REVOKED', revokedAt: new Date(), revokedBy: req.user!.userId }
     });
+
+    // Invalidate property pass cache in Redis
+    try {
+      const { redis } = await import('../../config/redis');
+      await redis.del(`pass_cache:property:${pass.unit.propertyId}`);
+    } catch {}
 
     await auditLog(req.user!.userId, 'REVOKE_PASS', 'Pass', id);
     return sendSuccess(res, 200, 'Pass revoked', updatedPass);

@@ -5,6 +5,9 @@ import { logger } from './utils/logger.util';
 import { prisma } from './config/prisma';
 import { Server } from 'socket.io';
 import { isKnownOrigin } from './utils/corsOrigin.util';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Redis } from 'ioredis';
+import './queues/notification.queue';
 
 const server = http.createServer(app);
 
@@ -20,6 +23,25 @@ export const io = new Server(server, {
     credentials: true,
   },
 });
+
+// ponytail: attach Redis adapter for multi-instance Socket.io clustering
+if (env.REDIS_URL) {
+  try {
+    const pubClient = new Redis(env.REDIS_URL, {
+      retryStrategy: (times) => (times > 5 ? null : Math.min(times * 200, 2000)),
+      enableOfflineQueue: false,
+    });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on('error', (err) => logger.warn('Socket.io Redis pub client error:', { err: err?.message || err }));
+    subClient.on('error', (err) => logger.warn('Socket.io Redis sub client error:', { err: err?.message || err }));
+
+    io.adapter(createAdapter(pubClient, subClient));
+    logger.info('Socket.io Redis adapter initialized for multi-instance clustering');
+  } catch (err: any) {
+    logger.warn('Socket.io Redis adapter setup skipped:', { err: err?.message || err });
+  }
+}
 
 app.set('io', io);
 

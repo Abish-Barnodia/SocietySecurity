@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert as RNAlert,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,15 +17,33 @@ import { useTheme } from '../../context/ThemeContext';
 import { useData, Alert } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
 import RemoteImage from '../../components/RemoteImage';
+import { AlertsSkeletonList } from '../../components/SkeletonLoader';
+
+// Checks if an alert is specifically an unknown vehicle alert that residents can claim
+function isVehicleAlert(alert: { title?: string; subtitle?: string; icon?: string }): boolean {
+  const t = (alert.title || '').toLowerCase();
+  const s = (alert.subtitle || '').toLowerCase();
+  return (
+    t.includes('vehicle') ||
+    t.includes('parking') ||
+    alert.icon === 'VEHICLE' ||
+    s.includes('spotted at') ||
+    s.includes('plate ')
+  );
+}
 
 // Maps alert icon/priority to monochrome Iconify/QuickActions style icon
 function getAlertIcon(priority: string, title?: string): keyof typeof Ionicons.glyphMap {
   const t = (title || '').toLowerCase();
+  if (t.includes('accident')) return 'warning-outline';
+  if (t.includes('fire')) return 'flame-outline';
+  if (t.includes('medical')) return 'medkit-outline';
+  if (t.includes('complaint')) return 'chatbox-ellipses-outline';
   if (t.includes('vehicle') || t.includes('parking') || priority === 'VEHICLE') return 'car-outline';
   if (t.includes('overstay') || t.includes('guard') || t.includes('security') || priority === 'P1') return 'shield-checkmark-outline';
   if (t.includes('visitor') || t.includes('guest') || t.includes('walk-in') || priority === 'VISITOR') return 'person-outline';
   if (t.includes('delivery') || t.includes('courier')) return 'bicycle-outline';
-  if (t.includes('bill') || t.includes('maintenance') || t.includes('payment')) return 'receipt-outline';
+  if (t.includes('bill') || t.includes('maintenance') || t.includes('payment')) return 'construct-outline';
   if (priority === 'P2') return 'warning-outline';
   return 'notifications-outline';
 }
@@ -36,11 +55,21 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
   const { userId } = useAuth();
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      fetchAlerts();
-    }, [fetchAlerts])
+      let isCurrent = true;
+      if (alerts.length === 0) setLoading(true);
+      fetchAlerts().finally(() => {
+        if (isCurrent) setLoading(false);
+      });
+      return () => {
+        isCurrent = false;
+      };
+    }, [fetchAlerts, alerts.length])
   );
 
   const unreadCount = useMemo(() => alerts.filter((a) => a.unread).length, [alerts]);
@@ -54,6 +83,12 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
     } finally {
       setClaimingId(null);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchAlerts();
+    setRefreshing(false);
   };
 
   return (
@@ -80,8 +115,14 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {alerts.length === 0 ? (
+      <ScrollView
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      >
+        {loading && !refreshing ? (
+          <AlertsSkeletonList count={3} />
+        ) : alerts.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View style={styles.emptyIconCircle}>
               <Ionicons name="notifications-off-outline" size={38} color={colors.text} />
@@ -137,8 +178,20 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
                 {/* VEHICLE / VISITOR ATTACHMENT IMAGE */}
                 {!!alert.imageUrl && (
                   <View style={styles.imageWrap}>
-                    <RemoteImage uri={alert.imageUrl} style={styles.vehicleImage} colors={colors} />
-                    {!alert.entryId && (
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setPreviewImageUrl(alert.imageUrl!);
+                      }}
+                    >
+                      <RemoteImage uri={alert.imageUrl} style={styles.vehicleImage} colors={colors} />
+                      <View style={styles.imageOverlayBadge}>
+                        <Ionicons name="expand-outline" size={12} color="#ffffff" style={{ marginRight: 3 }} />
+                        <Text style={styles.imageOverlayText}>View full photo</Text>
+                      </View>
+                    </TouchableOpacity>
+                    {isVehicleAlert(alert) && !alert.entryId && (
                       <View style={styles.claimSection}>
                         {alert.claimedByUserId ? (
                           <View style={styles.claimedBadge}>
@@ -231,15 +284,24 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
                 </View>
 
                 {selectedAlert.imageUrl && (
-                  <RemoteImage
-                    uri={selectedAlert.imageUrl}
-                    style={styles.modalFullImage}
-                    resizeMode="contain"
-                    colors={colors}
-                  />
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    onPress={() => setPreviewImageUrl(selectedAlert.imageUrl!)}
+                  >
+                    <RemoteImage
+                      uri={selectedAlert.imageUrl}
+                      style={styles.modalFullImage}
+                      resizeMode="cover"
+                      colors={colors}
+                    />
+                    <View style={styles.imageOverlayBadge}>
+                      <Ionicons name="expand-outline" size={12} color="#ffffff" style={{ marginRight: 3 }} />
+                      <Text style={styles.imageOverlayText}>Tap for full screen</Text>
+                    </View>
+                  </TouchableOpacity>
                 )}
 
-                {selectedAlert.imageUrl && !selectedAlert.entryId && (
+                {selectedAlert.imageUrl && isVehicleAlert(selectedAlert) && !selectedAlert.entryId && (
                   <View style={{ marginTop: 16 }}>
                     {selectedAlert.claimedByUserId ? (
                       <Text style={[styles.claimedText, { textAlign: 'center' }]}>
@@ -283,6 +345,55 @@ export default function AlertsScreen({ navigation }: { navigation: any }) {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Fullscreen Photo Preview Modal */}
+      <Modal
+        visible={!!previewImageUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImageUrl(null)}
+      >
+        <View style={styles.fullImageBackdrop}>
+          <SafeAreaView style={styles.fullImageSafeArea}>
+            <View style={styles.fullImageTopBar}>
+              <View style={styles.fullImageHeaderLeft}>
+                <Ionicons name="image-outline" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+                <Text style={styles.fullImageTitle}>Photo Attachment</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.fullImageCloseBtn}
+                onPress={() => setPreviewImageUrl(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={22} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.fullImageContent}
+              activeOpacity={1}
+              onPress={() => setPreviewImageUrl(null)}
+            >
+              {previewImageUrl && (
+                <RemoteImage
+                  uri={previewImageUrl}
+                  style={styles.fullImage}
+                  resizeMode="contain"
+                  colors={colors}
+                />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.fullImageBottomBar}
+              activeOpacity={0.8}
+              onPress={() => setPreviewImageUrl(null)}
+            >
+              <Text style={styles.fullImageHint}>Tap anywhere to close</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -574,5 +685,75 @@ const getStyles = (colors: any, isDark: boolean) =>
       fontSize: 13,
       fontWeight: '700',
       color: colors.text,
+    },
+    imageOverlayBadge: {
+      position: 'absolute',
+      bottom: 8,
+      right: 8,
+      backgroundColor: 'rgba(15, 23, 42, 0.75)',
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    imageOverlayText: {
+      color: '#ffffff',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    fullImageBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    },
+    fullImageSafeArea: {
+      flex: 1,
+      justifyContent: 'space-between',
+    },
+    fullImageTopBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    fullImageHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    fullImageTitle: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    fullImageCloseBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullImageContent: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 12,
+    },
+    fullImage: {
+      width: '100%',
+      height: '100%',
+    },
+    fullImageBottomBar: {
+      paddingVertical: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullImageHint: {
+      color: 'rgba(255, 255, 255, 0.6)',
+      fontSize: 12,
+      fontWeight: '500',
     },
   });

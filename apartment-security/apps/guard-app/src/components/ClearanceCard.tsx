@@ -4,9 +4,19 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ThemeColors } from '../theme/colors';
 
-export type ClearanceState = 'PENDING' | 'APPROVED' | 'DENIED' | 'TIMEOUT';
+export type ClearanceState = 'PENDING' | 'APPROVED' | 'EXIT' | 'DENIED' | 'TIMEOUT';
 
-export default function ClearanceCard({ state, timeoutAt, reason }: { state: ClearanceState; timeoutAt?: string | null; reason?: string | null }) {
+export default function ClearanceCard({
+  state,
+  timeoutAt,
+  reason,
+  durationFormatted,
+}: {
+  state: ClearanceState;
+  timeoutAt?: string | null;
+  reason?: string | null;
+  durationFormatted?: string | null;
+}) {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = getStyles(colors);
@@ -15,6 +25,7 @@ export default function ClearanceCard({ state, timeoutAt, reason }: { state: Cle
   const CONFIG: Record<ClearanceState, { bg: string; fg: string; label: string }> = {
     PENDING: { bg: colors.warningLight, fg: colors.warning, label: t('clearance_pending') },
     APPROVED: { bg: colors.successLight, fg: colors.success, label: t('clearance_approved') },
+    EXIT: { bg: colors.successLight, fg: colors.success, label: t('clearance_exit') },
     DENIED: { bg: colors.dangerLight, fg: colors.danger, label: t('clearance_denied') },
     TIMEOUT: { bg: colors.dangerLight, fg: colors.danger, label: t('clearance_timeout') },
   };
@@ -37,6 +48,11 @@ export default function ClearanceCard({ state, timeoutAt, reason }: { state: Cle
   return (
     <View style={[styles.card, { backgroundColor: bg }]}>
       <Text style={[styles.label, { color: fg }]}>{label}</Text>
+      {state === 'EXIT' && durationFormatted && (
+        <Text style={[styles.countdown, { color: fg }]}>
+          {t('clearance_exit_sub', { duration: durationFormatted })}
+        </Text>
+      )}
       {reason && state === 'DENIED' && (
         <Text style={[styles.countdown, { color: fg }]}>{reason}</Text>
       )}

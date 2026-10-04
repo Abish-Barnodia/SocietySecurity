@@ -1,7 +1,4 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getPublicPassVerification = exports.getAllPasses = exports.verifyPass = exports.deletePass = exports.revokePass = exports.suspendPass = exports.getMyPasses = exports.createPass = void 0;
 const prisma_1 = require("../../config/prisma");
@@ -9,7 +6,6 @@ const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
 const audit_util_1 = require("../../utils/audit.util");
 const qr_util_1 = require("../../utils/qr.util");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const createPass = async (req, res, next) => {
     try {
         const { type, visitorName, visitorPhone, purpose, validFrom, validUntil, entryPointIds, recurringRule, unitId: reqUnitId } = req.body;
@@ -34,13 +30,8 @@ const createPass = async (req, res, next) => {
         else {
             return next(new error_middleware_1.AppError('Unauthorized to create passes', 403));
         }
-        // For DELIVERY type, we optionally create an OTP
-        let otpPlaintext = null;
-        let otpHash = null;
-        if (type === 'DELIVERY') {
-            otpPlaintext = Math.floor(100000 + Math.random() * 900000).toString();
-            otpHash = await bcryptjs_1.default.hash(otpPlaintext, 10);
-        }
+        // Generate a 6-digit Entry OTP code for every pass
+        const otpPlaintext = Math.floor(100000 + Math.random() * 900000).toString();
         const updatedPass = await prisma_1.prisma.$transaction(async (tx) => {
             const pass = await tx.pass.create({
                 data: {
@@ -53,7 +44,7 @@ const createPass = async (req, res, next) => {
                     validFrom: new Date(validFrom),
                     validUntil: new Date(validUntil),
                     entryPointIds: entryPointIds || [],
-                    otpCode: otpHash,
+                    otpCode: otpPlaintext,
                     ...(recurringRule && {
                         recurringRule: {
                             create: recurringRule
@@ -297,13 +288,45 @@ const getPublicPassVerification = async (req, res, next) => {
                 pass: null,
             });
         }
+        const activeEntry = await prisma_1.prisma.entry.findFirst({
+            where: { passId: pass.id },
+            orderBy: { entryAt: 'desc' },
+            include: { entryPoint: true },
+        });
+        const isInside = activeEntry != null && activeEntry.exitAt == null && activeEntry.status === 'APPROVED';
+        const hasExited = activeEntry != null && activeEntry.exitAt != null;
+        let scanPhase = 'READY_FOR_ENTRY';
+        let scansUsed = 0;
+        let durationFormatted = null;
+        if (isInside) {
+            scanPhase = 'INSIDE_BUILDING';
+            scansUsed = 1;
+            const durationMs = Math.max(0, Date.now() - new Date(activeEntry.entryAt).getTime());
+            const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+            durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${(durationMinutes / 60).toFixed(1)}h`;
+        }
+        else if (hasExited) {
+            scanPhase = 'COMPLETED_EXPIRED';
+            scansUsed = 2;
+            const durationMs = Math.max(0, new Date(activeEntry.exitAt).getTime() - new Date(activeEntry.entryAt).getTime());
+            const durationMinutes = Math.max(1, Math.round(durationMs / 60000));
+            durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${(durationMinutes / 60).toFixed(1)}h`;
+        }
         const now = new Date();
-        const isExpired = now > pass.validUntil;
+        const isExpired = now > pass.validUntil || pass.status === 'EXPIRED' || hasExited;
         const isEarly = now < pass.validFrom;
-        const isActive = pass.status === 'ACTIVE' && !isExpired && !isEarly;
+        const isActive = (pass.status === 'ACTIVE' || isInside) && !isExpired && !isEarly;
         let statusText = 'ACTIVE';
-        let statusMessage = 'Pass is valid and clear for entry';
-        if (pass.status !== 'ACTIVE') {
+        let statusMessage = 'Pass is valid and clear for entry (1/2 scans remaining)';
+        if (hasExited || pass.status === 'EXPIRED') {
+            statusText = 'EXPIRED';
+            statusMessage = `Pass completed & expired (Visit duration: ${durationFormatted || 'Completed'})`;
+        }
+        else if (isInside) {
+            statusText = 'INSIDE';
+            statusMessage = `Visitor inside building (Stayed ${durationFormatted || '0m'}). Ready for exit scan.`;
+        }
+        else if (pass.status !== 'ACTIVE') {
             statusText = pass.status;
             statusMessage = `Pass has been ${pass.status.toLowerCase()}`;
         }
@@ -319,6 +342,19 @@ const getPublicPassVerification = async (req, res, next) => {
             status: statusText,
             isValid: isActive,
             message: statusMessage,
+            scanPhase,
+            scansUsed,
+            scansTotal: 2,
+            durationInside: isInside ? durationFormatted : null,
+            totalDuration: hasExited ? durationFormatted : null,
+            activeEntry: activeEntry
+                ? {
+                    id: activeEntry.id,
+                    entryAt: activeEntry.entryAt,
+                    exitAt: activeEntry.exitAt,
+                    gateName: activeEntry.entryPoint?.name || 'Gate',
+                }
+                : null,
             pass: {
                 id: pass.id,
                 visitorName: pass.visitorName,

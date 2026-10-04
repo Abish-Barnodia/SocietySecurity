@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acknowledgeAlertRoute = exports.claimVehicleAlert = exports.broadcastVehicleAlert = exports.getAlerts = exports.triggerDuress = exports.broadcastAlert = void 0;
+exports.notifyGuardsOverstay = exports.acknowledgeAlertRoute = exports.claimVehicleAlert = exports.broadcastVehicleAlert = exports.getAlerts = exports.triggerDuress = exports.broadcastAlert = void 0;
 const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
@@ -42,6 +42,7 @@ const server_1 = require("../../server");
 const sms_util_1 = require("../../utils/sms.util");
 const env_1 = require("../../config/env");
 const alert_util_1 = require("../../utils/alert.util");
+const residentContext_util_1 = require("../../utils/residentContext.util");
 const broadcastAlert = async (req, res, next) => {
     try {
         const { type, severity, priority: explicitPriority, title, message, targetRoles, location, photoBase64 } = req.body;
@@ -269,4 +270,40 @@ const acknowledgeAlertRoute = async (req, res, next) => {
     }
 };
 exports.acknowledgeAlertRoute = acknowledgeAlertRoute;
+const notifyGuardsOverstay = async (req, res, next) => {
+    try {
+        const { entryId, visitorName, expectedDuration, reason } = req.body;
+        const { propertyId, name: residentName, unitId } = await (0, residentContext_util_1.getResidentContext)(req.user.userId);
+        const unit = await prisma_1.prisma.unit.findUnique({
+            where: { id: unitId },
+            select: { unitNumber: true, tower: true },
+        });
+        const unitInfo = unit?.tower ? `${unit.tower} - ${unit.unitNumber}` : (unit?.unitNumber || 'Unit');
+        const title = `🚨 Overstay Notice: ${visitorName || 'Visitor'}`;
+        const body = `Resident ${residentName} (${unitInfo}) notified security that visitor ${visitorName || ''} is staying longer than pass time.${reason ? ` Reason: ${reason}` : ''}${expectedDuration ? ` Duration: ${expectedDuration}` : ''}`;
+        const { triggerAlert } = await Promise.resolve().then(() => __importStar(require('../../utils/alert.util')));
+        const alert = await triggerAlert({
+            priority: 'P2',
+            title,
+            body,
+            targetRoles: ['GUARD', 'MANAGER', 'COMMITTEE'],
+            propertyId,
+            entryId: entryId || undefined,
+        });
+        server_1.io?.to(`property:${propertyId}`).emit('alert:new', alert);
+        server_1.io?.to(`property:${propertyId}:guards`).emit('alert:new', alert);
+        server_1.io?.to(`property:${propertyId}`).emit('guard:overstay_alert', {
+            alert,
+            unitInfo,
+            visitorName,
+            residentName,
+        });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'NOTIFY_GUARD_OVERSTAY', 'Alert', alert.id);
+        return (0, response_util_1.sendSuccess)(res, 201, 'Guards notified of visitor overstay', alert);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.notifyGuardsOverstay = notifyGuardsOverstay;
 //# sourceMappingURL=alert.controller.js.map

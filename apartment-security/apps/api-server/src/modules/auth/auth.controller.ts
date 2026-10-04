@@ -343,7 +343,8 @@ export const signupEmail = async (req: Request, res: Response, next: NextFunctio
       return next(new AppError('Email already in use', 400));
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const resolvedRole = role === 'MANAGER' ? 'MANAGER' : 'RESIDENT';
+    // ponytail: Public signup is strictly RESIDENT. Manager/Admin creation is an internal admin action.
+    const resolvedRole = 'RESIDENT';
 
     const user = await prisma.user.create({
       data: {
@@ -352,19 +353,6 @@ export const signupEmail = async (req: Request, res: Response, next: NextFunctio
         role: resolvedRole,
       }
     });
-
-    if (resolvedRole === 'MANAGER') {
-      const property = await prisma.property.findFirst();
-      if (property) {
-        await prisma.manager.create({
-          data: {
-            userId: user.id,
-            propertyId: property.id,
-            name: name || 'Admin',
-          }
-        });
-      }
-    }
 
     return sendSuccess(res, 201, 'Signup successful', { id: user.id, email: user.email, role: user.role });
   } catch (error) {
@@ -395,15 +383,7 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       return next(new AppError('Invalid email or password', 401));
     }
 
-    let isValid = await bcrypt.compare(cleanPassword, user.passwordHash);
-    // Allow trailing period variation if needed for super admin
-    if (!isValid && user.role === 'SUPER_ADMIN') {
-      if (cleanPassword.endsWith('.')) {
-        isValid = await bcrypt.compare(cleanPassword.slice(0, -1), user.passwordHash);
-      } else {
-        isValid = await bcrypt.compare(`${cleanPassword}.`, user.passwordHash);
-      }
-    }
+    const isValid = await bcrypt.compare(cleanPassword, user.passwordHash);
 
     if (!isValid) {
       return next(new AppError('Invalid email or password', 401));

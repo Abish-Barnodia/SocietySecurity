@@ -36,7 +36,7 @@ export type AuthContextType = {
   userProfile: UserProfile | null;
   guardProfile: GuardProfile | null;
   isOnboarded: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, propertyId?: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutAllDevices: () => Promise<void>;
@@ -150,9 +150,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, allowedRol
   // the login screen itself) for the duration of the login request, showing
   // a blank/black screen until it resolved. LoginScreen already tracks its
   // own `loading` state for the button spinner.
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string, propertyId?: string): Promise<void> => {
     try {
-      const response = await api.post('/auth/login', { email, password });
+      const response = await api.post('/auth/login', {
+        email,
+        password,
+        ...(propertyId ? { propertyId } : {}),
+      });
       const { data } = response.data;
 
       if (!allowedRoles.includes(data.user.role)) {

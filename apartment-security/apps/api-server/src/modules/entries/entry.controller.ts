@@ -13,7 +13,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
     const { entryPointId, method, vehicleNumber, qrPayload, otpCode, notes, gatePhotoUrl } = req.body;
     let { unitId, visitorName, visitorPhone } = req.body;
 
-    if (method !== 'QR_SCAN' && (!unitId || !visitorName)) {
+    if (method !== 'QR_SCAN' && method !== 'OTP' && (!unitId || !visitorName)) {
       return next(new AppError('unitId and visitorName are required for this method', 400));
     }
 
@@ -25,21 +25,96 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
     let denialReason: string | null = null;
     let qrApproval: { pass: any; unit: any; entryPoint: any } | null = null;
 
-    if (method === 'QR_SCAN') {
-      if (!qrPayload) return next(new AppError('QR Payload required for QR scan', 400));
-      const parsedQr = verifySignedQRPayload(qrPayload);
-      const pass = parsedQr
-        ? await prisma.pass.findUnique({
-            where: { id: parsedQr.passId },
+    if (method === 'QR_SCAN' || method === 'OTP') {
+      const candidateCode = (qrPayload || otpCode || req.body.passId || '').trim();
+      if (!candidateCode) {
+        return next(new AppError('QR Payload or OTP code required', 400));
+      }
+
+      let pass: any = null;
+
+      // 1. Try cryptographic signed QR payload
+      const parsedQr = verifySignedQRPayload(candidateCode);
+      if (parsedQr?.passId) {
+        pass = await prisma.pass.findFirst({
+          where: {
+            id: parsedQr.passId,
+            unit: { propertyId: guard.propertyId },
+          },
+          include: {
+            unit: { include: { residents: { include: { user: true } } } },
+            resident: { include: { user: true } },
+          },
+        });
+      }
+
+      // 2. If not a signed QR, search by 6-digit OTP or Pass ID / Code
+      if (!pass) {
+        const cleanCode = candidateCode.replace(/^OTP:\s*/i, '').replace(/^PASS-\s*/i, '').trim();
+
+        // ponytail: check active pass strictly scoped to this property
+        pass = await prisma.pass.findFirst({
+          where: {
+            otpCode: cleanCode,
+            status: 'ACTIVE',
+            unit: { propertyId: guard.propertyId },
+          },
+          include: {
+            unit: { include: { residents: { include: { user: true } } } },
+            resident: { include: { user: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // Also check by ID / suffix if not found by OTP
+        if (!pass) {
+          pass = await prisma.pass.findFirst({
+            where: {
+              OR: [
+                { id: cleanCode },
+                { id: candidateCode },
+                { id: { endsWith: cleanCode } },
+              ],
+              status: 'ACTIVE',
+              unit: { propertyId: guard.propertyId },
+            },
             include: {
               unit: { include: { residents: { include: { user: true } } } },
               resident: { include: { user: true } },
             },
-          })
-        : null;
+            orderBy: { createdAt: 'desc' },
+          });
+        }
+
+        // Check if there is an expired/revoked/suspended pass for meaningful denial message
+        if (!pass) {
+          const matchedAny = await prisma.pass.findFirst({
+            where: {
+              OR: [
+                { otpCode: cleanCode },
+                { id: cleanCode },
+                { id: candidateCode },
+                { id: { endsWith: cleanCode } },
+              ],
+              unit: { propertyId: guard.propertyId },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (matchedAny) {
+            return sendSuccess(res, 200, 'Entry logged as DENIED', {
+              status: 'DENIED',
+              reason: `Pass is ${matchedAny.status.toLowerCase()}`,
+            });
+          }
+        }
+      }
 
       if (!pass) {
-        return sendSuccess(res, 200, 'Entry logged as DENIED', { status: 'DENIED', reason: 'Invalid or unrecognized QR code' });
+        return sendSuccess(res, 200, 'Entry logged as DENIED', {
+          status: 'DENIED',
+          reason: 'Invalid or unrecognized QR code / OTP',
+        });
       }
 
       const entryPoint = await prisma.entryPoint.findUnique({ where: { id: entryPointId } });
@@ -50,7 +125,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       visitorPhone = pass.visitorPhone;
 
       // Check if visitor is ALREADY INSIDE (Active open entry without exitAt)
-      // If so, this QR scan is the EXIT SCAN (leaving the building)!
+      // If so, this QR / OTP entry is the EXIT SCAN (leaving the building)!
       const openEntry = await prisma.entry.findFirst({
         where: {
           passId: pass.id,
@@ -73,7 +148,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
         const durationFormatted = durationMinutes < 60 ? `${durationMinutes}m` : `${durationHours}h (${durationMinutes}m)`;
 
         // 1. Mark entry as exited
-        const updatedEntry = await prisma.entry.update({
+        await prisma.entry.update({
           where: { id: openEntry.id },
           data: { exitAt },
         });
@@ -116,7 +191,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
         await triggerAlert({
           priority: 'P3',
           title: 'Visitor Left Building',
-          body: `${pass.visitorName} has left via ${entryPoint?.name || 'Gate'} (Duration: ${durationFormatted}). QR Pass completed & expired.`,
+          body: `${pass.visitorName} has left via ${entryPoint?.name || 'Gate'} (Duration: ${durationFormatted}). Pass completed & expired.`,
           targetUserIds: pass.unit.residents.map((r: any) => r.userId),
           propertyId: guard.propertyId,
           entryId: openEntry.id,
@@ -139,7 +214,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
           durationFormatted,
           durationMinutes,
           passStatus: 'EXPIRED',
-          message: `Visitor exit logged. Stay duration: ${durationFormatted}. QR Pass is now expired (2/2 scans used).`,
+          message: `Visitor exit logged. Stay duration: ${durationFormatted}. Pass is now expired (2/2 entries used).`,
         });
       }
 
@@ -149,7 +224,7 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
       });
 
       if (alreadyExited && (pass.type === 'ONE_TIME' || pass.type === 'DELIVERY')) {
-        denialReason = 'Pass has already been completed and visitor exited (QR code expired)';
+        denialReason = 'Pass has already been completed and visitor exited (Pass expired)';
       } else if (pass.status !== 'ACTIVE') {
         denialReason = `Pass is ${pass.status.toLowerCase()}`;
       } else if (now < pass.validFrom) {
@@ -170,15 +245,6 @@ export const logEntry = async (req: Request, res: Response, next: NextFunction) 
         resolvedPassId = pass.id;
         status = 'APPROVED'; // Pre-approved pass clear for entry
         qrApproval = { pass, unit: pass.unit, entryPoint };
-      }
-    } else if (method === 'OTP') {
-      if (!otpCode || !req.body.passId) return next(new AppError('OTP and Pass ID required', 400));
-      const pass = await prisma.pass.findUnique({ where: { id: req.body.passId } });
-      if (!pass || pass.status !== 'ACTIVE' || !pass.otpCode) status = 'DENIED';
-      else {
-        const isValid = await bcrypt.compare(otpCode, pass.otpCode);
-        if (!isValid) status = 'DENIED';
-        else resolvedPassId = pass.id;
       }
     } else if (method === 'MANUAL_GUARD') {
       // Manual guard entry for walk-in or delivery

@@ -13,6 +13,7 @@ import {
   Alert,
   Modal,
   Linking,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +35,7 @@ import CreatePollModal from '../../components/community/CreatePollModal';
 import MediaPreviewModal, { PreviewAsset } from '../../components/community/MediaPreviewModal';
 import MentionAutocomplete from '../../components/community/MentionAutocomplete';
 import ThemedAlertModal from '../../components/ThemedAlertModal';
+import VoiceMessagePlayer from '../../components/community/VoiceMessagePlayer';
 
 type ListItem = { kind: 'date'; label: string; key: string } | { kind: 'message'; message: ChatMessage };
 
@@ -55,12 +57,23 @@ const formatRecordingTime = (sec: number) => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
+const formatFileSize = (bytes?: number) => {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export interface DirectMessageItem {
   id: string;
   senderId: string;
-  text: string;
+  text?: string;
   timestamp: string;
   isMine: boolean;
+  mediaType?: 'IMAGE' | 'AUDIO' | 'FILE';
+  mediaUri?: string;
+  fileName?: string;
+  fileSize?: number;
+  durationSec?: number;
 }
 
 export interface HubPerson {
@@ -138,6 +151,10 @@ export default function CommunityScreen() {
   const [directChatTarget, setDirectChatTarget] = useState<HubPerson | null>(null);
   const [directChatHistory, setDirectChatHistory] = useState<Record<string, DirectMessageItem[]>>({});
   const [directChatInput, setDirectChatInput] = useState('');
+  const [directAttachmentOpen, setDirectAttachmentOpen] = useState(false);
+  const [directPreviewImage, setDirectPreviewImage] = useState<string | null>(null);
+  const directScrollRef = useRef<ScrollView>(null);
+  const directVoice = useVoiceRecorder();
 
   // Fetch Hub Data from backend
   const loadHubData = async () => {
@@ -422,7 +439,11 @@ export default function CommunityScreen() {
   const openDirectChat = (person: HubPerson) => {
     setSelectedPerson(null);
     setDirectoryModalOpen(false);
-    setDirectChatTarget(person);
+    navigation.navigate('ResidentChat', {
+      initialPartnerId: person.id,
+      initialPartnerName: person.name,
+      initialPartnerUnit: person.unitOrLocation,
+    });
   };
 
   const sendDirectMessage = () => {
@@ -441,6 +462,91 @@ export default function CommunityScreen() {
     }));
 
     setDirectChatInput('');
+  };
+
+  const sendDirectMedia = (
+    mediaType: 'IMAGE' | 'AUDIO' | 'FILE',
+    mediaUri: string,
+    fileName?: string,
+    fileSize?: number,
+    durationSec?: number
+  ) => {
+    if (!directChatTarget) return;
+    const newMsg: DirectMessageItem = {
+      id: `dm-${Date.now()}`,
+      senderId: userId || 'me',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isMine: true,
+      mediaType,
+      mediaUri,
+      fileName,
+      fileSize,
+      durationSec,
+    };
+
+    setDirectChatHistory((prev) => ({
+      ...prev,
+      [directChatTarget.id]: [...(prev[directChatTarget.id] || []), newMsg],
+    }));
+  };
+
+  const handleDirectMicPress = async () => {
+    if (directVoice.isRecording) {
+      const result = await directVoice.stopRecording();
+      if (result) {
+        sendDirectMedia('AUDIO', result.uri, undefined, undefined, result.durationSec);
+      }
+    } else {
+      try {
+        await directVoice.startRecording();
+      } catch {
+        Alert.alert('Permission required', 'Microphone permission is required to record a voice message.');
+      }
+    }
+  };
+
+  const handleDirectAttachment = async (action: 'camera' | 'gallery' | 'document') => {
+    setDirectAttachmentOpen(false);
+    try {
+      if (action === 'camera') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission required', 'Camera permission is required to take photos.');
+          return;
+        }
+        const res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ['images'],
+          quality: 0.8,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          sendDirectMedia('IMAGE', res.assets[0].uri);
+        }
+      } else if (action === 'gallery') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permission required', 'Media library permission is required to select photos.');
+          return;
+        }
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          quality: 0.8,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          sendDirectMedia('IMAGE', res.assets[0].uri);
+        }
+      } else if (action === 'document') {
+        const res = await DocumentPicker.getDocumentAsync({
+          type: '*/*',
+          copyToCacheDirectory: true,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          const asset = res.assets[0];
+          sendDirectMedia('FILE', asset.uri, asset.name, asset.size ?? undefined);
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Attachment Error', e?.message || 'Unable to attach selected item.');
+    }
   };
 
   const handleRaiseAlarm = () => {
@@ -851,17 +957,26 @@ export default function CommunityScreen() {
         visible={!!directChatTarget}
         animationType="slide"
         presentationStyle="fullScreen"
-        onRequestClose={() => setDirectChatTarget(null)}
+        onRequestClose={() => {
+          if (directVoice.isRecording) directVoice.cancelRecording();
+          setDirectChatTarget(null);
+        }}
       >
-        <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: isDark ? '#1e293b' : '#ffffff' }}>
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: isDark ? '#0f172a' : '#ffffff' }}>
           <KeyboardAvoidingView
-            style={[styles.keyboardAvoid, { backgroundColor: isDark ? '#0f172a' : '#f5f3ef' }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
           >
             {/* Header */}
             <View style={styles.chatModalHeader}>
-              <TouchableOpacity onPress={() => setDirectChatTarget(null)} style={{ padding: 4 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (directVoice.isRecording) directVoice.cancelRecording();
+                  setDirectChatTarget(null);
+                }}
+                style={{ padding: 4 }}
+              >
                 <Ionicons name="chevron-back" size={26} color={colors.text} />
               </TouchableOpacity>
 
@@ -887,8 +1002,12 @@ export default function CommunityScreen() {
 
             {/* Direct Messages List */}
             <ScrollView
+              ref={directScrollRef}
+              style={{ flex: 1 }}
               contentContainerStyle={{ padding: 16, flexGrow: 1, justifyContent: 'flex-end' }}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => directScrollRef.current?.scrollToEnd({ animated: true })}
             >
               <View style={styles.directChatNoticeBox}>
                 <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
@@ -905,9 +1024,65 @@ export default function CommunityScreen() {
                     msg.isMine ? styles.directMessageMine : styles.directMessageOther,
                   ]}
                 >
-                  <Text style={[styles.directMessageText, msg.isMine && { color: '#fff' }]}>
-                    {msg.text}
-                  </Text>
+                  {/* Photo Attachment */}
+                  {msg.mediaType === 'IMAGE' && !!msg.mediaUri && (
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => setDirectPreviewImage(msg.mediaUri || null)}
+                      style={{ marginBottom: 6 }}
+                    >
+                      <Image
+                        source={{ uri: msg.mediaUri }}
+                        style={styles.directMediaThumb}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Voice Note Audio */}
+                  {msg.mediaType === 'AUDIO' && !!msg.mediaUri && (
+                    <View style={{ marginVertical: 4 }}>
+                      <VoiceMessagePlayer
+                        uri={msg.mediaUri}
+                        fallbackDurationSec={msg.durationSec}
+                        tint={msg.isMine ? '#ffffff' : colors.primary}
+                      />
+                    </View>
+                  )}
+
+                  {/* File / Document Attachment */}
+                  {msg.mediaType === 'FILE' && !!msg.mediaUri && (
+                    <TouchableOpacity
+                      style={[styles.directFileCard, msg.isMine && styles.directFileCardMine]}
+                      activeOpacity={0.8}
+                      onPress={() => msg.mediaUri && Linking.openURL(msg.mediaUri)}
+                    >
+                      <Ionicons
+                        name="document-text"
+                        size={24}
+                        color={msg.isMine ? '#ffffff' : colors.primary}
+                        style={{ marginRight: 8 }}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.directFileName, msg.isMine && { color: '#ffffff' }]} numberOfLines={1}>
+                          {msg.fileName || 'Attachment Document'}
+                        </Text>
+                        {!!msg.fileSize && (
+                          <Text style={[styles.directFileSize, msg.isMine && { color: 'rgba(255,255,255,0.8)' }]}>
+                            {formatFileSize(msg.fileSize)}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Text Message */}
+                  {!!msg.text && (
+                    <Text style={[styles.directMessageText, msg.isMine && { color: '#fff' }]}>
+                      {msg.text}
+                    </Text>
+                  )}
+
                   <Text style={[styles.directMessageTime, msg.isMine && { color: 'rgba(255,255,255,0.7)' }]}>
                     {msg.timestamp}
                   </Text>
@@ -916,23 +1091,54 @@ export default function CommunityScreen() {
             </ScrollView>
 
             {/* Composer */}
-            <View style={styles.composerRow}>
-              <TextInput
-                style={styles.textInput}
-                placeholder={`Message ${directChatTarget?.name}...`}
-                placeholderTextColor={colors.textMuted}
-                value={directChatInput}
-                onChangeText={setDirectChatInput}
-                multiline
-              />
-              <TouchableOpacity
-                onPress={sendDirectMessage}
-                style={[styles.sendButton, !directChatInput.trim() && { opacity: 0.5 }]}
-                disabled={!directChatInput.trim()}
-              >
-                <Ionicons name="send" size={18} color="#fff" />
-              </TouchableOpacity>
-            </View>
+            {directVoice.isRecording ? (
+              <View style={styles.composerRow}>
+                <TouchableOpacity onPress={directVoice.cancelRecording} style={styles.iconButton}>
+                  <Ionicons name="trash" size={22} color={colors.danger} />
+                </TouchableOpacity>
+                <View style={styles.recordingIndicator}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>Recording… {formatRecordingTime(directVoice.elapsedSec)}</Text>
+                </View>
+                <TouchableOpacity onPress={handleDirectMicPress} style={styles.sendButton}>
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.composerRow}>
+                <TouchableOpacity
+                  onPress={() => setDirectAttachmentOpen(true)}
+                  style={styles.iconButton}
+                >
+                  <Ionicons name="add-circle" size={28} color={colors.primary} />
+                </TouchableOpacity>
+
+                <TextInput
+                  style={styles.textInput}
+                  placeholder={`Message ${directChatTarget?.name}...`}
+                  placeholderTextColor={colors.textMuted}
+                  value={directChatInput}
+                  onChangeText={setDirectChatInput}
+                  multiline
+                />
+
+                {directChatInput.trim() ? (
+                  <TouchableOpacity
+                    onPress={sendDirectMessage}
+                    style={styles.sendButton}
+                  >
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleDirectMicPress}
+                    style={styles.sendButton}
+                  >
+                    <Ionicons name="mic" size={20} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
@@ -1423,6 +1629,52 @@ export default function CommunityScreen() {
               <Text style={styles.modalPrimaryBtnText}>Submit Review</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Direct 1-on-1 Attachment Sheet */}
+      <AttachmentSheet
+        visible={directAttachmentOpen}
+        onClose={() => setDirectAttachmentOpen(false)}
+        onSelect={(action) => {
+          if (action === 'poll') {
+            Alert.alert('1-on-1 Chat', 'Polls can be created in the Community Live Chat.');
+          } else {
+            handleDirectAttachment(action);
+          }
+        }}
+      />
+
+      {/* Direct 1-on-1 Fullscreen Photo Preview Modal */}
+      <Modal
+        visible={!!directPreviewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDirectPreviewImage(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', justifyContent: 'center', alignItems: 'center' }}>
+          <SafeAreaView style={{ position: 'absolute', top: 16, right: 16, zIndex: 10 }}>
+            <TouchableOpacity
+              onPress={() => setDirectPreviewImage(null)}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons name="close" size={26} color="#ffffff" />
+            </TouchableOpacity>
+          </SafeAreaView>
+          {directPreviewImage && (
+            <Image
+              source={{ uri: directPreviewImage }}
+              style={{ width: '92%', height: '75%', borderRadius: 12 }}
+              resizeMode="contain"
+            />
+          )}
         </View>
       </Modal>
 
@@ -2228,6 +2480,34 @@ const getStyles = (colors: any, isDark: boolean) =>
       color: colors.textMuted,
       alignSelf: 'flex-end',
       marginTop: 4,
+    },
+    directMediaThumb: {
+      width: 200,
+      height: 180,
+      borderRadius: 12,
+    },
+    directFileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: 'rgba(0,0,0,0.06)',
+      marginBottom: 4,
+      minWidth: 180,
+      maxWidth: 220,
+    },
+    directFileCardMine: {
+      backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    directFileName: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    directFileSize: {
+      fontSize: 10,
+      color: colors.textMuted,
+      marginTop: 2,
     },
 
     // GENERIC MODAL STYLES

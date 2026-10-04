@@ -41,6 +41,7 @@ export interface Society {
   createdAt: string;
   updatedAt: string;
   managers?: Manager[];
+  demoRequests?: DemoRequest[];
   _count?: {
     units: number;
     guards: number;
@@ -61,6 +62,8 @@ export interface DemoRequest {
   city: string | null;
   numberOfUnits: number | null;
   message: string | null;
+  documentUrl?: string | null;
+  documentName?: string | null;
   status: DemoRequestStatus;
   notes: string | null;
   createdPropertyId: string | null;

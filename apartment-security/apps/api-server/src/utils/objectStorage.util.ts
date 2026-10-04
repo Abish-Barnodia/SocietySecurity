@@ -7,14 +7,19 @@ import os from 'os';
 
 const getLocalIp = () => {
   const interfaces = os.networkInterfaces();
+  const candidates: string[] = [];
   for (const name of Object.keys(interfaces)) {
+    const isVirtual = /virtual|vbox|vmware|wsl|hyper-v|loopback|pseudo/i.test(name);
     for (const iface of interfaces[name] || []) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        if (!isVirtual && !iface.address.startsWith('192.168.56.')) {
+          return iface.address;
+        }
+        candidates.push(iface.address);
       }
     }
   }
-  return 'localhost';
+  return candidates[0] || 'localhost';
 };
 
 // Uses Supabase's Storage REST API directly (already have axios + a Supabase
@@ -35,20 +40,21 @@ export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: s
     return 'https://societysecurity.onrender.com';
   };
 
+  // Sanitize path against directory traversal
+  const sanitizedPath = path.normalize(filePath).replace(/^(\.\.[\/\\])+/, '').replace(/\\/g, '/');
+
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     const uploadsDir = path.join(process.cwd(), 'uploads');
-    const fullPath = path.join(uploadsDir, filePath);
+    const fullPath = path.join(uploadsDir, sanitizedPath);
     const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(fullPath, buffer);
-    return `${getHostUrl()}/uploads/${filePath}`;
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(fullPath, buffer);
+    return `${getHostUrl()}/uploads/${sanitizedPath}`;
   }
 
   try {
     await axios.post(
-      `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_STORAGE_BUCKET}/${filePath}`,
+      `${env.SUPABASE_URL}/storage/v1/object/${env.SUPABASE_STORAGE_BUCKET}/${sanitizedPath}`,
       buffer,
       {
         headers: {
@@ -60,16 +66,14 @@ export const uploadBuffer = async (buffer: Buffer, filePath: string, mimeType: s
       }
     );
 
-    return `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_STORAGE_BUCKET}/${filePath}`;
+    return `${env.SUPABASE_URL}/storage/v1/object/public/${env.SUPABASE_STORAGE_BUCKET}/${sanitizedPath}`;
   } catch (err) {
     console.warn('Supabase storage upload failed, falling back to local file storage:', err);
     const uploadsDir = path.join(process.cwd(), 'uploads');
-    const fullPath = path.join(uploadsDir, filePath);
+    const fullPath = path.join(uploadsDir, sanitizedPath);
     const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(fullPath, buffer);
-    return `${getHostUrl()}/uploads/${filePath}`;
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(fullPath, buffer);
+    return `${getHostUrl()}/uploads/${sanitizedPath}`;
   }
 };

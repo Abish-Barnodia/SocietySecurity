@@ -240,14 +240,13 @@ export const sendDemoBookingConfirmationToUser = async (data: DemoNotificationDa
 export const sendDemoRequestNotificationToSuperAdmin = async (data: DemoNotificationData) => {
   const superAdminEmail =
     process.env.SUPER_ADMIN_EMAIL ||
-    process.env.SMTP_USER ||
     'abishbarnodia2018@gmail.com';
 
   const portalUrl = process.env.CLIENT_MANAGER_URL
     ? `${process.env.CLIENT_MANAGER_URL}/super-admin/demo-requests`
-    : 'http://localhost:3002/super-admin/demo-requests';
+    : 'https://society-security-phi.vercel.app/dashboard';
 
-  const subject = `🔔 New Demo Registration: ${data.societyName} - Action Required: Approve Request`;
+  const subject = `🔔 New Demo Registration: ${data.societyName} - Action Required: Go and Approve Request`;
 
   const text = `
 New Society Demo / Trial Registration:
@@ -261,20 +260,20 @@ New Society Demo / Trial Registration:
 ${data.documentUrl ? `- Verification Document: ${data.documentUrl}` : ''}
 ${data.message ? `- Note: ${data.message}` : ''}
 
-Please log in to Super Admin portal and approve this society request within 24 hours:
+Someone has requested a demo. Please log in to Super Admin portal and approve this request:
 ${portalUrl}
   `.trim();
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
       <div style="background: linear-gradient(135deg, #00A67C, #00C896); padding: 20px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
-        <h2 style="margin: 0; font-size: 22px;">New Society Registration</h2>
-        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.9;">Action Required: Go and Approve Request</p>
+        <h2 style="margin: 0; font-size: 22px;">New Demo Request Registered 🔔</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Action Required: Go and Approve Request</p>
       </div>
 
       <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
         <p style="margin-top: 0; font-size: 15px; color: #334155;">
-          <strong>${data.contactName}</strong> has registered <strong>${data.societyName}</strong> for a demo trial.
+          <strong>${data.contactName}</strong> has submitted a demo request for <strong>${data.societyName}</strong>. Please review and approve access.
         </p>
 
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 15px;">
@@ -600,14 +599,15 @@ export const sendManagerCredentialsEmail = async (opts: {
   portalUrl?: string;
 }) => {
   const managerName = opts.managerName || 'Manager';
-  const portalUrl = opts.portalUrl || (process.env.CLIENT_MANAGER_URL ? `${process.env.CLIENT_MANAGER_URL}/login?slug=${opts.slug}` : `http://localhost:3000/login?slug=${opts.slug}`);
-  const subject = `🔐 Welcome to Society Security: Manager Credentials for ${opts.societyName}`;
-  const text = `Hello ${managerName},\n\nYour manager account for ${opts.societyName} has been activated!\n\nPortal URL: ${portalUrl}\nSociety Slug: ${opts.slug}\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword || 'Configured during setup'}\n\nPlease sign in to configure your security staff, gates, and resident directory.\n\nBest regards,\nSociety Security Team`;
+  const defaultManagerBase = process.env.CLIENT_MANAGER_URL || 'https://society-security-phi.vercel.app';
+  const portalUrl = opts.portalUrl || (opts.slug ? `${defaultManagerBase}/login?slug=${opts.slug}` : `${defaultManagerBase}/login`);
+  const subject = `🎉 Your Demo Request is Approved! Manager Credentials for ${opts.societyName}`;
+  const text = `Hello ${managerName},\n\nGreat news! Your demo request and 1-month trial for ${opts.societyName} has been approved by the Super Admin!\n\nYour manager account is now active.\n\nPortal Link: ${portalUrl}\nSociety Slug: ${opts.slug}\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword || 'Configured during setup'}\n\nPlease sign in to configure your security staff, gates, and resident directory.\n\nBest regards,\nSociety Security Team`;
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
-      <div style="background: linear-gradient(135deg, #0284C7, #0369A1); padding: 22px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
-        <h2 style="margin: 0; font-size: 22px; font-weight: 700;">Welcome to Society Security! 🏢</h2>
+      <div style="background: linear-gradient(135deg, #00A67C, #00C896); padding: 22px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 22px; font-weight: 700;">Demo Request Approved! 🎉</h2>
         <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Manager Portal Account Provisioned</p>
       </div>
 
@@ -616,7 +616,7 @@ export const sendManagerCredentialsEmail = async (opts: {
           Hello <strong>${managerName}</strong>,
         </p>
         <p style="font-size: 14px; color: #475569; line-height: 22px;">
-          Your society <strong>${opts.societyName}</strong> has been successfully approved and activated on the <strong>Society Security</strong> platform.
+          Great news! Your demo request for <strong>${opts.societyName}</strong> has been approved by the Super Admin, and your society account is now active and ready.
         </p>
 
         <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 18px; margin: 20px 0;">

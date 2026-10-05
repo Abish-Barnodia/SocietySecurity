@@ -111,27 +111,18 @@ export const triggerDuress = async (req: Request, res: Response, next: NextFunct
 
 export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Caller's propertyId — already resolved by auth middleware — scopes alerts
-    // to prevent cross-tenant data exposure.
-    const propertyId = req.user!.propertyId;
+    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+    const propertyId = req.user?.propertyId;
 
-    if (!propertyId) return next(new AppError('No property context found', 403));
+    if (!propertyId && !isSuperAdmin) {
+      return sendSuccess(res, 200, 'Alerts fetched', []);
+    }
 
-    // Managers/committee run the property's Alerts & Escalation dashboard —
-    // they need oversight of everything happening on the property (a
-    // resident's own broadcast, a guard's vehicle alert), not just alerts
-    // some triggerAlert() call happened to target at their role. Guards and
-    // residents keep the narrower "alerts addressed to me" feed.
-    const isOversightRole = req.user!.role === 'MANAGER' || req.user!.role === 'COMMITTEE';
+    const isOversightRole = isSuperAdmin || req.user?.role === 'MANAGER' || req.user?.role === 'COMMITTEE';
 
     const alerts = await prisma.alert.findMany({
       where: {
-        propertyId,
-        // Role-wide broadcasts (targetRoles) and alerts aimed at this specific
-        // user (targetUserIds — e.g. a visitor-approval request for one
-        // resident) are both valid ways an alert can be "for" this caller;
-        // matching only targetRoles meant any targetUserIds-only alert
-        // (walk-in requests, visitor QR approvals) was never fetchable here.
+        ...(propertyId ? { propertyId } : {}),
         ...(isOversightRole ? {} : {
           OR: [
             { targetRoles: { has: req.user!.role as any } },
@@ -140,7 +131,7 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
         }),
       },
       orderBy: { createdAt: 'desc' },
-      take: 50
+      take: 50,
     });
 
     return sendSuccess(res, 200, 'Alerts fetched', alerts);

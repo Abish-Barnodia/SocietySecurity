@@ -13,6 +13,7 @@ const router = (0, express_1.Router)();
 exports.authRouter = router;
 router.get('/societies', auth_controller_1.getPublicSocieties);
 router.get('/approval-status', auth_controller_1.checkApprovalStatus);
+router.post('/resident-register', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.residentRegisterSchema), auth_controller_1.registerResidentPublic);
 router.post('/signup', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.signupEmailSchema), auth_controller_1.signupEmail);
 router.post('/login', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.loginEmailSchema), auth_controller_1.loginEmail);
 router.post('/forgot-password', rateLimiter_middleware_1.authRateLimiter, (0, validate_middleware_1.validate)(auth_schema_1.forgotPasswordSchema), auth_controller_1.forgotPassword);

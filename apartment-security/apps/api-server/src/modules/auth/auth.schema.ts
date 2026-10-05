@@ -98,3 +98,25 @@ export const resetPasswordSchema = z.object({
     password: passwordComplexitySchema,
   })
 });
+
+export const residentRegisterSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email format'),
+    password: passwordComplexitySchema,
+    name: z.string().min(1, 'Full name is required'),
+    phone: z.string().optional().nullable(),
+    tower: z.string().min(1, 'Building / Tower is required'),
+    flatNumber: z.string().min(1, 'Flat / Unit number is required'),
+    propertyId: z.string().optional().nullable(),
+    societyName: z.string().optional().nullable(),
+    city: z.string().optional().nullable(),
+    country: z.string().optional().nullable(),
+    type: z.enum(['Owner', 'Tenant']).optional().nullable(),
+    tenantSubtype: z.string().optional().nullable(),
+    occupancyStatus: z.string().optional().nullable(),
+    documentUrl: z.string().optional().nullable(),
+    documentName: z.string().optional().nullable(),
+    vehicleNumber: z.string().optional().nullable(),
+  })
+});
+

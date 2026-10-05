@@ -61,19 +61,19 @@ export default function ApprovalPendingScreen({
       'Are you sure you want to sign out or switch account?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: () => {
+        { text: 'Sign Out', style: 'destructive', onPress: async () => {
+          await logout().catch(() => {});
           if (onGoToLogin) onGoToLogin();
           else if (onSwitchAccount) onSwitchAccount();
-          else logout();
         }},
       ]
     );
   };
 
-  const handleGoToLogin = () => {
+  const handleGoToLogin = async () => {
+    await logout().catch(() => {});
     if (onGoToLogin) onGoToLogin();
     else if (onSwitchAccount) onSwitchAccount();
-    else logout();
   };
 
   return (

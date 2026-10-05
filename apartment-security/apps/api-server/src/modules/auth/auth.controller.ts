@@ -10,7 +10,7 @@ import { auditLog } from '../../utils/audit.util';
 import { logger } from '../../utils/logger.util';
 import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_MS } from '../../utils/managerPortalLock.util';
 import { sendSupabaseRecoveryEmail, verifySupabaseRecoveryCode, setSupabaseUserPassword } from '../../utils/supabaseAuth.util';
-import { sendPasswordResetEmail } from '../../utils/email.service';
+import { sendPasswordResetEmail, sendResidentRegistrationEmailToManager } from '../../utils/email.service';
 
 export const getPublicSocieties = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -656,3 +656,204 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+export const registerResidentPublic = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      email,
+      password,
+      name,
+      phone,
+      tower,
+      flatNumber,
+      propertyId,
+      societyName,
+      city,
+      country,
+      type,
+      tenantSubtype,
+      occupancyStatus,
+      documentUrl,
+      documentName,
+      vehicleNumber,
+    } = req.body;
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+
+    // 1. Check if user already exists
+    let user = await prisma.user.findFirst({
+      where: { email: { equals: cleanEmail, mode: 'insensitive' } },
+      include: {
+        resident: {
+          include: { unit: { include: { property: true } } },
+        },
+      },
+    });
+
+    if (user?.resident) {
+      if (user.resident.status === 'PENDING') {
+        return sendSuccess(res, 200, 'Your registration is already submitted and pending approval', {
+          id: user.resident.id,
+          userId: user.id,
+          email: user.email,
+          name: user.resident.name,
+          flat: user.resident.unit?.unitNumber || flatNumber,
+          building: user.resident.unit?.tower || tower,
+          society: user.resident.unit?.property?.name || societyName,
+          status: 'PENDING',
+          submittedAt: user.resident.createdAt,
+        });
+      }
+      if (user.resident.status === 'APPROVED') {
+        return next(new AppError('An account with this email is already registered and approved. Please sign in.', 400));
+      }
+    }
+
+    if (!user) {
+      const passwordHash = await bcrypt.hash(cleanPassword, 10);
+      user = await prisma.user.create({
+        data: {
+          email: cleanEmail,
+          passwordHash,
+          phone: phone ? String(phone).trim() : null,
+          role: 'RESIDENT',
+        },
+        include: {
+          resident: {
+            include: { unit: { include: { property: true } } },
+          },
+        },
+      });
+    }
+
+    // 2. Resolve Society / Property
+    let property = null;
+    if (propertyId) {
+      property = await prisma.property.findUnique({ where: { id: propertyId } });
+    }
+    if (!property && societyName) {
+      property = await prisma.property.findFirst({
+        where: { name: { contains: societyName, mode: 'insensitive' } },
+      });
+    }
+    if (!property) {
+      property = await prisma.property.findFirst();
+    }
+    if (!property) {
+      property = await prisma.property.create({
+        data: {
+          name: societyName || 'Aban Humming Bees',
+          address: 'Address',
+          city: city || 'Bengaluru',
+          pincode: '560001',
+          totalUnits: 100,
+        },
+      });
+    }
+
+    // 3. Resolve Unit
+    const formattedTower = (tower || 'Block A').trim();
+    const formattedFlat = String(flatNumber || '101').trim();
+
+    let unit = await prisma.unit.findUnique({
+      where: { propertyId_unitNumber: { propertyId: property.id, unitNumber: formattedFlat } },
+    });
+
+    if (!unit) {
+      unit = await prisma.unit.create({
+        data: {
+          unitNumber: formattedFlat,
+          tower: formattedTower,
+          floor: 1,
+          propertyId: property.id,
+          isOccupied: true,
+        },
+      });
+    } else if (unit.tower !== formattedTower && formattedTower) {
+      await prisma.unit.update({
+        where: { id: unit.id },
+        data: { tower: formattedTower },
+      });
+    }
+
+    // 4. Create Resident Profile
+    const existingUnitResidents = await prisma.resident.count({ where: { unitId: unit.id } });
+    const resident = await prisma.resident.create({
+      data: {
+        userId: user.id,
+        unitId: unit.id,
+        name: name.trim(),
+        residentType: type || 'Owner',
+        relationship: tenantSubtype || 'Primary',
+        status: 'PENDING',
+        occupancyStatus: occupancyStatus || 'Currently residing',
+        documentUrl: documentUrl || null,
+        documentName: documentName || null,
+        isPrimary: existingUnitResidents === 0,
+      },
+      include: { unit: { include: { property: true } } },
+    });
+
+    // 5. Create Vehicle if given
+    if (vehicleNumber && String(vehicleNumber).trim()) {
+      await prisma.vehicle.create({
+        data: {
+          unitId: unit.id,
+          registrationNo: String(vehicleNumber).trim().toUpperCase(),
+          isResident: true,
+        },
+      }).catch((vErr) => {
+        logger.warn('Vehicle creation during public registration failed:', vErr);
+      });
+    }
+
+    if (!unit.isOccupied) {
+      await prisma.unit.update({ where: { id: unit.id }, data: { isOccupied: true } }).catch(() => {});
+    }
+
+    await auditLog(user.id, 'PUBLIC_REGISTER_RESIDENT', 'Resident', resident.id);
+
+    // 6. Notify Society Managers by Email
+    const managers = await prisma.manager.findMany({
+      where: { propertyId: property.id },
+      include: { user: true },
+    });
+    const managerEmails = managers
+      .map((m) => m.user?.email)
+      .filter((e): e is string => !!e);
+    const targetManagerEmail = managerEmails.length > 0 ? managerEmails.join(', ') : null;
+
+    sendResidentRegistrationEmailToManager({
+      managerEmail: targetManagerEmail,
+      societyName: property.name,
+      residentName: name.trim(),
+      residentEmail: user.email,
+      residentPhone: user.phone,
+      unitNumber: formattedFlat,
+      tower: formattedTower,
+      residentType: type || 'Owner',
+      tenantSubtype: tenantSubtype || null,
+      occupancyStatus: occupancyStatus || 'Currently residing',
+      documentUrl: documentUrl || null,
+      documentName: documentName || null,
+    }).catch((err) => {
+      logger.warn('Failed to send manager alert email:', err);
+    });
+
+    return sendSuccess(res, 201, 'Registration request submitted for approval', {
+      id: resident.id,
+      userId: user.id,
+      email: user.email,
+      name: resident.name,
+      flat: formattedFlat,
+      building: formattedTower,
+      society: property.name,
+      status: 'PENDING',
+      submittedAt: resident.createdAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

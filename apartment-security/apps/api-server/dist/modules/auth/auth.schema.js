@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.updateManagerProfileSchema = exports.emailSignupSchema = exports.passwordComplexitySchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
+exports.residentRegisterSchema = exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.updateManagerProfileSchema = exports.emailSignupSchema = exports.passwordComplexitySchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
 const zod_1 = require("zod");
 exports.requestOtpSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -85,6 +85,26 @@ exports.resetPasswordSchema = zod_1.z.object({
         email: zod_1.z.string().email('Invalid email format'),
         code: zod_1.z.string().length(6, 'OTP must be 6 characters'),
         password: exports.passwordComplexitySchema,
+    })
+});
+exports.residentRegisterSchema = zod_1.z.object({
+    body: zod_1.z.object({
+        email: zod_1.z.string().email('Invalid email format'),
+        password: exports.passwordComplexitySchema,
+        name: zod_1.z.string().min(1, 'Full name is required'),
+        phone: zod_1.z.string().optional().nullable(),
+        tower: zod_1.z.string().min(1, 'Building / Tower is required'),
+        flatNumber: zod_1.z.string().min(1, 'Flat / Unit number is required'),
+        propertyId: zod_1.z.string().optional().nullable(),
+        societyName: zod_1.z.string().optional().nullable(),
+        city: zod_1.z.string().optional().nullable(),
+        country: zod_1.z.string().optional().nullable(),
+        type: zod_1.z.enum(['Owner', 'Tenant']).optional().nullable(),
+        tenantSubtype: zod_1.z.string().optional().nullable(),
+        occupancyStatus: zod_1.z.string().optional().nullable(),
+        documentUrl: zod_1.z.string().optional().nullable(),
+        documentName: zod_1.z.string().optional().nullable(),
+        vehicleNumber: zod_1.z.string().optional().nullable(),
     })
 });
 //# sourceMappingURL=auth.schema.js.map

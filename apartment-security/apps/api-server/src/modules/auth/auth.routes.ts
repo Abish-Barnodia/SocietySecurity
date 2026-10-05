@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences, updateMyManagerProfile, getPublicSocieties, checkApprovalStatus } from './auth.controller';
-import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema, updateManagerProfileSchema } from './auth.schema';
+import { requestOtp, verifyOtp, refreshToken, logout, logoutAllDevices, registerFcmToken, getMe, signupEmail, loginEmail, forgotPassword, resetPassword, updateManagerAlertPreferences, updateMyManagerProfile, getPublicSocieties, checkApprovalStatus, registerResidentPublic } from './auth.controller';
+import { requestOtpSchema, verifyOtpSchema, refreshTokenSchema, registerFcmTokenSchema, signupEmailSchema, loginEmailSchema, forgotPasswordSchema, resetPasswordSchema, updateManagerProfileSchema, residentRegisterSchema } from './auth.schema';
 import { alertPreferencesSchema } from '../residents/resident.schema';
 import { validate } from '../../middlewares/validate.middleware';
 import { authenticate } from '../../middlewares/auth.middleware';
@@ -11,6 +11,7 @@ const router = Router();
 
 router.get('/societies', getPublicSocieties);
 router.get('/approval-status', checkApprovalStatus);
+router.post('/resident-register', authRateLimiter, validate(residentRegisterSchema), registerResidentPublic);
 router.post('/signup', authRateLimiter, validate(signupEmailSchema), signupEmail);
 router.post('/login', authRateLimiter, validate(loginEmailSchema), loginEmail);
 router.post('/forgot-password', authRateLimiter, validate(forgotPasswordSchema), forgotPassword);

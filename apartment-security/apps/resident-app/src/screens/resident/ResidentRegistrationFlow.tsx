@@ -270,22 +270,7 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
 
     setSubmitting(true);
     try {
-      // 1. If not authenticated, sign up or login
-      if (!isAuthenticated) {
-        const cleanEmail = email.trim();
-        try {
-          await signup(cleanEmail, password);
-        } catch (err: any) {
-          // If already registered, attempt login
-          if (err?.response?.status === 400 || err?.message?.includes('already exists')) {
-            await login(cleanEmail, password);
-          } else {
-            throw err;
-          }
-        }
-      }
-
-      // 2. Ensure document is uploaded to server if still local URI
+      // 1. Ensure document is uploaded to server if still local URI
       let finalDocUrl = attachedDoc?.uri;
       if (attachedDoc && attachedDoc.uri && attachedDoc.uri.startsWith('file://')) {
         try {
@@ -306,38 +291,60 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
         }
       }
 
-      // 3. Submit resident onboarding request
+      // 2. Submit resident registration
       const formattedTower = selectedBuilding.replace(/^Block\s*/i, '');
-      const response = await api.post('/residents/me/onboard', {
-        name: fullName.trim(),
-        tower: formattedTower || selectedBuilding,
-        flatNumber: selectedFlat,
-        propertyId: selectedPropertyId || undefined,
-        societyName: selectedSociety,
-        city: selectedCity,
-        country: selectedCountry,
-        type: residentRole,
-        tenantSubtype: residentRole === 'Tenant' ? tenantSubtype : 'Primary',
-        occupancyStatus,
-        documentName: attachedDoc?.name || undefined,
-        documentUrl: finalDocUrl || undefined,
-        vehicleNumber: vehicleNumber.trim() || undefined,
-      });
-
-      const resident = response.data?.data;
       const cleanEmail = email.trim();
+
+      let resData: any = null;
+
+      if (!isAuthenticated) {
+        const response = await api.post('/auth/resident-register', {
+          email: cleanEmail,
+          password,
+          name: fullName.trim(),
+          phone: phone.trim() || undefined,
+          tower: formattedTower || selectedBuilding,
+          flatNumber: selectedFlat,
+          propertyId: selectedPropertyId || undefined,
+          societyName: selectedSociety,
+          city: selectedCity,
+          country: selectedCountry,
+          type: residentRole,
+          tenantSubtype: residentRole === 'Tenant' ? tenantSubtype : 'Primary',
+          occupancyStatus,
+          documentName: attachedDoc?.name || undefined,
+          documentUrl: finalDocUrl || undefined,
+          vehicleNumber: vehicleNumber.trim() || undefined,
+        });
+        resData = response.data?.data;
+      } else {
+        const response = await api.post('/residents/me/onboard', {
+          name: fullName.trim(),
+          tower: formattedTower || selectedBuilding,
+          flatNumber: selectedFlat,
+          propertyId: selectedPropertyId || undefined,
+          societyName: selectedSociety,
+          city: selectedCity,
+          country: selectedCountry,
+          type: residentRole,
+          tenantSubtype: residentRole === 'Tenant' ? tenantSubtype : 'Primary',
+          occupancyStatus,
+          documentName: attachedDoc?.name || undefined,
+          documentUrl: finalDocUrl || undefined,
+          vehicleNumber: vehicleNumber.trim() || undefined,
+        });
+        resData = response.data?.data;
+      }
+
       const payload = {
-        email: cleanEmail,
+        email: cleanEmail || resData?.email,
         flat: selectedFlat,
         building: selectedBuilding,
         society: selectedSociety,
-        submittedAt: new Date().toISOString(),
+        submittedAt: resData?.submittedAt || new Date().toISOString(),
       };
 
       setSubmittedData(payload);
-
-      // Clear session so pending resident is not kept in active auth state
-      await logout();
 
       if (onCompleteRegistration) {
         onCompleteRegistration(payload);

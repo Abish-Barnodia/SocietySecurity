@@ -962,12 +962,10 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
                 <Text style={styles.quickActionBadgeText}>{unreadDmCount > 99 ? '99+' : unreadDmCount}</Text>
               </View>
             )}
-            <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#0284c725' : '#e0f2fe' }]}>
-              <Ionicons name="chatbubbles" size={24} color={colors.primary} />
+            <View style={styles.quickActionIconBox}>
+              <Ionicons name="chatbubbles-outline" size={24} color={colors.text} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.primary, fontWeight: '700' }]} numberOfLines={1}>
-              Chat
-            </Text>
+            <Text style={styles.quickActionLabel} numberOfLines={1}>Chat</Text>
           </TouchableOpacity>
 
           {/* 6. Domestic Workers */}

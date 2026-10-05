@@ -358,8 +358,7 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
       select: { name: true, address: true },
     });
 
-    // Only units that actually belong to this manager's property — a
-    // tampered unitId can't be used to raise a bill on another property.
+    // Only units that actually belong to this manager's property
     const units = await prisma.unit.findMany({
       where: { id: { in: unitIds }, propertyId: manager.propertyId },
       select: {
@@ -367,13 +366,17 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
         unitNumber: true,
         tower: true,
         residents: {
-          where: { isPrimary: true },
           select: {
             id: true,
             name: true,
-            user: { select: { email: true } },
+            isPrimary: true,
+            status: true,
+            user: { select: { email: true, phone: true } },
           },
-          take: 1,
+          orderBy: [
+            { isPrimary: 'desc' },
+            { createdAt: 'asc' },
+          ],
         },
       },
     });
@@ -381,12 +384,13 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
 
     const due = new Date(dueDate);
     const created = await prisma.$transaction(
-      units.map((u) =>
-        prisma.invoice.create({
+      units.map((u) => {
+        const primaryRes = u.residents.find((r) => r.isPrimary) || u.residents[0];
+        return prisma.invoice.create({
           data: {
             propertyId: manager.propertyId,
             unitId: u.id,
-            residentId: u.residents[0]?.id ?? null,
+            residentId: primaryRes?.id ?? null,
             amount: amt,
             description,
             dueDate: due,
@@ -397,49 +401,63 @@ export const createInvoice = async (req: Request, res: Response, next: NextFunct
             resident: { select: { name: true } },
             property: { select: { name: true, address: true } },
           },
-        })
-      )
+        });
+      })
     );
 
     const io = req.app.get('io');
     created.forEach((invoice) => io?.to(`property:${manager.propertyId}`).emit('invoice:new', invoice));
 
-    // ponytail: send invoice PDF via SMTP email to all primary family members with registered emails
+    // ponytail: send invoice PDF via SMTP email to all residents associated with the billed units
     (async () => {
       for (const inv of created) {
         const matchingUnit = units.find((u) => u.id === inv.unitId);
-        const primaryRes = matchingUnit?.residents[0];
-        const email = primaryRes?.user?.email;
-        if (!email) continue;
+        if (!matchingUnit || !matchingUnit.residents.length) continue;
+
+        // Collect all resident recipients for this unit
+        const recipients = matchingUnit.residents
+          .filter((r) => r.user?.email)
+          .map((r) => ({
+            name: r.name,
+            email: r.user!.email!,
+          }));
+
+        if (recipients.length === 0) {
+          console.warn(`[Invoice Email] No email found for unit ${matchingUnit.unitNumber}`);
+          continue;
+        }
 
         try {
           const pdfBuffer = await generateInvoicePDFBuffer({
             invoiceId: inv.id,
             societyName: property?.name || 'Society Security',
             societyAddress: property?.address,
-            residentName: primaryRes.name,
-            unitNumber: matchingUnit?.unitNumber || '',
-            tower: matchingUnit?.tower,
+            residentName: recipients[0].name,
+            unitNumber: matchingUnit.unitNumber,
+            tower: matchingUnit.tower,
             amount: inv.amount,
             description: inv.description,
             dueDate: inv.dueDate,
             status: inv.status,
           });
 
-          await queueInvoiceEmail({
-            to: email,
-            residentName: primaryRes.name,
-            societyName: property?.name || 'Society Security',
-            unitNumber: matchingUnit?.unitNumber || '',
-            tower: matchingUnit?.tower,
-            amount: inv.amount,
-            description: inv.description,
-            dueDate: inv.dueDate,
-            pdfBuffer,
-            invoiceId: inv.id,
-          });
+          for (const recipient of recipients) {
+            console.log(`[Invoice Email] Dispatching invoice ${inv.id} to ${recipient.email}...`);
+            await queueInvoiceEmail({
+              to: recipient.email,
+              residentName: recipient.name,
+              societyName: property?.name || 'Society Security',
+              unitNumber: matchingUnit.unitNumber,
+              tower: matchingUnit.tower,
+              amount: inv.amount,
+              description: inv.description,
+              dueDate: inv.dueDate,
+              pdfBuffer,
+              invoiceId: inv.id,
+            });
+          }
         } catch (mailErr) {
-          console.error(`Failed to dispatch invoice PDF email for invoice ${inv.id} to ${email}:`, mailErr);
+          console.error(`Failed to dispatch invoice PDF email for invoice ${inv.id}:`, mailErr);
         }
       }
     })().catch((err) => console.error('Invoice email dispatch error:', err));

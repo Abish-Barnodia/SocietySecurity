@@ -122,19 +122,20 @@ export default function MaintenanceScreen() {
         </View>
 
         {payable && (
-          <View style={[styles.actionRow, { flexDirection: 'row', gap: 10 }]}>
+          <View style={[styles.actionRow, { flexDirection: 'row', gap: 10, alignItems: 'center' }]}>
             <TouchableOpacity
               style={styles.downloadOutlineBtn}
               onPress={() => handleDownloadInvoice(item)}
               disabled={downloadingId === item.id}
+              activeOpacity={0.7}
             >
               {downloadingId === item.id ? (
                 <ActivityIndicator size="small" color={colors.text} />
               ) : (
-                <>
-                  <Ionicons name="receipt-outline" size={15} color={colors.text} style={{ marginRight: 6 }} />
-                  <Text style={styles.downloadOutlineText}>View Bill</Text>
-                </>
+                <View style={styles.btnInner}>
+                  <Ionicons name="receipt-outline" size={16} color={colors.text} />
+                  <Text style={styles.downloadOutlineText} numberOfLines={1}>View Bill</Text>
+                </View>
               )}
             </TouchableOpacity>
 
@@ -142,14 +143,15 @@ export default function MaintenanceScreen() {
               style={styles.payButton}
               onPress={() => handlePay(item)}
               disabled={payingId === item.id}
+              activeOpacity={0.8}
             >
               {payingId === item.id ? (
                 <ActivityIndicator size="small" color={isDark ? '#000' : '#fff'} />
               ) : (
-                <>
-                  <Ionicons name="card-outline" size={16} color={isDark ? '#000' : '#fff'} style={{ marginRight: 6 }} />
-                  <Text style={styles.payButtonText}>Pay ({formatAmount(item.amount)})</Text>
-                </>
+                <View style={styles.btnInner}>
+                  <Ionicons name="card-outline" size={16} color={isDark ? '#000' : '#fff'} />
+                  <Text style={styles.payButtonText} numberOfLines={1}>Pay ({formatAmount(item.amount)})</Text>
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -323,10 +325,18 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
       borderTopWidth: 1,
       borderTopColor: isDark ? '#334155' : '#f1f5f9',
     },
-    payButton: {
+    btnInner: {
       flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    payButton: {
+      flex: 1.1,
+      minHeight: 44,
       backgroundColor: isDark ? '#ffffff' : '#0f172a',
-      paddingVertical: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -338,10 +348,12 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
     },
     downloadButton: {
       flexDirection: 'row',
+      minHeight: 44,
       backgroundColor: isDark ? 'rgba(22, 163, 74, 0.15)' : '#f0fdf4',
       borderWidth: 1,
       borderColor: isDark ? '#166534' : '#bbf7d0',
-      paddingVertical: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
@@ -352,11 +364,13 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolea
       fontWeight: '700',
     },
     downloadOutlineBtn: {
-      flexDirection: 'row',
+      flex: 0.9,
+      minHeight: 44,
       backgroundColor: isDark ? '#334155' : '#f8fafc',
       borderWidth: 1,
       borderColor: colors.border,
-      paddingVertical: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
       borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',

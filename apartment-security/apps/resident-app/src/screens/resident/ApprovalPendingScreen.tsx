@@ -27,9 +27,9 @@ interface Props {
 }
 
 export default function ApprovalPendingScreen({
-  flatNumber = '103',
-  tower = 'A',
-  societyName = 'Aban Humming bees',
+  flatNumber = '',
+  tower = '',
+  societyName = 'Society Security',
   submittedAt,
   email,
   onRefreshStatus,

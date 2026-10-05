@@ -20,6 +20,7 @@ import * as FileSystem from 'expo-file-system';
 import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../utils/api';
+import ApprovalPendingScreen from './ApprovalPendingScreen';
 
 interface CountryItem {
   id: string;
@@ -126,12 +127,13 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
   // Form selections
   const [selectedCountry, setSelectedCountry] = useState('India');
   const [selectedCity, setSelectedCity] = useState('Bengaluru');
-  const [selectedSociety, setSelectedSociety] = useState('Aban Humming bees');
+  const [selectedSociety, setSelectedSociety] = useState('');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [societiesList, setSocietiesList] = useState<any[]>([]);
-  const [loadingSocieties, setLoadingSocieties] = useState(false);
+  const [loadingSocieties, setLoadingSocieties] = useState(true);
   const [selectedBuilding, setSelectedBuilding] = useState('Block A');
   const [selectedFlat, setSelectedFlat] = useState('103');
+  const [submittedData, setSubmittedData] = useState<any | null>(null);
 
   // Details
   const [residentRole, setResidentRole] = useState<'Owner' | 'Tenant'>('Tenant');
@@ -157,23 +159,19 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
       const res = await api.get('/auth/societies');
       if (res.data?.data && res.data.data.length > 0) {
         setSocietiesList(res.data.data);
-        // If current society is not in list, select the first one
         const currentInList = res.data.data.find((s: any) => s.name === selectedSociety || s.id === selectedPropertyId);
-        if (!currentInList) {
+        if (currentInList) {
+          setSelectedSociety(currentInList.name);
+          setSelectedPropertyId(currentInList.id);
+          if (currentInList.city) setSelectedCity(currentInList.city);
+        } else {
           setSelectedSociety(res.data.data[0].name);
           setSelectedPropertyId(res.data.data[0].id);
           if (res.data.data[0].city) setSelectedCity(res.data.data[0].city);
         }
       }
-    } catch {
-      // Fallback
-      if (societiesList.length === 0) {
-        setSocietiesList([
-          { id: '1', name: 'Aban Humming bees', city: 'Bengaluru' },
-          { id: '2', name: 'Aban Essence', city: 'Bengaluru' },
-          { id: '3', name: 'Prestige Lakeside', city: 'Bengaluru' },
-        ]);
-      }
+    } catch (e) {
+      console.error('Failed to load registered societies:', e);
     } finally {
       setLoadingSocieties(false);
     }
@@ -320,18 +318,21 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
 
       const resident = response.data?.data;
       const cleanEmail = email.trim();
+      const payload = {
+        email: cleanEmail,
+        flat: selectedFlat,
+        building: selectedBuilding,
+        society: selectedSociety,
+        submittedAt: new Date().toISOString(),
+      };
+
+      setSubmittedData(payload);
 
       // Clear session so pending resident is not kept in active auth state
       await logout();
 
       if (onCompleteRegistration) {
-        onCompleteRegistration({
-          email: cleanEmail,
-          flat: selectedFlat,
-          building: selectedBuilding,
-          society: selectedSociety,
-          submittedAt: new Date().toISOString(),
-        });
+        onCompleteRegistration(payload);
       }
     } catch (error: any) {
       const msg = error.response?.data?.message || error.message || 'Failed to submit request. Please try again.';
@@ -340,6 +341,21 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
       setSubmitting(false);
     }
   };
+
+  // If successfully submitted, immediately render verification pending screen
+  if (submittedData) {
+    return (
+      <ApprovalPendingScreen
+        flatNumber={submittedData.flat}
+        tower={submittedData.building?.replace(/^Block\s*/i, '')}
+        societyName={submittedData.society}
+        submittedAt={submittedData.submittedAt}
+        email={submittedData.email}
+        onGoToLogin={onGoToLogin}
+        onSwitchAccount={onGoToLogin}
+      />
+    );
+  }
 
   // -------------------------------------------------------------
   // SCREEN 1: SELECT COUNTRY

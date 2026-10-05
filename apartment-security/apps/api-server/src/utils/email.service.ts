@@ -22,22 +22,33 @@ export const sendEmail = async (
   }
 
   const smtpHost = process.env.SMTP_HOST || (smtpUser.endsWith('@gmail.com') ? 'smtp.gmail.com' : 'smtp.ethereal.email');
-  const isGmail = smtpHost.includes('gmail.com');
+  const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
   const smtpPort = parseInt(process.env.SMTP_PORT || (isGmail ? '465' : '587'), 10);
   const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
 
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: smtpPort,
-    secure: isSecure,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  });
+  const transporter = isGmail
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      })
+    : nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: isSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      });
 
   const mailOptions = {
     from: process.env.SMTP_FROM || `"Society Security" <${smtpUser || 'noreply@example.com'}>`,
@@ -48,9 +59,14 @@ export const sendEmail = async (
     attachments,
   };
 
-  const info = await transporter.sendMail(mailOptions);
-  console.log('Message sent successfully: %s to %s', info.messageId, to);
-  return info;
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[SMTP SUCCESS] Message sent successfully: %s to %s', info.messageId, to);
+    return info;
+  } catch (err: any) {
+    console.error('[SMTP ERROR] Failed to send email to %s (Subject: "%s"):', to, subject, err?.message || err);
+    throw err;
+  }
 };
 
 export const sendVerificationEmail = async (to: string, otp: string) => {

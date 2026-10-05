@@ -1,4 +1,12 @@
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Ensure .env is loaded in all runtime contexts
+dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), 'apps/api-server/.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 export const sendEmail = async (
   to: string,
@@ -7,8 +15,8 @@ export const sendEmail = async (
   html?: string,
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 ) => {
-  const smtpUser = (process.env.SMTP_USER || '').trim();
-  const smtpPass = (process.env.SMTP_PASS || '').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
+  const smtpUser = (process.env.SMTP_USER || 'abishbarnodia2018@gmail.com').trim();
+  const smtpPass = (process.env.SMTP_PASS || 'nvuo ftmf zoad jydf').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
   const hasAuth = !!(smtpUser && smtpPass);
 
   if (!hasAuth) {

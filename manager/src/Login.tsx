@@ -223,8 +223,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setError('Please enter the 6-digit reset code received on your email.');
       return;
     }
-    if (cleanNewPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const hasUpper = /[A-Z]/.test(cleanNewPassword);
+    const hasNumber = /[0-9]/.test(cleanNewPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(cleanNewPassword);
+    const hasMinLength = cleanNewPassword.length >= 8;
+
+    if (!hasMinLength || !hasUpper || !hasNumber || !hasSpecial) {
+      setError('Password must be at least 8 characters and include at least one uppercase letter (A-Z), one number (0-9), and one special character (!@#$%^&*).');
       return;
     }
     if (cleanNewPassword !== confirmPassword.trim()) {

@@ -376,6 +376,20 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
             property: true,
           },
         },
+        guard: {
+          include: {
+            property: true,
+          },
+        },
+        resident: {
+          include: {
+            unit: {
+              include: {
+                property: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -392,6 +406,8 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       return next(new AppError('This account has been deactivated', 403));
     }
 
+    let managerSessionToken: string | undefined;
+
     // Role-specific validations for Manager login:
     if (user.role === 'MANAGER') {
       if (!propertyId) {
@@ -405,29 +421,37 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
           : 'You are not registered as a manager for the selected society.';
         return next(new AppError(msg, 403));
       }
-    }
 
-    // Managers get exactly one active Manager Portal session per property —
-    // claim it atomically before issuing any tokens. If another manager
-    // already holds it, the login is rejected outright (no tokens minted),
-    // not just blocked on the next request.
-    let managerSessionToken: string | undefined;
-    if (user.role === 'MANAGER' && user.manager) {
+      if (user.manager?.property?.status === 'SUSPENDED') {
+        return next(new AppError('This society has been suspended. Please contact platform support.', 403));
+      }
+
       const token = await claimManagerPortalLock(user.manager.propertyId, user.manager.id);
       if (!token) {
-        return next(new AppError('The Manager Portal is currently being used by another manager. Please try again later.', 409));
+        return next(new AppError('Another manager is currently logged into this society portal.', 409));
       }
       managerSessionToken = token;
     }
 
-    // ponytail: Leave restriction enforced at backend auth layer, not frontend
+    // Role-specific validations for Guard login:
     if (user.role === 'GUARD') {
-      const guard = await prisma.guard.findUnique({ where: { userId: user.id }, select: { id: true } });
-      if (guard) {
+      if (propertyId && (!user.guard || user.guard.propertyId !== propertyId)) {
+        const assignedPropertyName = user.guard?.property?.name;
+        const msg = assignedPropertyName
+          ? `You are not authorized for the selected society. Your guard account is registered under "${assignedPropertyName}".`
+          : 'You are not registered as a guard for the selected society.';
+        return next(new AppError(msg, 403));
+      }
+
+      if (user.guard?.property?.status === 'SUSPENDED') {
+        return next(new AppError('This society has been suspended. Please contact platform support.', 403));
+      }
+
+      if (user.guard) {
         const now = new Date();
         const activeLeave = await prisma.guardLeave.findFirst({
           where: {
-            guardId: guard.id,
+            guardId: user.guard.id,
             status: 'APPROVED',
             startDate: { lte: now },
             endDate: { gte: now },
@@ -443,15 +467,27 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
       }
     }
 
-    // For residents: verify they are approved before letting them log into the app
+    // For residents: verify society match and approval status
     if (user.role === 'RESIDENT') {
-      const resident = await prisma.resident.findUnique({
-        where: { userId: user.id },
-      });
-      if (resident && resident.status === 'PENDING') {
+      if (propertyId) {
+        const residentPropertyId = user.resident?.unit?.propertyId;
+        if (!residentPropertyId || residentPropertyId !== propertyId) {
+          const assignedPropertyName = user.resident?.unit?.property?.name;
+          const msg = assignedPropertyName
+            ? `You are not registered in the selected society. Your resident account belongs to "${assignedPropertyName}".`
+            : 'You are not registered in the selected society.';
+          return next(new AppError(msg, 403));
+        }
+      }
+
+      if (user.resident?.unit?.property?.status === 'SUSPENDED') {
+        return next(new AppError('This society has been suspended. Please contact platform support.', 403));
+      }
+
+      if (user.resident && user.resident.status === 'PENDING') {
         return next(new AppError('Your account verification is still pending approval by your society manager.', 403));
       }
-      if (resident && resident.status === 'REJECTED') {
+      if (user.resident && user.resident.status === 'REJECTED') {
         return next(new AppError('Your registration request was rejected by your society management.', 403));
       }
     }

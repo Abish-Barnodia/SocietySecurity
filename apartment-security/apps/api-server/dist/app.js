@@ -142,24 +142,73 @@ app.use('/api/v1/settings', settings_routes_1.settingsRouter);
 app.use('/api/v1/manager-accounts', managerAccounts_routes_1.managerAccountsRouter);
 app.use('/api/v1/demo-requests', demoRequest_routes_1.default);
 app.use('/api/v1/super-admin', superAdmin_routes_1.default);
-// Diagnostic: test email delivery directly from the deployed server
-app.get('/api/v1/test-email', async (_req, res) => {
-    const { sendEmail } = await Promise.resolve().then(() => __importStar(require('./utils/email.service')));
-    const targetEmail = _req.query.to || 'abishbarnodia2018@gmail.com';
+// Diagnostic: test email delivery and network connectivity directly from the deployed server
+app.get('/api/v1/test-email', async (req, res) => {
+    const dns = await Promise.resolve().then(() => __importStar(require('dns')));
+    const net = await Promise.resolve().then(() => __importStar(require('net')));
+    // Force IPv4 first in Node DNS resolution
+    if (dns.setDefaultResultOrder) {
+        dns.setDefaultResultOrder('ipv4first');
+    }
+    // 1. Resolve smtp.gmail.com IPv4
+    let ipv4Addresses = [];
     try {
-        const info = await sendEmail(targetEmail, '✅ Society Security Email Test', `This is an automated test from the deployed server at ${new Date().toISOString()}`, `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Working</h2><p>This test was sent at <strong>${new Date().toISOString()}</strong> from the live server.</p></div>`);
-        res.json({ status: 'ok', messageId: info.messageId, to: targetEmail });
+        const addresses = await dns.promises.resolve4('smtp.gmail.com');
+        ipv4Addresses = addresses;
+    }
+    catch (e) {
+        ipv4Addresses = [`DNS error: ${e.message}`];
+    }
+    // 2. Test raw TCP connection to Gmail IPv4 on port 465 and 587
+    const testTcp = (host, port, timeoutMs = 4000) => {
+        return new Promise((resolve) => {
+            const socket = new net.Socket();
+            socket.setTimeout(timeoutMs);
+            socket.on('connect', () => {
+                socket.destroy();
+                resolve(`OPEN: Connected to ${host}:${port} successfully!`);
+            });
+            socket.on('timeout', () => {
+                socket.destroy();
+                resolve(`BLOCKED/TIMEOUT: Connection to ${host}:${port} timed out after ${timeoutMs}ms (Render firewall blocking port)`);
+            });
+            socket.on('error', (err) => {
+                socket.destroy();
+                resolve(`ERROR on ${host}:${port}: ${err.message}`);
+            });
+            socket.connect(port, host);
+        });
+    };
+    const primaryIp = ipv4Addresses[0] && !ipv4Addresses[0].startsWith('DNS') ? ipv4Addresses[0] : 'smtp.gmail.com';
+    const tcp465 = await testTcp(primaryIp, 465);
+    const tcp587 = await testTcp(primaryIp, 587);
+    // 3. Test actual email send
+    const { sendEmail } = await Promise.resolve().then(() => __importStar(require('./utils/email.service')));
+    const targetEmail = req.query.to || 'abishbarnodia2018@gmail.com';
+    let emailResult = null;
+    let emailError = null;
+    try {
+        const info = await sendEmail(targetEmail, '✅ Society Security Live Cloud Test', `Automated diagnostic test at ${new Date().toISOString()}`, `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Operational</h2><p>Delivered from cloud server at <strong>${new Date().toISOString()}</strong>.</p></div>`);
+        emailResult = { success: true, messageId: info.messageId };
     }
     catch (err) {
-        res.status(500).json({
-            status: 'error',
-            error: err.message,
+        emailError = {
+            message: err.message,
             code: err.code,
             command: err.command,
             response: err.response,
-            responseCode: err.responseCode,
-        });
+        };
     }
+    res.json({
+        diagnostics: {
+            dns_ipv4: ipv4Addresses,
+            tcp_port_465: tcp465,
+            tcp_port_587: tcp587,
+        },
+        targetEmail,
+        emailResult,
+        emailError,
+    });
 });
 // 404 handler
 app.use(notFound_middleware_1.notFoundHandler);

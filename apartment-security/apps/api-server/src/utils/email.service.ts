@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import path from 'path';
+import dns from 'dns';
+
+// Force Node.js to prioritize IPv4 over IPv6 (fixes ENETUNREACH in cloud environments without IPv6 routes like Render)
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Ensure .env is loaded in all runtime contexts
 dotenv.config();
@@ -12,11 +18,14 @@ function getValidSmtpConfig() {
   let user = (process.env.SMTP_USER || '').trim();
   let pass = (process.env.SMTP_PASS || '').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
 
-  if (!user || user === 'abishbarnodia2018@gmail.com') {
+  // If user provided custom credentials in environment, respect them
+  if (!user && !pass) {
     user = 'abishbarnodia2018@gmail.com';
-    if (!pass || pass.length !== 16) {
-      pass = 'nvuoftmfzoadjydf';
-    }
+    pass = 'nvuoftmfzoadjydf';
+  } else if (!user) {
+    user = 'abishbarnodia2018@gmail.com';
+  } else if (!pass) {
+    pass = 'nvuoftmfzoadjydf';
   }
   return { smtpUser: user, smtpPass: pass };
 }
@@ -28,6 +37,88 @@ export const sendEmail = async (
   html?: string,
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 ) => {
+  // Option 1: HTTP API via Resend (over HTTPS Port 443 - works everywhere including Render Free tier)
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  if (resendApiKey) {
+    try {
+      const fromEmail = process.env.RESEND_FROM || 'Society Security <onboarding@resend.dev>';
+      const payload: any = {
+        from: fromEmail,
+        to: [to],
+        subject,
+        text,
+        html: html || text,
+      };
+      if (attachments?.length) {
+        payload.attachments = attachments.map((a) => ({
+          filename: a.filename,
+          content: a.content ? (Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content) : undefined,
+          path: a.path,
+        }));
+      }
+
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json()) as any;
+      if (res.ok && data?.id) {
+        console.log('[RESEND SUCCESS] Email sent via HTTPS port 443 to %s: id=%s', to, data.id);
+        return { messageId: data.id };
+      }
+      console.warn('[RESEND WARNING] Resend HTTP API response not ok:', data);
+    } catch (resendErr: any) {
+      console.warn('[RESEND ERROR] Failed to send via Resend API, falling back to SMTP:', resendErr?.message || resendErr);
+    }
+  }
+
+  // Option 2: HTTP API via Brevo / Sendinblue (over HTTPS Port 443)
+  const brevoApiKey = process.env.BREVO_API_KEY?.trim();
+  if (brevoApiKey) {
+    try {
+      const senderEmail = process.env.BREVO_FROM || process.env.SMTP_USER || 'abishbarnodia2018@gmail.com';
+      const payload: any = {
+        sender: { name: 'Society Security', email: senderEmail },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html || text,
+      };
+      if (attachments?.length) {
+        payload.attachment = attachments.map((a) => ({
+          name: a.filename,
+          content: a.content ? (Buffer.isBuffer(a.content) ? a.content.toString('base64') : a.content) : undefined,
+          url: a.path,
+        }));
+      }
+
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': brevoApiKey,
+          'Content-Type': 'application/json',
+          accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = (await res.json()) as any;
+      if (res.ok && data?.messageId) {
+        console.log('[BREVO SUCCESS] Email sent via HTTPS port 443 to %s: messageId=%s', to, data.messageId);
+        return { messageId: data.messageId };
+      }
+      console.warn('[BREVO WARNING] Brevo HTTP API response not ok:', data);
+    } catch (brevoErr: any) {
+      console.warn('[BREVO ERROR] Failed to send via Brevo API, falling back to SMTP:', brevoErr?.message || brevoErr);
+    }
+  }
+
+  // Option 3: Direct SMTP Transport with strict IPv4 resolution
   const { smtpUser, smtpPass } = getValidSmtpConfig();
   const hasAuth = !!(smtpUser && smtpPass);
 
@@ -41,8 +132,6 @@ export const sendEmail = async (
     return { messageId: 'mock-id' };
   }
 
-  const isGmail = smtpUser.endsWith('@gmail.com');
-
   const mailOptions = {
     from: `"Society Security" <${smtpUser}>`,
     to,
@@ -52,7 +141,14 @@ export const sendEmail = async (
     attachments,
   };
 
-  // Primary transport: Gmail direct SSL on port 465 with IPv4 forced
+  // Explicit IPv4 DNS lookup helper to prevent ENETUNREACH on IPv6-disabled cloud containers
+  const ipv4Lookup = (hostname: string, _options: any, callback: any) => {
+    dns.lookup(hostname, { family: 4 }, (err, address, family) => {
+      callback(err, address, family);
+    });
+  };
+
+  // Primary transport: Gmail direct SSL on port 465 with strict IPv4 lookup
   const primaryTransporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
@@ -61,10 +157,10 @@ export const sendEmail = async (
       user: smtpUser,
       pass: smtpPass,
     },
-    family: 4,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    lookup: ipv4Lookup,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
     tls: {
       rejectUnauthorized: false,
     },
@@ -86,10 +182,10 @@ export const sendEmail = async (
           user: smtpUser,
           pass: smtpPass,
         },
-        family: 4,
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
+        lookup: ipv4Lookup,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 10000,
         tls: {
           rejectUnauthorized: false,
         },

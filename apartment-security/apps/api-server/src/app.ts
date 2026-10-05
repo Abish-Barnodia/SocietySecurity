@@ -116,28 +116,83 @@ app.use('/api/v1/manager-accounts', managerAccountsRouter);
 app.use('/api/v1/demo-requests', demoRequestRouter);
 app.use('/api/v1/super-admin', superAdminRouter);
 
-// Diagnostic: test email delivery directly from the deployed server
-app.get('/api/v1/test-email', async (_req, res) => {
+// Diagnostic: test email delivery and network connectivity directly from the deployed server
+app.get('/api/v1/test-email', async (req, res) => {
+  const dns = await import('dns');
+  const net = await import('net');
+
+  // Force IPv4 first in Node DNS resolution
+  if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+  }
+
+  // 1. Resolve smtp.gmail.com IPv4
+  let ipv4Addresses: string[] = [];
+  try {
+    const addresses = await dns.promises.resolve4('smtp.gmail.com');
+    ipv4Addresses = addresses;
+  } catch (e: any) {
+    ipv4Addresses = [`DNS error: ${e.message}`];
+  }
+
+  // 2. Test raw TCP connection to Gmail IPv4 on port 465 and 587
+  const testTcp = (host: string, port: number, timeoutMs = 4000): Promise<string> => {
+    return new Promise((resolve) => {
+      const socket = new net.Socket();
+      socket.setTimeout(timeoutMs);
+      socket.on('connect', () => {
+        socket.destroy();
+        resolve(`OPEN: Connected to ${host}:${port} successfully!`);
+      });
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve(`BLOCKED/TIMEOUT: Connection to ${host}:${port} timed out after ${timeoutMs}ms (Render firewall blocking port)`);
+      });
+      socket.on('error', (err) => {
+        socket.destroy();
+        resolve(`ERROR on ${host}:${port}: ${err.message}`);
+      });
+      socket.connect(port, host);
+    });
+  };
+
+  const primaryIp = ipv4Addresses[0] && !ipv4Addresses[0].startsWith('DNS') ? ipv4Addresses[0] : 'smtp.gmail.com';
+  const tcp465 = await testTcp(primaryIp, 465);
+  const tcp587 = await testTcp(primaryIp, 587);
+
+  // 3. Test actual email send
   const { sendEmail } = await import('./utils/email.service');
-  const targetEmail = (_req.query.to as string) || 'abishbarnodia2018@gmail.com';
+  const targetEmail = (req.query.to as string) || 'abishbarnodia2018@gmail.com';
+  let emailResult: any = null;
+  let emailError: any = null;
+
   try {
     const info = await sendEmail(
       targetEmail,
-      '✅ Society Security Email Test',
-      `This is an automated test from the deployed server at ${new Date().toISOString()}`,
-      `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Working</h2><p>This test was sent at <strong>${new Date().toISOString()}</strong> from the live server.</p></div>`
+      '✅ Society Security Live Cloud Test',
+      `Automated diagnostic test at ${new Date().toISOString()}`,
+      `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Operational</h2><p>Delivered from cloud server at <strong>${new Date().toISOString()}</strong>.</p></div>`
     );
-    res.json({ status: 'ok', messageId: info.messageId, to: targetEmail });
+    emailResult = { success: true, messageId: info.messageId };
   } catch (err: any) {
-    res.status(500).json({
-      status: 'error',
-      error: err.message,
+    emailError = {
+      message: err.message,
       code: err.code,
       command: err.command,
       response: err.response,
-      responseCode: err.responseCode,
-    });
+    };
   }
+
+  res.json({
+    diagnostics: {
+      dns_ipv4: ipv4Addresses,
+      tcp_port_465: tcp465,
+      tcp_port_587: tcp587,
+    },
+    targetEmail,
+    emailResult,
+    emailError,
+  });
 });
 
 // 404 handler

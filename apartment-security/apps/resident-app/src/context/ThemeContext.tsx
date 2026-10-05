@@ -18,16 +18,16 @@ type ThemeContextType = {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const systemScheme = useColorScheme();
-  const [theme, setThemeState] = useState<ThemeName>(systemScheme === 'dark' ? 'dark' : 'light');
+  const [theme, setThemeState] = useState<ThemeName>('light');
   const [hydrated, setHydrated] = useState(false);
 
-  // A user's explicit choice (once made) always wins over the OS setting —
-  // only fall back to the system scheme before any preference is saved.
+  // Default to light theme on fresh start unless user explicitly stored a preference
   useEffect(() => {
     tokenStorage.getItemAsync(THEME_STORAGE_KEY).then((stored) => {
       if (stored === 'light' || stored === 'dark') {
         setThemeState(stored);
+      } else {
+        setThemeState('light');
       }
       setHydrated(true);
     });

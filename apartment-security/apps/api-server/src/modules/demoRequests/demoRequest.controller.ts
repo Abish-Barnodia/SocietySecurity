@@ -124,15 +124,15 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       documentName: documentName || null,
     };
 
-    // ponytail: 1. Send confirmation email to the user on their registered email
-    sendDemoBookingConfirmationToUser(demoPayload).catch((err) =>
-      console.error(`Failed to send demo booking email to registrant ${email}:`, err)
-    );
-
-    // ponytail: 2. Send email notification to Super Admin via SMTP
-    sendDemoRequestNotificationToSuperAdmin(demoPayload).catch((err) =>
-      console.error('Error sending superadmin notification email:', err)
-    );
+    // ponytail: 1 & 2. Await both emails so the socket completes transmission before closing HTTP cycle
+    try {
+      await Promise.allSettled([
+        sendDemoBookingConfirmationToUser(demoPayload),
+        sendDemoRequestNotificationToSuperAdmin(demoPayload),
+      ]);
+    } catch (e) {
+      console.error('Non-blocking error during demo emails delivery:', e);
+    }
 
     return sendSuccess(res, 201, 'Payment verified and demo trial activated successfully!', {
       demoRequest,
@@ -178,15 +178,15 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
       documentName: documentName || null,
     };
 
-    // ponytail: 1. Send confirmation email to the user on their registered email
-    sendDemoBookingConfirmationToUser(demoPayload).catch((err) =>
-      console.error(`Failed to send demo booking email to registrant ${email}:`, err)
-    );
-
-    // ponytail: 2. Send email notification to Super Admin via SMTP
-    sendDemoRequestNotificationToSuperAdmin(demoPayload).catch((err) =>
-      console.error('Error sending superadmin notification email:', err)
-    );
+    // ponytail: 1 & 2. Await both emails so the socket completes transmission before closing HTTP cycle
+    try {
+      await Promise.allSettled([
+        sendDemoBookingConfirmationToUser(demoPayload),
+        sendDemoRequestNotificationToSuperAdmin(demoPayload),
+      ]);
+    } catch (e) {
+      console.error('Non-blocking error during demo emails delivery:', e);
+    }
 
     return sendSuccess(res, 201, 'Demo request submitted successfully. Our team will contact you soon.', demoRequest);
   } catch (error) {
@@ -464,14 +464,20 @@ export const approveAndProvision = async (req: Request, res: Response, next: Nex
       // Non-blocking error
     }
 
-    // ponytail: auto-dispatch manager credentials email upon approval
-    sendManagerCredentialsEmail({
-      to: managerEmail,
-      managerName: managerName || demoRequest.contactName || 'Manager',
-      societyName: result.property.name,
-      slug: result.property.slug || 'society',
-      temporaryPassword: rawPassword,
-    }).catch((err) => console.error('Error auto-dispatching manager credentials email:', err));
+    // ponytail: auto-dispatch manager credentials email upon approval and ensure socket finishes transmission
+    try {
+      await Promise.allSettled([
+        sendManagerCredentialsEmail({
+          to: managerEmail,
+          managerName: managerName || demoRequest.contactName || 'Manager',
+          societyName: result.property.name,
+          slug: result.property.slug || 'society',
+          temporaryPassword: rawPassword,
+        }),
+      ]);
+    } catch (err) {
+      console.error('Error auto-dispatching manager credentials email:', err);
+    }
 
     return sendSuccess(res, 201, 'Society and Manager account provisioned successfully!', {
       society: {

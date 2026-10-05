@@ -44,7 +44,7 @@ export const sendEmail = async (
   const isGmail = smtpUser.endsWith('@gmail.com');
 
   const mailOptions = {
-    from: process.env.SMTP_FROM || `"Society Security" <${smtpUser || 'noreply@example.com'}>`,
+    from: `"Society Security" <${smtpUser}>`,
     to,
     subject,
     text,

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "build": "npm run build --prefix apps/api-server",
+    "start": "node apps/api-server/dist/server.js",
     "dev:api": "npm run dev --prefix apps/api-server",
     "dev:resident": "npm run start --prefix apps/resident-app",
     "dev:super-admin": "npm run dev --prefix apps/super-admin",

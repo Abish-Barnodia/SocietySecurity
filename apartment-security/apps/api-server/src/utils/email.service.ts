@@ -8,6 +8,19 @@ dotenv.config({ path: path.resolve(process.cwd(), 'apps/api-server/.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+function getValidSmtpConfig() {
+  let user = (process.env.SMTP_USER || '').trim();
+  let pass = (process.env.SMTP_PASS || '').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
+
+  if (!user || user === 'abishbarnodia2018@gmail.com') {
+    user = 'abishbarnodia2018@gmail.com';
+    if (!pass || pass.length !== 16) {
+      pass = 'nvuoftmfzoadjydf';
+    }
+  }
+  return { smtpUser: user, smtpPass: pass };
+}
+
 export const sendEmail = async (
   to: string,
   subject: string,
@@ -15,8 +28,7 @@ export const sendEmail = async (
   html?: string,
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 ) => {
-  const smtpUser = (process.env.SMTP_USER || 'abishbarnodia2018@gmail.com').trim();
-  const smtpPass = (process.env.SMTP_PASS || 'nvuo ftmf zoad jydf').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
+  const { smtpUser, smtpPass } = getValidSmtpConfig();
   const hasAuth = !!(smtpUser && smtpPass);
 
   if (!hasAuth) {

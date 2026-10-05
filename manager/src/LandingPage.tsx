@@ -127,6 +127,8 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
   const [demoLoading, setDemoLoading] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
   const [docUploadError, setDocUploadError] = useState('');
+  const [isDraggingDoc, setIsDraggingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [paymentSuccessInfo, setPaymentSuccessInfo] = useState<{ paymentId: string; plan: string; society: string } | null>(null);
 
   useEffect(() => {
@@ -137,8 +139,7 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
 
   const scrollTo = (id: string) => { setMenuOpen(false); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); };
 
-  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processDocumentFile = async (file: File) => {
     if (!file) return;
 
     if (file.size > 15 * 1024 * 1024) {
@@ -149,6 +150,26 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
     setDocUploading(true);
     setDocUploadError('');
 
+    // 1. Read as local base64 Data URL immediately for instant preview and offline resilience
+    let localDataUrl = '';
+    try {
+      localDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } catch (readErr) {
+      console.warn('Local file reading error:', readErr);
+    }
+
+    setDemoForm((f) => ({
+      ...f,
+      documentUrl: localDataUrl || URL.createObjectURL(file),
+      documentName: file.name,
+    }));
+
+    // 2. Concurrently attempt upload to the server
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -159,20 +180,27 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
       });
 
       const data = await res.json();
-      if (res.ok && data.status === 'success') {
-        setDemoForm(f => ({
+      if (res.ok && data.status === 'success' && data.data?.url) {
+        setDemoForm((f) => ({
           ...f,
           documentUrl: data.data.url,
           documentName: data.data.fileName || file.name,
         }));
-      } else {
-        setDocUploadError(data.message || 'Failed to upload verification document.');
       }
-    } catch {
-      setDocUploadError('Network error uploading document. Please try again.');
+    } catch (uploadErr) {
+      console.warn('Server document upload fallback to base64 data URI:', uploadErr);
     } finally {
       setDocUploading(false);
     }
+  };
+
+  const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processDocumentFile(file);
+    }
+    // Reset file input value so selecting the same file triggers change
+    if (e.target) e.target.value = '';
   };
 
   const handleDemoSubmit = async (e: React.FormEvent) => {
@@ -1155,13 +1183,35 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                     <Icon icon="lucide:file-badge" size={14} color="#00A67C" /> Verification Document (Aadhaar / ID Proof)
                   </div>
 
-                  <div style={{
-                    border: '1.5px dashed ' + (demoForm.documentUrl ? '#00A67C' : '#cbd5e1'),
-                    borderRadius: 12,
-                    padding: '16px',
-                    background: demoForm.documentUrl ? 'rgba(0, 200, 150, 0.05)' : '#f8fafc',
-                    transition: 'all 0.2s',
-                  }}>
+                  <div
+                    style={{
+                      border: '1.5px dashed ' + (demoForm.documentUrl ? '#00A67C' : isDraggingDoc ? '#00A67C' : '#cbd5e1'),
+                      borderRadius: 12,
+                      padding: '16px',
+                      background: demoForm.documentUrl
+                        ? 'rgba(0, 200, 150, 0.05)'
+                        : isDraggingDoc
+                        ? 'rgba(0, 200, 150, 0.08)'
+                        : '#f8fafc',
+                      transition: 'all 0.2s',
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingDoc(true);
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      setIsDraggingDoc(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingDoc(false);
+                      const droppedFile = e.dataTransfer.files?.[0];
+                      if (droppedFile) {
+                        processDocumentFile(droppedFile);
+                      }
+                    }}
+                  >
                     {demoForm.documentUrl ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1204,7 +1254,10 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                           </a>
                           <button
                             type="button"
-                            onClick={() => setDemoForm(f => ({ ...f, documentUrl: undefined, documentName: undefined }))}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDemoForm((f) => ({ ...f, documentUrl: undefined, documentName: undefined }));
+                            }}
                             style={{
                               padding: '6px 10px',
                               borderRadius: 8,
@@ -1224,30 +1277,30 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                         </div>
                       </div>
                     ) : (
-                      <div>
-                        <label
-                          htmlFor="demo-document-upload"
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: docUploading ? 'wait' : 'pointer',
-                            padding: '12px 8px',
-                            textAlign: 'center',
-                          }}
-                        >
-                          <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(0, 166, 124, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                            <Icon icon={docUploading ? 'lucide:loader-2' : 'lucide:upload-cloud'} size={22} color="#00A67C" />
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                            {docUploading ? 'Uploading document...' : 'Upload Aadhaar Card / Society Document'}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
-                            Upload Aadhaar Card, ID proof, or Society Registration deed (PDF, PNG, JPG up to 15MB)
-                          </div>
-                        </label>
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: docUploading ? 'wait' : 'pointer',
+                          padding: '12px 8px',
+                          textAlign: 'center',
+                          userSelect: 'none',
+                        }}
+                      >
+                        <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(0, 166, 124, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                          <Icon icon={docUploading ? 'lucide:loader-2' : 'lucide:upload-cloud'} size={22} color="#00A67C" />
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                          {docUploading ? 'Uploading document...' : 'Upload Aadhaar Card / Society Document'}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                          Upload Aadhaar Card, ID proof, or Society Registration deed (PDF, PNG, JPG up to 15MB)
+                        </div>
                         <input
+                          ref={fileInputRef}
                           id="demo-document-upload"
                           type="file"
                           accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"

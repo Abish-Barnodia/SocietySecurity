@@ -116,7 +116,7 @@ export default function ForgotPasswordScreen() {
 
           <View style={styles.headerContainer}>
             <View style={styles.iconContainer}>
-              <Ionicons name="lock-closed" size={30} color={colors.primary} />
+              <Ionicons name="lock-closed" size={30} color="#00A67C" />
             </View>
             <Text style={styles.title}>Reset Password</Text>
             <Text style={styles.subtitle}>
@@ -131,7 +131,7 @@ export default function ForgotPasswordScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={[styles.inputWrapper, focusedField === 'email' && styles.inputWrapperFocused]}>
-                  <Ionicons name="mail-outline" size={20} color={focusedField === 'email' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
+                  <Ionicons name="mail-outline" size={20} color={focusedField === 'email' ? '#00A67C' : colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholderTextColor={colors.textMuted}
@@ -151,7 +151,7 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
                   <View style={[styles.inputWrapper, focusedField === 'code' && styles.inputWrapperFocused]}>
-                    <Ionicons name="key-outline" size={20} color={focusedField === 'code' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
+                    <Ionicons name="key-outline" size={20} color={focusedField === 'code' ? '#00A67C' : colors.textMuted} style={styles.inputIcon} />
                     <TextInput
                       style={[styles.input, { letterSpacing: 4, fontWeight: '700' }]}
                       placeholderTextColor={colors.textMuted}
@@ -169,7 +169,7 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>New Password</Text>
                   <View style={[styles.inputWrapper, focusedField === 'password' && styles.inputWrapperFocused]}>
-                    <Ionicons name="shield-checkmark-outline" size={20} color={focusedField === 'password' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
+                    <Ionicons name="shield-checkmark-outline" size={20} color={focusedField === 'password' ? '#00A67C' : colors.textMuted} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholderTextColor={colors.textMuted}
@@ -336,9 +336,9 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 20,
-    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+    backgroundColor: isDark ? 'rgba(0, 166, 124, 0.15)' : '#ecfdf5',
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
+    borderColor: isDark ? 'rgba(0, 166, 124, 0.3)' : '#a7f3d0',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -382,7 +382,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     height: 52,
   },
   inputWrapperFocused: {
-    borderColor: colors.primary,
+    borderColor: '#00A67C',
     backgroundColor: colors.card,
     borderWidth: 1.5,
   },
@@ -432,15 +432,15 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     marginLeft: 4,
   },
   button: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#00A67C',
     borderRadius: 14,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
-    shadowColor: colors.primary,
+    shadowColor: '#00A67C',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: isDark ? 0.4 : 0.25,
+    shadowOpacity: isDark ? 0.35 : 0.2,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -463,7 +463,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     color: colors.textMuted,
   },
   resendTextBold: {
-    color: colors.primary,
+    color: '#00A67C',
     fontWeight: '700',
   },
 });

@@ -171,7 +171,7 @@ export const getUnitVehicles = async (req: Request, res: Response, next: NextFun
 
 export const addUnitVehicle = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { registrationNo, make, model, color, type } = req.body;
+        const { registrationNo, make, model, color, type, photoUrl } = req.body;
         if (!registrationNo || !registrationNo.trim()) {
             return next(new AppError('Vehicle registration number is required', 400));
         }
@@ -197,6 +197,7 @@ export const addUnitVehicle = async (req: Request, res: Response, next: NextFunc
                     model: model?.trim() || existing.model,
                     color: color?.trim() || existing.color,
                     type: type?.toUpperCase() || existing.type,
+                    photoUrl: photoUrl !== undefined ? (photoUrl || null) : existing.photoUrl,
                 }
             });
         } else {
@@ -208,6 +209,7 @@ export const addUnitVehicle = async (req: Request, res: Response, next: NextFunc
                     model: model?.trim() || null,
                     color: color?.trim() || null,
                     type: type?.toUpperCase() || 'CAR',
+                    photoUrl: photoUrl || null,
                     isResident: true,
                     isActive: true,
                 }
@@ -259,7 +261,7 @@ export const getUnitPets = async (req: Request, res: Response, next: NextFunctio
 
 export const addUnitPet = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { name, type, breed, age, notes } = req.body;
+        const { name, type, breed, age, notes, photoUrl } = req.body;
         if (!name || !name.trim()) {
             return next(new AppError('Pet name is required', 400));
         }
@@ -277,6 +279,7 @@ export const addUnitPet = async (req: Request, res: Response, next: NextFunction
                 breed: breed?.trim() || null,
                 age: age?.trim() || null,
                 notes: notes?.trim() || null,
+                photoUrl: photoUrl || null,
             }
         });
 

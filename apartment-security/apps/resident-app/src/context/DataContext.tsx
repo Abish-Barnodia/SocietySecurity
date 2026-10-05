@@ -222,6 +222,7 @@ export type Vehicle = {
   make?: string | null;
   model?: string | null;
   color?: string | null;
+  photoUrl?: string | null;
 };
 
 export type Pet = {
@@ -231,6 +232,7 @@ export type Pet = {
   breed?: string | null;
   age?: string | null;
   notes?: string | null;
+  photoUrl?: string | null;
 };
 
 export type ScanRequest = {
@@ -349,12 +351,13 @@ type DataContextType = {
   deleteMember: (id: string) => Promise<void>;
   vehicles: Vehicle[];
   fetchVehicles: () => Promise<void>;
-  addVehicle: (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string }) => Promise<void>;
+  addVehicle: (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string; photoUrl?: string }) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   pets: Pet[];
   fetchPets: () => Promise<void>;
-  addPet: (data: { name: string; type?: string; breed?: string; age?: string; notes?: string }) => Promise<void>;
+  addPet: (data: { name: string; type?: string; breed?: string; age?: string; notes?: string; photoUrl?: string }) => Promise<void>;
   deletePet: (id: string) => Promise<void>;
+  uploadHouseholdPhoto: (localUri: string, mimeType?: string, fileName?: string) => Promise<string>;
   amenities: Amenity[];
   fetchAmenities: () => Promise<void>;
   amenitiesLastFetchedAt: React.MutableRefObject<number>;
@@ -520,13 +523,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         make: v.make || null,
         model: v.model || null,
         color: v.color || null,
+        photoUrl: v.photoUrl || null,
       })));
     } catch (error) {
       console.error('Failed to fetch unit vehicles:', error);
     }
   }, []);
 
-  const addVehicle = useCallback(async (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string }) => {
+  const addVehicle = useCallback(async (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string; photoUrl?: string }) => {
     await api.post('/residents/unit/vehicles', data);
     await fetchVehicles();
   }, [fetchVehicles]);
@@ -547,13 +551,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         breed: p.breed || null,
         age: p.age || null,
         notes: p.notes || null,
+        photoUrl: p.photoUrl || null,
       })));
     } catch (error) {
       console.error('Failed to fetch unit pets:', error);
     }
   }, []);
 
-  const addPet = useCallback(async (data: { name: string; type?: string; breed?: string; age?: string; notes?: string }) => {
+  const addPet = useCallback(async (data: { name: string; type?: string; breed?: string; age?: string; notes?: string; photoUrl?: string }) => {
     await api.post('/residents/unit/pets', data);
     await fetchPets();
   }, [fetchPets]);
@@ -561,6 +566,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deletePet = useCallback(async (id: string) => {
     await api.delete(`/residents/unit/pets/${id}`);
     setPets((prev) => prev.filter(p => p.id !== id));
+  }, []);
+
+  const uploadHouseholdPhoto = useCallback(async (localUri: string, mimeType?: string, fileName?: string) => {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: localUri,
+      name: fileName || `photo-${Date.now()}.jpg`,
+      type: mimeType || 'image/jpeg',
+    } as any);
+    const response = await api.post('/residents/upload-document', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(data) => data],
+      timeout: 60000,
+    });
+    return response.data.data.url as string;
   }, []);
 
   const fetchAmenities = useCallback(async () => {
@@ -867,6 +887,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     members, fetchMembers, addMember, deleteMember,
     vehicles, fetchVehicles, addVehicle, deleteVehicle,
     pets, fetchPets, addPet, deletePet,
+    uploadHouseholdPhoto,
     amenities, fetchAmenities, amenitiesLastFetchedAt, bookAmenity,
     scanRequests, addScanRequest,
     pendingWalkIns, respondWalkIn,
@@ -882,6 +903,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     members, fetchMembers, addMember, deleteMember,
     vehicles, fetchVehicles, addVehicle, deleteVehicle,
     pets, fetchPets, addPet, deletePet,
+    uploadHouseholdPhoto,
     amenities, fetchAmenities, bookAmenity,
     scanRequests, addScanRequest,
     pendingWalkIns, respondWalkIn,

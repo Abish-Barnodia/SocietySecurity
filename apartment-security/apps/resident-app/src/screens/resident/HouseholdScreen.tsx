@@ -12,10 +12,12 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 
@@ -37,6 +39,7 @@ export default function HouseholdScreen() {
     fetchPets,
     addPet,
     deletePet,
+    uploadHouseholdPhoto,
   } = useData();
 
   const [activeTab, setActiveTab] = useState<TabType>('members');
@@ -56,6 +59,8 @@ export default function HouseholdScreen() {
   const [vehicleMake, setVehicleMake] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleColor, setVehicleColor] = useState('');
+  const [vehiclePhotoUrl, setVehiclePhotoUrl] = useState('');
+  const [uploadingVehiclePhoto, setUploadingVehiclePhoto] = useState(false);
 
   // Pet Modal State
   const [showPetModal, setShowPetModal] = useState(false);
@@ -64,6 +69,8 @@ export default function HouseholdScreen() {
   const [petBreed, setPetBreed] = useState('');
   const [petAge, setPetAge] = useState('');
   const [petNotes, setPetNotes] = useState('');
+  const [petPhotoUrl, setPetPhotoUrl] = useState('');
+  const [uploadingPetPhoto, setUploadingPetPhoto] = useState(false);
 
   const loadAll = useCallback(async () => {
     await Promise.allSettled([fetchMembers(), fetchVehicles(), fetchPets()]);
@@ -112,6 +119,35 @@ export default function HouseholdScreen() {
     ]);
   };
 
+  const handlePickPhoto = async (target: 'vehicle' | 'pet') => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Photo library permission is required.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [4, 3],
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      if (target === 'vehicle') setUploadingVehiclePhoto(true);
+      else setUploadingPetPhoto(true);
+
+      const url = await uploadHouseholdPhoto(asset.uri, asset.mimeType ?? 'image/jpeg', asset.fileName ?? `${target}-${Date.now()}.jpg`);
+      if (target === 'vehicle') setVehiclePhotoUrl(url);
+      else setPetPhotoUrl(url);
+    } catch (err) {
+      Alert.alert('Upload Error', 'Failed to upload photo. Please try again.');
+    } finally {
+      if (target === 'vehicle') setUploadingVehiclePhoto(false);
+      else setUploadingPetPhoto(false);
+    }
+  };
+
   // Add Vehicle
   const handleAddVehicle = async () => {
     if (!vehicleRegNo.trim()) {
@@ -126,6 +162,7 @@ export default function HouseholdScreen() {
         make: vehicleMake.trim() || undefined,
         model: vehicleModel.trim() || undefined,
         color: vehicleColor.trim() || undefined,
+        photoUrl: vehiclePhotoUrl || undefined,
       });
       setShowVehicleModal(false);
       setVehicleRegNo('');
@@ -133,6 +170,7 @@ export default function HouseholdScreen() {
       setVehicleMake('');
       setVehicleModel('');
       setVehicleColor('');
+      setVehiclePhotoUrl('');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message ?? 'Failed to register vehicle.');
     } finally {
@@ -165,6 +203,7 @@ export default function HouseholdScreen() {
         breed: petBreed.trim() || undefined,
         age: petAge.trim() || undefined,
         notes: petNotes.trim() || undefined,
+        photoUrl: petPhotoUrl || undefined,
       });
       setShowPetModal(false);
       setPetName('');
@@ -172,6 +211,7 @@ export default function HouseholdScreen() {
       setPetBreed('');
       setPetAge('');
       setPetNotes('');
+      setPetPhotoUrl('');
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message ?? 'Failed to register pet.');
     } finally {
@@ -369,8 +409,12 @@ export default function HouseholdScreen() {
               vehicles.map((v) => (
                 <View key={v.id} style={styles.card}>
                   <View style={styles.cardRow}>
-                    <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#1e293b' : '#eff6ff' }]}>
-                      <Ionicons name={getVehicleIcon(v.type) as any} size={22} color={colors.primary} />
+                    <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#1e293b' : '#eff6ff', overflow: 'hidden' }]}>
+                      {v.photoUrl ? (
+                        <Image source={{ uri: v.photoUrl }} style={styles.cardImage} resizeMode="cover" />
+                      ) : (
+                        <Ionicons name={getVehicleIcon(v.type) as any} size={22} color={colors.primary} />
+                      )}
                     </View>
 
                     <View style={styles.memberInfo}>
@@ -431,8 +475,12 @@ export default function HouseholdScreen() {
               pets.map((p) => (
                 <View key={p.id} style={styles.card}>
                   <View style={styles.cardRow}>
-                    <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#1e293b' : '#fef3c7' }]}>
-                      <Ionicons name="paw" size={22} color="#d97706" />
+                    <View style={[styles.quickActionIconBox, { backgroundColor: isDark ? '#1e293b' : '#fef3c7', overflow: 'hidden' }]}>
+                      {p.photoUrl ? (
+                        <Image source={{ uri: p.photoUrl }} style={styles.cardImage} resizeMode="cover" />
+                      ) : (
+                        <Ionicons name="paw" size={22} color="#d97706" />
+                      )}
                     </View>
 
                     <View style={styles.memberInfo}>
@@ -606,6 +654,31 @@ export default function HouseholdScreen() {
               placeholderTextColor={colors.textMuted}
             />
 
+            <Text style={styles.label}>Vehicle Photo (Optional)</Text>
+            {vehiclePhotoUrl ? (
+              <View style={styles.photoPreviewWrapper}>
+                <Image source={{ uri: vehiclePhotoUrl }} style={styles.photoPreview} resizeMode="cover" />
+                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => setVehiclePhotoUrl('')}>
+                  <Ionicons name="close-circle" size={24} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.uploadPhotoBtn}
+                onPress={() => handlePickPhoto('vehicle')}
+                disabled={uploadingVehiclePhoto}
+              >
+                {uploadingVehiclePhoto ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
+                    <Text style={styles.uploadPhotoText}>Upload Vehicle Photo</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setShowVehicleModal(false)} disabled={saving}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -692,6 +765,31 @@ export default function HouseholdScreen() {
               onChangeText={setPetNotes}
               placeholderTextColor={colors.textMuted}
             />
+
+            <Text style={styles.label}>Pet Photo (Optional)</Text>
+            {petPhotoUrl ? (
+              <View style={styles.photoPreviewWrapper}>
+                <Image source={{ uri: petPhotoUrl }} style={styles.photoPreview} resizeMode="cover" />
+                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => setPetPhotoUrl('')}>
+                  <Ionicons name="close-circle" size={24} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.uploadPhotoBtn}
+                onPress={() => handlePickPhoto('pet')}
+                disabled={uploadingPetPhoto}
+              >
+                {uploadingPetPhoto ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
+                    <Text style={styles.uploadPhotoText}>Upload Pet Photo</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelButton} onPress={() => setShowPetModal(false)} disabled={saving}>
@@ -1025,5 +1123,51 @@ const getStyles = (colors: any, isDark: boolean) =>
       color: '#0f172a',
       fontWeight: '800',
       fontSize: 13,
+    },
+    cardImage: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 12,
+    },
+    photoPreviewWrapper: {
+      position: 'relative',
+      width: 100,
+      height: 80,
+      borderRadius: 12,
+      marginBottom: 14,
+      overflow: 'visible',
+    },
+    photoPreview: {
+      width: 100,
+      height: 80,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+    },
+    removePhotoBtn: {
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      backgroundColor: '#ffffff',
+      borderRadius: 12,
+    },
+    uploadPhotoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: colors.border,
+      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+      marginBottom: 14,
+    },
+    uploadPhotoText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text,
     },
   });

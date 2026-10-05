@@ -218,7 +218,7 @@ const getUnitVehicles = async (req, res, next) => {
 exports.getUnitVehicles = getUnitVehicles;
 const addUnitVehicle = async (req, res, next) => {
     try {
-        const { registrationNo, make, model, color, type } = req.body;
+        const { registrationNo, make, model, color, type, photoUrl } = req.body;
         if (!registrationNo || !registrationNo.trim()) {
             return next(new error_middleware_1.AppError('Vehicle registration number is required', 400));
         }
@@ -241,6 +241,7 @@ const addUnitVehicle = async (req, res, next) => {
                     model: model?.trim() || existing.model,
                     color: color?.trim() || existing.color,
                     type: type?.toUpperCase() || existing.type,
+                    photoUrl: photoUrl !== undefined ? (photoUrl || null) : existing.photoUrl,
                 }
             });
         }
@@ -253,6 +254,7 @@ const addUnitVehicle = async (req, res, next) => {
                     model: model?.trim() || null,
                     color: color?.trim() || null,
                     type: type?.toUpperCase() || 'CAR',
+                    photoUrl: photoUrl || null,
                     isResident: true,
                     isActive: true,
                 }
@@ -309,7 +311,7 @@ const getUnitPets = async (req, res, next) => {
 exports.getUnitPets = getUnitPets;
 const addUnitPet = async (req, res, next) => {
     try {
-        const { name, type, breed, age, notes } = req.body;
+        const { name, type, breed, age, notes, photoUrl } = req.body;
         if (!name || !name.trim()) {
             return next(new error_middleware_1.AppError('Pet name is required', 400));
         }
@@ -326,6 +328,7 @@ const addUnitPet = async (req, res, next) => {
                 breed: breed?.trim() || null,
                 age: age?.trim() || null,
                 notes: notes?.trim() || null,
+                photoUrl: photoUrl || null,
             }
         });
         await (0, audit_util_1.auditLog)(req.user.userId, 'ADD_UNIT_PET', 'Pet', pet.id);

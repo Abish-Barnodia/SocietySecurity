@@ -28,6 +28,7 @@ export interface VehicleItem {
   make?: string | null;
   model?: string | null;
   color?: string | null;
+  photoUrl?: string | null;
   isResident?: boolean;
 }
 
@@ -38,6 +39,7 @@ export interface PetItem {
   breed?: string | null;
   age?: string | null;
   notes?: string | null;
+  photoUrl?: string | null;
 }
 
 interface Family {
@@ -1197,15 +1199,29 @@ const ResidentDirectory = () => {
                         }}>
                           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                             <div style={{
-                              width: 42, height: 42, borderRadius: 10,
+                              width: 48, height: 48, borderRadius: 10,
                               backgroundColor: v.type === 'BIKE' ? '#FEF3C7' : v.type === 'EV' ? '#DCFCE7' : '#EFF6FF',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              <Icon
-                                name={v.type === 'BIKE' ? 'motorbike' : v.type === 'EV' ? 'bolt' : 'car'}
-                                size={22}
-                                color={v.type === 'BIKE' ? '#D97706' : v.type === 'EV' ? '#16A34A' : '#2563EB'}
-                              />
+                              overflow: 'hidden', flexShrink: 0,
+                              border: v.photoUrl ? '1px solid #CBD5E1' : 'none',
+                              cursor: v.photoUrl ? 'pointer' : 'default',
+                            }}
+                            onClick={() => v.photoUrl && setSelectedDocument({ url: v.photoUrl, name: `${v.registrationNo} - Vehicle Photo` })}
+                            title={v.photoUrl ? 'Click to view vehicle photo' : undefined}
+                            >
+                              {v.photoUrl ? (
+                                <img
+                                  src={v.photoUrl}
+                                  alt="Vehicle"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <Icon
+                                  name={v.type === 'BIKE' ? 'motorbike' : v.type === 'EV' ? 'bolt' : 'car'}
+                                  size={22}
+                                  color={v.type === 'BIKE' ? '#D97706' : v.type === 'EV' ? '#16A34A' : '#2563EB'}
+                                />
+                              )}
                             </div>
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1272,11 +1288,25 @@ const ResidentDirectory = () => {
                         }}>
                           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                             <div style={{
-                              width: 42, height: 42, borderRadius: 10,
+                              width: 48, height: 48, borderRadius: 10,
                               backgroundColor: '#FEF3C7',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              <Icon name="paw" size={22} color="#D97706" />
+                              overflow: 'hidden', flexShrink: 0,
+                              border: p.photoUrl ? '1px solid #CBD5E1' : 'none',
+                              cursor: p.photoUrl ? 'pointer' : 'default',
+                            }}
+                            onClick={() => p.photoUrl && setSelectedDocument({ url: p.photoUrl, name: `${p.name} - Pet Photo` })}
+                            title={p.photoUrl ? 'Click to view pet photo' : undefined}
+                            >
+                              {p.photoUrl ? (
+                                <img
+                                  src={p.photoUrl}
+                                  alt="Pet"
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <Icon name="paw" size={22} color="#D97706" />
+                              )}
                             </div>
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -435,6 +435,7 @@ model Vehicle {
   make           String?
   model          String?
   color          String?
+  photoUrl       String?
   isResident     Boolean  @default(true)
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -452,6 +453,7 @@ model Pet {
   breed     String?
   age       String?
   notes     String?
+  photoUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)

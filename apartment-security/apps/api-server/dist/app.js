@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -109,6 +142,25 @@ app.use('/api/v1/settings', settings_routes_1.settingsRouter);
 app.use('/api/v1/manager-accounts', managerAccounts_routes_1.managerAccountsRouter);
 app.use('/api/v1/demo-requests', demoRequest_routes_1.default);
 app.use('/api/v1/super-admin', superAdmin_routes_1.default);
+// Diagnostic: test email delivery directly from the deployed server
+app.get('/api/v1/test-email', async (_req, res) => {
+    const { sendEmail } = await Promise.resolve().then(() => __importStar(require('./utils/email.service')));
+    const targetEmail = _req.query.to || 'abishbarnodia2018@gmail.com';
+    try {
+        const info = await sendEmail(targetEmail, '✅ Society Security Email Test', `This is an automated test from the deployed server at ${new Date().toISOString()}`, `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Working</h2><p>This test was sent at <strong>${new Date().toISOString()}</strong> from the live server.</p></div>`);
+        res.json({ status: 'ok', messageId: info.messageId, to: targetEmail });
+    }
+    catch (err) {
+        res.status(500).json({
+            status: 'error',
+            error: err.message,
+            code: err.code,
+            command: err.command,
+            response: err.response,
+            responseCode: err.responseCode,
+        });
+    }
+});
 // 404 handler
 app.use(notFound_middleware_1.notFoundHandler);
 // Global error handler

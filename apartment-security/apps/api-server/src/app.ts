@@ -116,6 +116,30 @@ app.use('/api/v1/manager-accounts', managerAccountsRouter);
 app.use('/api/v1/demo-requests', demoRequestRouter);
 app.use('/api/v1/super-admin', superAdminRouter);
 
+// Diagnostic: test email delivery directly from the deployed server
+app.get('/api/v1/test-email', async (_req, res) => {
+  const { sendEmail } = await import('./utils/email.service');
+  const targetEmail = (_req.query.to as string) || 'abishbarnodia2018@gmail.com';
+  try {
+    const info = await sendEmail(
+      targetEmail,
+      '✅ Society Security Email Test',
+      `This is an automated test from the deployed server at ${new Date().toISOString()}`,
+      `<div style="font-family:sans-serif;padding:20px"><h2 style="color:#00A67C">✅ Email System Working</h2><p>This test was sent at <strong>${new Date().toISOString()}</strong> from the live server.</p></div>`
+    );
+    res.json({ status: 'ok', messageId: info.messageId, to: targetEmail });
+  } catch (err: any) {
+    res.status(500).json({
+      status: 'error',
+      error: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      responseCode: err.responseCode,
+    });
+  }
+});
+
 // 404 handler
 app.use(notFoundHandler);
 

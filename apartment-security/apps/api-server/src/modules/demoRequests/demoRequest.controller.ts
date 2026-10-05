@@ -126,10 +126,18 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
 
     // ponytail: 1 & 2. Await both emails so the socket completes transmission before closing HTTP cycle
     try {
-      await Promise.allSettled([
+      const emailResults = await Promise.allSettled([
         sendDemoBookingConfirmationToUser(demoPayload),
         sendDemoRequestNotificationToSuperAdmin(demoPayload),
       ]);
+      emailResults.forEach((r, i) => {
+        const label = i === 0 ? 'UserConfirmation' : 'SuperAdminNotification';
+        if (r.status === 'fulfilled') {
+          console.log(`[EMAIL OK] ${label}: messageId=${r.value?.messageId || 'n/a'}`);
+        } else {
+          console.error(`[EMAIL FAIL] ${label}:`, r.reason?.message || r.reason);
+        }
+      });
     } catch (e) {
       console.error('Non-blocking error during demo emails delivery:', e);
     }
@@ -180,10 +188,18 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
 
     // ponytail: 1 & 2. Await both emails so the socket completes transmission before closing HTTP cycle
     try {
-      await Promise.allSettled([
+      const emailResults = await Promise.allSettled([
         sendDemoBookingConfirmationToUser(demoPayload),
         sendDemoRequestNotificationToSuperAdmin(demoPayload),
       ]);
+      emailResults.forEach((r, i) => {
+        const label = i === 0 ? 'UserConfirmation' : 'SuperAdminNotification';
+        if (r.status === 'fulfilled') {
+          console.log(`[EMAIL OK] ${label}: messageId=${r.value?.messageId || 'n/a'}`);
+        } else {
+          console.error(`[EMAIL FAIL] ${label}:`, r.reason?.message || r.reason);
+        }
+      });
     } catch (e) {
       console.error('Non-blocking error during demo emails delivery:', e);
     }

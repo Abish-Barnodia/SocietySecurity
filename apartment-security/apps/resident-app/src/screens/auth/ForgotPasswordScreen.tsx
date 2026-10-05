@@ -19,6 +19,7 @@ import { RootStackParamList } from '../../navigation/AppNavigator';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../utils/api';
 import ThemedAlertModal from '../../components/ThemedAlertModal';
+import { validatePassword } from '../../utils/passwordValidation';
 
 export default function ForgotPasswordScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -30,10 +31,14 @@ export default function ForgotPasswordScreen() {
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<'email' | 'code' | 'password' | 'confirm' | null>(null);
   const [alertInfo, setAlertInfo] = useState<{ title: string; message: string; onDismiss?: () => void } | null>(null);
+
+  const pwCheck = validatePassword(password);
 
   const handleRequestOtp = async () => {
     const trimmedEmail = email.trim();
@@ -61,8 +66,8 @@ export default function ForgotPasswordScreen() {
       setAlertInfo({ title: 'Invalid Code', message: 'Please enter the 6-digit reset code.' });
       return;
     }
-    if (password.length < 6) {
-      setAlertInfo({ title: 'Invalid Password', message: 'Password must be at least 6 characters.' });
+    if (!pwCheck.isValid) {
+      setAlertInfo({ title: 'Standard Password Required', message: pwCheck.errorMessage || 'Password must meet all complexity requirements.' });
       return;
     }
     if (password !== confirmPassword) {
@@ -87,11 +92,13 @@ export default function ForgotPasswordScreen() {
     }
   };
 
+  const isResetDisabled = loading || (step === 'email' && !email.trim()) || (step === 'reset' && (!code || !password || !confirmPassword || !pwCheck.isValid || password !== confirmPassword));
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
         <ScrollView
@@ -102,19 +109,20 @@ export default function ForgotPasswordScreen() {
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
 
           <View style={styles.headerContainer}>
             <View style={styles.iconContainer}>
-              <Ionicons name="lock-closed-outline" size={30} color={colors.primary} />
+              <Ionicons name="lock-closed" size={30} color={colors.primary} />
             </View>
             <Text style={styles.title}>Reset Password</Text>
             <Text style={styles.subtitle}>
               {step === 'email' 
-                ? 'Enter your registered email address and we will send you a reset code.'
-                : 'Enter the 6-digit code sent to your email and your new password.'}
+                ? 'Enter your registered email address to receive your 6-digit verification code.'
+                : 'Enter the 6-digit code sent to your email and choose a strong new password.'}
             </Text>
           </View>
 
@@ -123,6 +131,7 @@ export default function ForgotPasswordScreen() {
               <View style={styles.formGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={[styles.inputWrapper, focusedField === 'email' && styles.inputWrapperFocused]}>
+                  <Ionicons name="mail-outline" size={20} color={focusedField === 'email' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
                     placeholderTextColor={colors.textMuted}
@@ -140,10 +149,11 @@ export default function ForgotPasswordScreen() {
             ) : (
               <>
                 <View style={styles.formGroup}>
-                  <Text style={styles.inputLabel}>Reset Code</Text>
+                  <Text style={styles.inputLabel}>6-Digit Verification Code</Text>
                   <View style={[styles.inputWrapper, focusedField === 'code' && styles.inputWrapperFocused]}>
+                    <Ionicons name="key-outline" size={20} color={focusedField === 'code' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, { letterSpacing: 4, fontWeight: '700' }]}
                       placeholderTextColor={colors.textMuted}
                       placeholder="123456"
                       keyboardType="number-pad"
@@ -159,11 +169,12 @@ export default function ForgotPasswordScreen() {
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>New Password</Text>
                   <View style={[styles.inputWrapper, focusedField === 'password' && styles.inputWrapperFocused]}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color={focusedField === 'password' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholderTextColor={colors.textMuted}
-                      placeholder="••••••••"
-                      secureTextEntry
+                      placeholder="Min 8 chars with uppercase, number & symbol"
+                      secureTextEntry={!showPassword}
                       autoCapitalize="none"
                       autoCorrect={false}
                       value={password}
@@ -171,17 +182,52 @@ export default function ForgotPasswordScreen() {
                       onFocus={() => setFocusedField('password')}
                       onBlur={() => setFocusedField(null)}
                     />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.eyeBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color={colors.textMuted}
+                      />
+                    </TouchableOpacity>
                   </View>
+
+                  {/* Real-time Password Standards Checklist */}
+                  {password.length > 0 && (
+                    <View style={styles.requirementsBox}>
+                      <Text style={styles.reqTitle}>Password requirements:</Text>
+                      <View style={styles.reqRow}>
+                        <Ionicons name={pwCheck.hasMinLength ? "checkmark-circle" : "ellipse-outline"} size={14} color={pwCheck.hasMinLength ? "#10B981" : colors.textMuted} />
+                        <Text style={[styles.reqText, pwCheck.hasMinLength && styles.reqTextActive]}>At least 8 characters</Text>
+                      </View>
+                      <View style={styles.reqRow}>
+                        <Ionicons name={pwCheck.hasUpper ? "checkmark-circle" : "ellipse-outline"} size={14} color={pwCheck.hasUpper ? "#10B981" : colors.textMuted} />
+                        <Text style={[styles.reqText, pwCheck.hasUpper && styles.reqTextActive]}>1 uppercase letter (A-Z)</Text>
+                      </View>
+                      <View style={styles.reqRow}>
+                        <Ionicons name={pwCheck.hasNumber ? "checkmark-circle" : "ellipse-outline"} size={14} color={pwCheck.hasNumber ? "#10B981" : colors.textMuted} />
+                        <Text style={[styles.reqText, pwCheck.hasNumber && styles.reqTextActive]}>1 number (0-9)</Text>
+                      </View>
+                      <View style={styles.reqRow}>
+                        <Ionicons name={pwCheck.hasSpecial ? "checkmark-circle" : "ellipse-outline"} size={14} color={pwCheck.hasSpecial ? "#10B981" : colors.textMuted} />
+                        <Text style={[styles.reqText, pwCheck.hasSpecial && styles.reqTextActive]}>1 special character (!@#$%^&*)</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.formGroup}>
                   <Text style={styles.inputLabel}>Confirm New Password</Text>
                   <View style={[styles.inputWrapper, focusedField === 'confirm' && styles.inputWrapperFocused]}>
+                    <Ionicons name="lock-closed-outline" size={20} color={focusedField === 'confirm' ? colors.primary : colors.textMuted} style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
                       placeholderTextColor={colors.textMuted}
-                      placeholder="••••••••"
-                      secureTextEntry
+                      placeholder="Repeat your new password"
+                      secureTextEntry={!showConfirmPassword}
                       autoCapitalize="none"
                       autoCorrect={false}
                       value={confirmPassword}
@@ -189,7 +235,21 @@ export default function ForgotPasswordScreen() {
                       onFocus={() => setFocusedField('confirm')}
                       onBlur={() => setFocusedField(null)}
                     />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      style={styles.eyeBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color={colors.textMuted}
+                      />
+                    </TouchableOpacity>
                   </View>
+                  {confirmPassword.length > 0 && password !== confirmPassword && (
+                    <Text style={styles.errorHint}>Passwords do not match</Text>
+                  )}
                 </View>
               </>
             )}
@@ -197,15 +257,14 @@ export default function ForgotPasswordScreen() {
             <TouchableOpacity
               style={[
                 styles.button,
-                ((step === 'email' && !email) || (step === 'reset' && (!code || !password || !confirmPassword)) || loading) 
-                  && styles.buttonDisabled
+                isResetDisabled && styles.buttonDisabled
               ]}
               onPress={step === 'email' ? handleRequestOtp : handleResetPassword}
-              disabled={loading || (step === 'email' && !email) || (step === 'reset' && (!code || !password || !confirmPassword))}
+              disabled={isResetDisabled}
               activeOpacity={0.8}
             >
               {loading ? (
-                <ActivityIndicator color={colors.card} />
+                <ActivityIndicator color="#ffffff" />
               ) : (
                 <Text style={styles.buttonText}>
                   {step === 'email' ? 'Send Reset Code' : 'Reset Password'}
@@ -220,7 +279,7 @@ export default function ForgotPasswordScreen() {
                 disabled={loading}
               >
                 <Text style={styles.resendText}>
-                  Didn't receive a code? <Text style={styles.resendTextBold}>Resend</Text>
+                  Didn't receive a code? <Text style={styles.resendTextBold}>Resend Code</Text>
                 </Text>
               </TouchableOpacity>
             )}
@@ -250,60 +309,67 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.card,
-    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: isDark ? 0.2 : 0.06,
+    shadowRadius: 4,
     elevation: 2,
   },
   headerContainer: {
-    marginBottom: 40,
+    marginBottom: 32,
     alignItems: 'center',
   },
   iconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primaryLight,
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#e0f2fe',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(2, 132, 199, 0.3)' : '#bae6fd',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   title: {
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    fontSize: 28,
-    fontWeight: Platform.OS === 'ios' ? '700' : 'normal',
+    fontSize: 24,
+    fontWeight: '800',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 21,
+    paddingHorizontal: 12,
   },
   formContainer: {
     width: '100%',
   },
   formGroup: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -311,41 +377,89 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    height: 56,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
   },
   inputWrapperFocused: {
     borderColor: colors.primary,
     backgroundColor: colors.card,
+    borderWidth: 1.5,
+  },
+  inputIcon: {
+    marginRight: 10,
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
+  },
+  eyeBtn: {
+    padding: 6,
+  },
+  requirementsBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc',
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  reqTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  reqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reqText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  reqTextActive: {
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  errorHint: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 6,
+    marginLeft: 4,
   },
   button: {
     backgroundColor: colors.primary,
-    borderRadius: 16,
-    height: 56,
+    borderRadius: 14,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.4 : 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   buttonDisabled: {
-    backgroundColor: '#EBE3DB',
+    backgroundColor: isDark ? '#334155' : '#cbd5e1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   buttonText: {
-    color: colors.card,
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
   resendButton: {
-    marginTop: 24,
+    marginTop: 20,
     alignItems: 'center',
   },
   resendText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textMuted,
   },
   resendTextBold: {

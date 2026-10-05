@@ -21,6 +21,7 @@ import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../../context/ThemeContext';
 import api from '../../utils/api';
 import ApprovalPendingScreen from './ApprovalPendingScreen';
+import { validatePassword } from '../../utils/passwordValidation';
 
 interface CountryItem {
   id: string;
@@ -255,9 +256,16 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
       return;
     }
 
-    if (!isAuthenticated && (!email.trim() || !password || password.length < 6)) {
-      Alert.alert('Missing Details', 'Please enter your Email and Password (min 6 chars) to create your account.');
-      return;
+    if (!isAuthenticated) {
+      if (!email.trim() || !password) {
+        Alert.alert('Missing Details', 'Please enter your Email and Password to create your account.');
+        return;
+      }
+      const pwCheck = validatePassword(password);
+      if (!pwCheck.isValid) {
+        Alert.alert('Standard Password Required', pwCheck.errorMessage || 'Password must meet all complexity requirements.');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -873,7 +881,7 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
               <View style={styles.passwordInputWrap}>
                 <TextInput
                   style={styles.passwordTextInput}
-                  placeholder="At least 6 characters"
+                  placeholder="Min 8 chars with uppercase, number & symbol"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -894,6 +902,31 @@ export default function ResidentRegistrationFlow({ onCompleteRegistration, onGoT
                   />
                 </TouchableOpacity>
               </View>
+
+              {password.length > 0 && (() => {
+                const check = validatePassword(password);
+                return (
+                  <View style={styles.requirementsBox}>
+                    <Text style={styles.reqTitle}>Password requirements:</Text>
+                    <View style={styles.reqRow}>
+                      <Ionicons name={check.hasMinLength ? "checkmark-circle" : "ellipse-outline"} size={14} color={check.hasMinLength ? "#10B981" : "#94A3B8"} />
+                      <Text style={[styles.reqText, check.hasMinLength && styles.reqTextActive]}>At least 8 characters</Text>
+                    </View>
+                    <View style={styles.reqRow}>
+                      <Ionicons name={check.hasUpper ? "checkmark-circle" : "ellipse-outline"} size={14} color={check.hasUpper ? "#10B981" : "#94A3B8"} />
+                      <Text style={[styles.reqText, check.hasUpper && styles.reqTextActive]}>1 uppercase letter (A-Z)</Text>
+                    </View>
+                    <View style={styles.reqRow}>
+                      <Ionicons name={check.hasNumber ? "checkmark-circle" : "ellipse-outline"} size={14} color={check.hasNumber ? "#10B981" : "#94A3B8"} />
+                      <Text style={[styles.reqText, check.hasNumber && styles.reqTextActive]}>1 number (0-9)</Text>
+                    </View>
+                    <View style={styles.reqRow}>
+                      <Ionicons name={check.hasSpecial ? "checkmark-circle" : "ellipse-outline"} size={14} color={check.hasSpecial ? "#10B981" : "#94A3B8"} />
+                      <Text style={[styles.reqText, check.hasSpecial && styles.reqTextActive]}>1 special character (!@#$%^&*)</Text>
+                    </View>
+                  </View>
+                );
+              })()}
             </>
           ) : null}
 
@@ -1353,5 +1386,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+  },
+  requirementsBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  reqTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  reqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reqText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  reqTextActive: {
+    color: '#10B981',
+    fontWeight: '600',
   },
 });

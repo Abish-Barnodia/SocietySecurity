@@ -13,10 +13,17 @@ export const emailLoginSchema = z.object({
   }),
 });
 
+export const passwordComplexitySchema = z
+  .string()
+  .min(8, 'Password must be at least 8 characters')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter (A-Z)')
+  .regex(/[0-9]/, 'Password must contain at least one number (0-9)')
+  .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/, 'Password must contain at least one special character (!@#$%^&*)');
+
 export const emailSignupSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: passwordComplexitySchema,
     name: z.string().min(1, 'Name is required'),
     phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'Invalid phone number format').optional(),
   }),
@@ -64,7 +71,7 @@ export const registerFcmTokenSchema = z.object({
 export const signupEmailSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    password: z.string().min(6),
+    password: passwordComplexitySchema,
     name: z.string().min(2).optional(),
     role: z.enum(['RESIDENT', 'MANAGER']).optional(),
   })
@@ -88,6 +95,6 @@ export const resetPasswordSchema = z.object({
   body: z.object({
     email: z.string().email('Invalid email format'),
     code: z.string().length(6, 'OTP must be 6 characters'),
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: passwordComplexitySchema,
   })
 });

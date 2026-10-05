@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.updateManagerProfileSchema = exports.emailSignupSchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
+exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginEmailSchema = exports.signupEmailSchema = exports.registerFcmTokenSchema = exports.refreshTokenSchema = exports.verifyOtpSchema = exports.googleAuthSchema = exports.verifyEmailOtpSchema = exports.updateManagerProfileSchema = exports.emailSignupSchema = exports.passwordComplexitySchema = exports.emailLoginSchema = exports.requestOtpSchema = void 0;
 const zod_1 = require("zod");
 exports.requestOtpSchema = zod_1.z.object({
     body: zod_1.z.object({
@@ -13,10 +13,16 @@ exports.emailLoginSchema = zod_1.z.object({
         password: zod_1.z.string().min(1, 'Password is required'),
     }),
 });
+exports.passwordComplexitySchema = zod_1.z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter (A-Z)')
+    .regex(/[0-9]/, 'Password must contain at least one number (0-9)')
+    .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/, 'Password must contain at least one special character (!@#$%^&*)');
 exports.emailSignupSchema = zod_1.z.object({
     body: zod_1.z.object({
         email: zod_1.z.string().email('Invalid email format'),
-        password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
+        password: exports.passwordComplexitySchema,
         name: zod_1.z.string().min(1, 'Name is required'),
         phone: zod_1.z.string().regex(/^\+[1-9]\d{7,14}$/, 'Invalid phone number format').optional(),
     }),
@@ -57,7 +63,7 @@ exports.registerFcmTokenSchema = zod_1.z.object({
 exports.signupEmailSchema = zod_1.z.object({
     body: zod_1.z.object({
         email: zod_1.z.string().email(),
-        password: zod_1.z.string().min(6),
+        password: exports.passwordComplexitySchema,
         name: zod_1.z.string().min(2).optional(),
         role: zod_1.z.enum(['RESIDENT', 'MANAGER']).optional(),
     })
@@ -78,7 +84,7 @@ exports.resetPasswordSchema = zod_1.z.object({
     body: zod_1.z.object({
         email: zod_1.z.string().email('Invalid email format'),
         code: zod_1.z.string().length(6, 'OTP must be 6 characters'),
-        password: zod_1.z.string().min(6, 'Password must be at least 6 characters'),
+        password: exports.passwordComplexitySchema,
     })
 });
 //# sourceMappingURL=auth.schema.js.map

@@ -103,8 +103,9 @@ export const Societies: React.FC = () => {
     }
   };
 
-  const [createdResult, setCreatedResult] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
 
   const handleCreateSociety = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,6 +114,7 @@ export const Societies: React.FC = () => {
       setIsAddModalOpen(false);
       setCreatedResult(res);
       setCopied(false);
+      setEmailSentSuccess(false);
       setNewSociety({
         name: '',
         address: '',
@@ -151,15 +153,29 @@ export const Societies: React.FC = () => {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleSendEmail = () => {
-    if (!createdResult) return;
+  const handleSendEmail = async () => {
+    if (!createdResult || isSendingEmail) return;
     const recipient = createdResult.credentials.email;
     const portalUrl = getPortalUrl(createdResult.society.slug);
-    const subject = `Welcome to SecureGate - Login Credentials for ${createdResult.society.name}`;
-    const body = `Hello ${createdResult.manager?.name || 'Manager'},\n\nYour society "${createdResult.society.name}" has been successfully created and provisioned on SecureGate!\n\nHere are your Manager Portal login details:\n• Portal URL: ${portalUrl}\n• Society Slug: ${createdResult.society.slug}\n• Login Email: ${createdResult.credentials.email}\n• Temporary Password: ${createdResult.credentials.temporaryPassword}\n\nPlease sign in to configure your entry gates, assign security guards, and onboard residents.\nFor account security, remember to update your temporary password after logging in.\n\nBest regards,\nSecureGate Platform Administration`;
 
-    const mailtoUrl = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailtoUrl, '_blank');
+    setIsSendingEmail(true);
+    try {
+      await superAdminService.sendManagerCredentialsEmail({
+        societyId: createdResult.society.id,
+        societyName: createdResult.society.name,
+        slug: createdResult.society.slug,
+        managerName: createdResult.manager?.name || 'Manager',
+        managerEmail: recipient,
+        temporaryPassword: createdResult.credentials.temporaryPassword,
+        portalUrl,
+      });
+      setEmailSentSuccess(true);
+      setTimeout(() => setEmailSentSuccess(false), 5000);
+    } catch (err: any) {
+      alert(`Failed to send email: ${err.message || 'SMTP server error'}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const handleSendWhatsApp = () => {
@@ -658,8 +674,9 @@ export const Societies: React.FC = () => {
                   type="button"
                   className="btn"
                   onClick={handleSendEmail}
+                  disabled={isSendingEmail}
                   style={{
-                    background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                    background: emailSentSuccess ? '#059669' : 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
                     color: '#FFFFFF',
                     border: 'none',
                     display: 'flex',
@@ -669,11 +686,14 @@ export const Societies: React.FC = () => {
                     fontWeight: 600,
                     padding: '10px 16px',
                     borderRadius: 'var(--radius-sm)',
-                    boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+                    boxShadow: emailSentSuccess ? '0 2px 8px rgba(5, 150, 105, 0.25)' : '0 2px 8px rgba(2, 132, 199, 0.25)',
+                    cursor: isSendingEmail ? 'not-allowed' : 'pointer',
+                    opacity: isSendingEmail ? 0.7 : 1,
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  <Icon icon="solar:letter-bold" width="18" />
-                  Send via Email
+                  <Icon icon={isSendingEmail ? "solar:restart-bold" : emailSentSuccess ? "solar:check-circle-bold" : "solar:letter-bold"} className={isSendingEmail ? "animate-spin" : ""} width="18" />
+                  {isSendingEmail ? 'Sending Email...' : emailSentSuccess ? 'Email Sent Directly!' : 'Send via Email'}
                 </button>
               </div>
             </div>

@@ -7,12 +7,10 @@ export const sendEmail = async (
   html?: string,
   attachments?: Array<{ filename: string; content?: any; path?: string; contentType?: string }>
 ) => {
-  const hasAuth = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const smtpUser = (process.env.SMTP_USER || '').trim();
+  const smtpPass = (process.env.SMTP_PASS || '').replace(/[\r\n\t"]/g, '').replace(/\s+/g, '').trim();
+  const hasAuth = !!(smtpUser && smtpPass);
 
-  // Without credentials, connecting to smtp.ethereal.email is guaranteed to
-  // fail (or hang until the client times out) — that's what was surfacing as
-  // a generic "please try again" on password reset with no real cause shown.
-  // Log-and-skip in every environment instead of only outside production.
   if (!hasAuth) {
     console.warn('\n=== EMAIL NOT SENT (Missing SMTP credentials) ===');
     console.warn(`To: ${to}`);
@@ -23,20 +21,26 @@ export const sendEmail = async (
     return { messageId: 'mock-id' };
   }
 
+  const smtpHost = process.env.SMTP_HOST || (smtpUser.endsWith('@gmail.com') ? 'smtp.gmail.com' : 'smtp.ethereal.email');
+  const isGmail = smtpHost.includes('gmail.com');
+  const smtpPort = parseInt(process.env.SMTP_PORT || (isGmail ? '465' : '587'), 10);
+  const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true',
-    ...(hasAuth ? {
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      }
-    } : {})
+    host: smtpHost,
+    port: smtpPort,
+    secure: isSecure,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 
   const mailOptions = {
-    from: process.env.SMTP_FROM || '"Apartment Security" <noreply@example.com>',
+    from: process.env.SMTP_FROM || `"Society Security" <${smtpUser || 'noreply@example.com'}>`,
     to,
     subject,
     text,
@@ -45,7 +49,7 @@ export const sendEmail = async (
   };
 
   const info = await transporter.sendMail(mailOptions);
-  console.log('Message sent: %s', info.messageId);
+  console.log('Message sent successfully: %s to %s', info.messageId, to);
   return info;
 };
 
@@ -460,6 +464,77 @@ export const sendInvoiceEmail = async (opts: {
   } catch (err) {
     console.error('Failed to send maintenance invoice email:', err);
   }
+};
+
+// ponytail: directly email manager login credentials upon approval or manual dispatch
+export const sendManagerCredentialsEmail = async (opts: {
+  to: string;
+  managerName?: string;
+  societyName: string;
+  slug: string;
+  temporaryPassword?: string;
+  portalUrl?: string;
+}) => {
+  const managerName = opts.managerName || 'Manager';
+  const portalUrl = opts.portalUrl || (process.env.CLIENT_MANAGER_URL ? `${process.env.CLIENT_MANAGER_URL}/login?slug=${opts.slug}` : `http://localhost:3000/login?slug=${opts.slug}`);
+  const subject = `🔐 Welcome to Society Security: Manager Credentials for ${opts.societyName}`;
+  const text = `Hello ${managerName},\n\nYour manager account for ${opts.societyName} has been activated!\n\nPortal URL: ${portalUrl}\nSociety Slug: ${opts.slug}\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword || 'Configured during setup'}\n\nPlease sign in to configure your security staff, gates, and resident directory.\n\nBest regards,\nSociety Security Team`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #0284C7, #0369A1); padding: 22px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 22px; font-weight: 700;">Welcome to Society Security! 🏢</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Manager Portal Account Provisioned</p>
+      </div>
+
+      <div style="background: white; padding: 24px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin-top: 0; font-size: 15px; color: #334155;">
+          Hello <strong>${managerName}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #475569; line-height: 22px;">
+          Your society <strong>${opts.societyName}</strong> has been successfully approved and activated on the <strong>Society Security</strong> platform.
+        </p>
+
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 18px; margin: 20px 0;">
+          <h4 style="margin: 0 0 12px; color: #0369a1; font-size: 15px; font-weight: 700;">🔑 Your Manager Portal Credentials</h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b; width: 140px;">Portal Link:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0284c7;">
+                <a href="${portalUrl}" style="color: #0284c7; text-decoration: underline;">${portalUrl}</a>
+              </td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Society Slug:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a; font-family: monospace;">${opts.slug}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e0f2fe;">
+              <td style="padding: 8px 0; color: #64748b;">Login Email:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${opts.to}</td>
+            </tr>
+            ${opts.temporaryPassword ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Temporary Password:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0284c7; font-family: monospace; font-size: 16px;">${opts.temporaryPassword}</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+
+        <div style="text-align: center; margin: 24px 0 16px;">
+          <a href="${portalUrl}" style="display: inline-block; background: linear-gradient(135deg, #0284C7, #0369A1); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);">
+            Sign in to Manager Dashboard →
+          </a>
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; line-height: 20px; margin-bottom: 0;">
+          💡 <em>Tip: For account security, we recommend changing your temporary password after your initial sign in.</em>
+        </p>
+      </div>
+    </div>
+  `;
+
+  return sendEmail(opts.to, subject, text, html);
 };
 
 

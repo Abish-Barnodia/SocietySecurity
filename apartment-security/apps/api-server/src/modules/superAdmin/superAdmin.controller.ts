@@ -765,3 +765,31 @@ export const updatePlatformSettings = async (req: Request, res: Response, next: 
   }
 };
 
+// ponytail: directly email manager credentials via SMTP
+export const sendManagerCredentials = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { managerEmail, managerName, societyName, slug, temporaryPassword, portalUrl } = req.body;
+
+    if (!managerEmail) {
+      return next(new AppError('Manager email is required', 400));
+    }
+
+    const { sendManagerCredentialsEmail } = await import('../../utils/email.service');
+    await sendManagerCredentialsEmail({
+      to: managerEmail,
+      managerName,
+      societyName: societyName || 'Society Security',
+      slug: slug || 'society',
+      temporaryPassword,
+      portalUrl,
+    });
+
+    return sendSuccess(res, 200, `Login credentials sent successfully to ${managerEmail}`, {
+      sent: true,
+      recipient: managerEmail,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

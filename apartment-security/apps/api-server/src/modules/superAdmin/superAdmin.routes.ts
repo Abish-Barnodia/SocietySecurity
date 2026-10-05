@@ -11,6 +11,7 @@ import {
   getSubscriptionPlans,
   getPlatformSettings,
   updatePlatformSettings,
+  sendManagerCredentials,
 } from './superAdmin.controller';
 import { authenticate } from '../../middlewares/auth.middleware';
 import { requireRole } from '../../middlewares/role.middleware';
@@ -31,5 +32,6 @@ router.get('/audit-logs', getAuditLogs);
 router.get('/subscription-plans', getSubscriptionPlans);
 router.get('/settings', getPlatformSettings);
 router.put('/settings', updatePlatformSettings);
+router.post('/send-manager-credentials', sendManagerCredentials);
 
 export default router;

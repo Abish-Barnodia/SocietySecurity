@@ -220,10 +220,17 @@ const App: React.FC = () => {
 
   if (!isAuthenticated) {
     const handleLoginWithReturn = (token: string, user: any) => {
-      setActiveTab('dashboard');
       handleLogin(token, user);
-      history.replaceState(null, '', '/dashboard');
-      setCurrentPath('/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      const redirectPath = params.get('redirect');
+      if (redirectPath) {
+        history.replaceState(null, '', redirectPath);
+        setCurrentPath(redirectPath.toLowerCase());
+      } else {
+        setActiveTab('dashboard');
+        history.replaceState(null, '', '/dashboard');
+        setCurrentPath('/dashboard');
+      }
     };
 
     // If on root path ('/' or ''), render the Landing Page

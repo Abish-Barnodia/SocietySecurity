@@ -93,7 +93,8 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
 
   const getPortalUrl = (slug?: string) => {
     const s = slug || provisionedData?.society?.slug || '';
-    return `${window.location.protocol}//${window.location.hostname}:5173/login?slug=${s}`;
+    const base = window.location.origin;
+    return `${base}/login?slug=${s}`;
   };
 
   const getFormattedCredentialsText = () => {

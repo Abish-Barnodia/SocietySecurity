@@ -347,15 +347,22 @@ export const sendDemoBookingConfirmationToUser = async (data: DemoNotificationDa
   }
 };
 
+function cleanManagerPortalBase(): string {
+  let base = (process.env.CLIENT_MANAGER_URL || 'https://society-security-phi.vercel.app').trim();
+  if (base.includes('.vercel.app') || base.startsWith('https://')) {
+    base = base.replace(/:5173\b/, '').replace(/:3002\b/, '');
+  }
+  return base.replace(/\/+$/, '');
+}
+
 // ponytail: direct SMTP email alert to super admin when society registers for demo
 export const sendDemoRequestNotificationToSuperAdmin = async (data: DemoNotificationData) => {
   const superAdminEmail =
     process.env.SUPER_ADMIN_EMAIL ||
     'abishbarnodia2018@gmail.com';
 
-  const portalUrl = process.env.CLIENT_MANAGER_URL
-    ? `${process.env.CLIENT_MANAGER_URL}/super-admin/demo-requests`
-    : 'https://society-security-phi.vercel.app/dashboard';
+  const managerBase = cleanManagerPortalBase();
+  const portalUrl = `${managerBase}/login?redirect=${encodeURIComponent('/super-admin?tab=demos')}&role=superadmin`;
 
   const subject = `🔔 New Demo Registration: ${data.societyName} - Action Required: Go and Approve Request`;
 
@@ -710,8 +717,17 @@ export const sendManagerCredentialsEmail = async (opts: {
   portalUrl?: string;
 }) => {
   const managerName = opts.managerName || 'Manager';
-  const defaultManagerBase = process.env.CLIENT_MANAGER_URL || 'https://society-security-phi.vercel.app';
-  const portalUrl = opts.portalUrl || (opts.slug ? `${defaultManagerBase}/login?slug=${opts.slug}` : `${defaultManagerBase}/login`);
+  const defaultManagerBase = cleanManagerPortalBase();
+  let portalUrl = opts.portalUrl;
+  if (portalUrl) {
+    if (portalUrl.includes('.vercel.app') || portalUrl.startsWith('https://')) {
+      portalUrl = portalUrl.replace(/:5173\b/, '').replace(/:3002\b/, '');
+    }
+  } else {
+    portalUrl = opts.slug
+      ? `${defaultManagerBase}/login?slug=${encodeURIComponent(opts.slug)}&email=${encodeURIComponent(opts.to)}`
+      : `${defaultManagerBase}/login?email=${encodeURIComponent(opts.to)}`;
+  }
   const subject = `🎉 Your Demo Request is Approved! Manager Credentials for ${opts.societyName}`;
   const text = `Hello ${managerName},\n\nGreat news! Your demo request and 1-month trial for ${opts.societyName} has been approved by the Super Admin!\n\nYour manager account is now active.\n\nPortal Link: ${portalUrl}\nSociety Slug: ${opts.slug}\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword || 'Configured during setup'}\n\nPlease sign in to configure your security staff, gates, and resident directory.\n\nBest regards,\nSociety Security Team`;
 

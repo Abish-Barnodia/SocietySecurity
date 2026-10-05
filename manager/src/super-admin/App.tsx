@@ -17,7 +17,16 @@ interface SuperAdminPortalProps {
 }
 
 export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) => {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const search = new URLSearchParams(window.location.search);
+    const tabParam = search.get('tab');
+    if (tabParam === 'demos' || tabParam === 'demo-requests') return 'demos';
+    if (tabParam === 'societies') return 'societies';
+    if (tabParam === 'managers') return 'managers';
+    if (tabParam === 'subscriptions') return 'subscriptions';
+    if (tabParam === 'audit') return 'audit';
+    return 'dashboard';
+  });
   const [stats, setStats] = useState<PlatformStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [provisioningDemo, setProvisioningDemo] = useState<DemoRequest | null>(null);

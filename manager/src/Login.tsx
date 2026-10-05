@@ -43,6 +43,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   // Ensure clean crisp login styling by resetting any portal theme attribute
   useEffect(() => {
     document.documentElement.removeAttribute('data-theme');
+    const params = new URLSearchParams(window.location.search);
+    const emailParam = params.get('email');
+    if (emailParam) {
+      setEmail(emailParam);
+    }
   }, []);
 
   // Load public registered societies

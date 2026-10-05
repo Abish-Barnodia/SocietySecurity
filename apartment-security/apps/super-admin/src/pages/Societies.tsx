@@ -138,7 +138,8 @@ export const Societies: React.FC = () => {
 
   const getPortalUrl = (slug?: string) => {
     const s = slug || createdResult?.society?.slug || '';
-    return `${window.location.protocol}//${window.location.hostname}:5173/login?slug=${s}`;
+    const base = window.location.origin;
+    return `${base}/login?slug=${s}`;
   };
 
   const getFormattedCredentialsText = () => {
@@ -1042,7 +1043,7 @@ export const Societies: React.FC = () => {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.protocol}//${window.location.hostname}:5173/login?slug=${selectedSociety.slug}`);
+                  navigator.clipboard.writeText(`${window.location.origin}/login?slug=${selectedSociety.slug}`);
                   alert('Manager portal URL copied!');
                 }}
               >

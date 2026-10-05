@@ -82,15 +82,25 @@ export const Societies: React.FC = () => {
     fetchSocieties();
   }, [statusFilter, search, page, pageSize]);
 
-  const handleStatusToggle = async (society: Society) => {
-    const nextStatus: SocietyStatus = society.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    if (!window.confirm(`Are you sure you want to change status of "${society.name}" to ${nextStatus}?`)) return;
+  const [statusConfirmTarget, setStatusConfirmTarget] = useState<{ society: Society; nextStatus: SocietyStatus } | null>(null);
+  const [statusConfirmLoading, setStatusConfirmLoading] = useState(false);
 
+  const handleStatusToggle = (society: Society) => {
+    const nextStatus: SocietyStatus = society.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    setStatusConfirmTarget({ society, nextStatus });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusConfirmTarget) return;
+    setStatusConfirmLoading(true);
     try {
-      await superAdminService.updateSocietyStatus(society.id, nextStatus);
+      await superAdminService.updateSocietyStatus(statusConfirmTarget.society.id, statusConfirmTarget.nextStatus);
+      setStatusConfirmTarget(null);
       fetchSocieties();
     } catch (err: any) {
       alert(err.message || 'Failed to update society status');
+    } finally {
+      setStatusConfirmLoading(false);
     }
   };
 
@@ -1016,6 +1026,104 @@ export const Societies: React.FC = () => {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Society Status Change Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(statusConfirmTarget)}
+        onClose={() => !statusConfirmLoading && setStatusConfirmTarget(null)}
+        title={statusConfirmTarget?.nextStatus === 'SUSPENDED' ? 'Suspend Society' : 'Activate Society'}
+        maxWidth="500px"
+      >
+        {statusConfirmTarget && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  background: statusConfirmTarget.nextStatus === 'SUSPENDED' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                  color: statusConfirmTarget.nextStatus === 'SUSPENDED' ? '#ef4444' : '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: '22px'
+                }}
+              >
+                <Icon
+                  icon={
+                    statusConfirmTarget.nextStatus === 'SUSPENDED'
+                      ? 'solar:danger-triangle-bold-duotone'
+                      : 'solar:check-circle-bold-duotone'
+                  }
+                  width="24"
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {statusConfirmTarget.nextStatus === 'SUSPENDED'
+                    ? `Suspend "${statusConfirmTarget.society.name}"?`
+                    : `Activate "${statusConfirmTarget.society.name}"?`}
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {statusConfirmTarget.nextStatus === 'SUSPENDED'
+                    ? `Are you sure you want to suspend this society? Managers, guards, and residents belonging to this society will lose access until it is reactivated.`
+                    : `Are you sure you want to activate this society? Users associated with this society will regain full access.`}
+                </p>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--bg-secondary, rgba(0, 0, 0, 0.03))',
+              border: '1px solid var(--border-color, rgba(0, 0, 0, 0.08))',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '0.8rem',
+              color: 'var(--text-secondary)'
+            }}>
+              <div><strong>Society:</strong> {statusConfirmTarget.society.name}</div>
+              {statusConfirmTarget.society.slug && <div><strong>Slug:</strong> <code>{statusConfirmTarget.society.slug}</code></div>}
+              <div><strong>Current Status:</strong> <span className={`badge badge-${statusConfirmTarget.society.status.toLowerCase()}`}>{statusConfirmTarget.society.status}</span></div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setStatusConfirmTarget(null)}
+                disabled={statusConfirmLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={statusConfirmTarget.nextStatus === 'SUSPENDED' ? 'btn btn-danger' : 'btn btn-primary'}
+                onClick={handleConfirmStatusChange}
+                disabled={statusConfirmLoading}
+                style={statusConfirmTarget.nextStatus === 'SUSPENDED' ? { background: '#ef4444', color: '#ffffff', borderColor: '#dc2626' } : {}}
+              >
+                {statusConfirmLoading ? (
+                  <>
+                    <Icon icon="solar:spinner-line-duotone" width="16" className="animate-spin" />
+                    Updating...
+                  </>
+                ) : statusConfirmTarget.nextStatus === 'SUSPENDED' ? (
+                  <>
+                    <Icon icon="solar:shield-cross-bold" width="16" />
+                    Confirm Suspension
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:shield-check-bold" width="16" />
+                    Confirm Activation
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}

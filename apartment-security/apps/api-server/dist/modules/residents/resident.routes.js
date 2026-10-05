@@ -24,6 +24,12 @@ router.put('/me/alerts', (0, role_middleware_1.requireRole)('RESIDENT'), (0, val
 router.get('/unit', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.getUnitResidents);
 router.post('/unit/members', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.addHouseholdMember);
 router.delete('/unit/members/:memberId', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.removeHouseholdMember);
+router.get('/unit/vehicles', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.getUnitVehicles);
+router.post('/unit/vehicles', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.addUnitVehicle);
+router.delete('/unit/vehicles/:vehicleId', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.removeUnitVehicle);
+router.get('/unit/pets', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.getUnitPets);
+router.post('/unit/pets', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.addUnitPet);
+router.delete('/unit/pets/:petId', (0, role_middleware_1.requireRole)('RESIDENT'), resident_controller_1.removeUnitPet);
 // Manager operations
 router.get('/pending', (0, role_middleware_1.requireRole)('MANAGER', 'COMMITTEE'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.getPendingResidents);
 router.post('/:id/approve', (0, role_middleware_1.requireRole)('MANAGER'), (0, managerPermission_middleware_1.requireManagerPermission)('residents'), resident_controller_1.approveResident);

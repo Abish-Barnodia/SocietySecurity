@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getUnitSummary = exports.shareResidentCredential = exports.restoreFamily = exports.deleteFamily = exports.deactivateResident = exports.updateHousehold = exports.onboardHousehold = exports.onboardResident = exports.uploadResidentDocument = exports.getFamilyDetails = exports.getAllResidents = exports.rejectResident = exports.approveResident = exports.getPendingResidents = exports.onboardSelf = exports.getUnitsByTower = exports.getTowers = exports.removeHouseholdMember = exports.addHouseholdMember = exports.getUnitResidents = exports.updateAlertPreferences = exports.updateMyProfile = exports.getMyProfile = void 0;
+exports.getUnitSummary = exports.shareResidentCredential = exports.restoreFamily = exports.deleteFamily = exports.deactivateResident = exports.updateHousehold = exports.onboardHousehold = exports.onboardResident = exports.uploadResidentDocument = exports.getFamilyDetails = exports.getAllResidents = exports.rejectResident = exports.approveResident = exports.getPendingResidents = exports.onboardSelf = exports.getUnitsByTower = exports.getTowers = exports.removeUnitPet = exports.addUnitPet = exports.getUnitPets = exports.removeUnitVehicle = exports.addUnitVehicle = exports.getUnitVehicles = exports.removeHouseholdMember = exports.addHouseholdMember = exports.getUnitResidents = exports.updateAlertPreferences = exports.updateMyProfile = exports.getMyProfile = void 0;
 const prisma_1 = require("../../config/prisma");
 const response_util_1 = require("../../utils/response.util");
 const error_middleware_1 = require("../../middlewares/error.middleware");
@@ -198,6 +198,167 @@ const removeHouseholdMember = async (req, res, next) => {
     }
 };
 exports.removeHouseholdMember = removeHouseholdMember;
+const getUnitVehicles = async (req, res, next) => {
+    try {
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const vehicles = await prisma_1.prisma.vehicle.findMany({
+            where: { unitId: currentResident.unitId, isActive: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Unit vehicles fetched', vehicles);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getUnitVehicles = getUnitVehicles;
+const addUnitVehicle = async (req, res, next) => {
+    try {
+        const { registrationNo, make, model, color, type } = req.body;
+        if (!registrationNo || !registrationNo.trim()) {
+            return next(new error_middleware_1.AppError('Vehicle registration number is required', 400));
+        }
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const normalizedRegNo = registrationNo.trim().toUpperCase();
+        const existing = await prisma_1.prisma.vehicle.findFirst({
+            where: { unitId: currentResident.unitId, registrationNo: normalizedRegNo }
+        });
+        let vehicle;
+        if (existing) {
+            vehicle = await prisma_1.prisma.vehicle.update({
+                where: { id: existing.id },
+                data: {
+                    isActive: true,
+                    make: make?.trim() || existing.make,
+                    model: model?.trim() || existing.model,
+                    color: color?.trim() || existing.color,
+                    type: type?.toUpperCase() || existing.type,
+                }
+            });
+        }
+        else {
+            vehicle = await prisma_1.prisma.vehicle.create({
+                data: {
+                    unitId: currentResident.unitId,
+                    registrationNo: normalizedRegNo,
+                    make: make?.trim() || null,
+                    model: model?.trim() || null,
+                    color: color?.trim() || null,
+                    type: type?.toUpperCase() || 'CAR',
+                    isResident: true,
+                    isActive: true,
+                }
+            });
+        }
+        await (0, audit_util_1.auditLog)(req.user.userId, 'ADD_UNIT_VEHICLE', 'Vehicle', vehicle.id);
+        server_1.io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+        return (0, response_util_1.sendSuccess)(res, 201, 'Vehicle added successfully', vehicle);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.addUnitVehicle = addUnitVehicle;
+const removeUnitVehicle = async (req, res, next) => {
+    try {
+        const vehicleId = req.params.vehicleId;
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const vehicle = await prisma_1.prisma.vehicle.findUnique({ where: { id: vehicleId } });
+        if (!vehicle || vehicle.unitId !== currentResident.unitId) {
+            return next(new error_middleware_1.AppError('Vehicle not found in your unit', 404));
+        }
+        await prisma_1.prisma.vehicle.delete({ where: { id: vehicleId } });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'REMOVE_UNIT_VEHICLE', 'Vehicle', vehicleId);
+        server_1.io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Vehicle removed successfully');
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.removeUnitVehicle = removeUnitVehicle;
+const getUnitPets = async (req, res, next) => {
+    try {
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const pets = await prisma_1.prisma.pet.findMany({
+            where: { unitId: currentResident.unitId },
+            orderBy: { createdAt: 'desc' }
+        });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Unit pets fetched', pets);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.getUnitPets = getUnitPets;
+const addUnitPet = async (req, res, next) => {
+    try {
+        const { name, type, breed, age, notes } = req.body;
+        if (!name || !name.trim()) {
+            return next(new error_middleware_1.AppError('Pet name is required', 400));
+        }
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const pet = await prisma_1.prisma.pet.create({
+            data: {
+                unitId: currentResident.unitId,
+                name: name.trim(),
+                type: type?.toUpperCase() || 'DOG',
+                breed: breed?.trim() || null,
+                age: age?.trim() || null,
+                notes: notes?.trim() || null,
+            }
+        });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'ADD_UNIT_PET', 'Pet', pet.id);
+        server_1.io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+        return (0, response_util_1.sendSuccess)(res, 201, 'Pet added successfully', pet);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.addUnitPet = addUnitPet;
+const removeUnitPet = async (req, res, next) => {
+    try {
+        const petId = req.params.petId;
+        const currentResident = await prisma_1.prisma.resident.findUnique({
+            where: { userId: req.user.userId }
+        });
+        if (!currentResident)
+            return next(new error_middleware_1.AppError('Resident not found', 404));
+        const pet = await prisma_1.prisma.pet.findUnique({ where: { id: petId } });
+        if (!pet || pet.unitId !== currentResident.unitId) {
+            return next(new error_middleware_1.AppError('Pet not found in your unit', 404));
+        }
+        await prisma_1.prisma.pet.delete({ where: { id: petId } });
+        await (0, audit_util_1.auditLog)(req.user.userId, 'REMOVE_UNIT_PET', 'Pet', petId);
+        server_1.io?.to(`unit_${currentResident.unitId}`).emit('household_updated', { unitId: currentResident.unitId });
+        return (0, response_util_1.sendSuccess)(res, 200, 'Pet removed successfully');
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.removeUnitPet = removeUnitPet;
 const getTowers = async (_req, res, next) => {
     try {
         const units = await prisma_1.prisma.unit.findMany({
@@ -419,13 +580,19 @@ const getAllResidents = async (req, res, next) => {
         const showDeleted = req.query.deleted === 'true';
         const residents = await prisma_1.prisma.resident.findMany({
             where: {
+                status: 'APPROVED',
                 unit: {
                     isDeleted: showDeleted,
                     ...(req.user.propertyId ? { propertyId: req.user.propertyId } : {}),
                 },
             },
             include: {
-                unit: true,
+                unit: {
+                    include: {
+                        vehicles: { where: { isActive: true } },
+                        pets: true,
+                    }
+                },
                 user: { select: { phone: true, email: true, isActive: true } }
             },
             orderBy: { createdAt: 'asc' }
@@ -448,6 +615,8 @@ const getAllResidents = async (req, res, next) => {
                     totalMembers: 0,
                     primaryResident: null,
                     members: [],
+                    vehicles: r.unit.vehicles || [],
+                    pets: r.unit.pets || [],
                 });
             }
             const family = familyMap.get(uid);
@@ -503,6 +672,13 @@ const getFamilyDetails = async (req, res, next) => {
                 residents: {
                     include: { user: { select: { phone: true, email: true, isActive: true } } },
                     orderBy: { isPrimary: 'desc' }
+                },
+                vehicles: {
+                    where: { isActive: true },
+                    orderBy: { createdAt: 'desc' }
+                },
+                pets: {
+                    orderBy: { createdAt: 'desc' }
                 }
             }
         });
@@ -544,6 +720,8 @@ const getFamilyDetails = async (req, res, next) => {
                 isActive: r.user?.isActive ?? true,
                 createdAt: r.createdAt,
             })),
+            vehicles: unit.vehicles || [],
+            pets: unit.pets || [],
         };
         return (0, response_util_1.sendSuccess)(res, 200, 'Family details fetched', result);
     }

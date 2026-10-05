@@ -21,6 +21,25 @@ interface FamilyMember {
   createdAt: string;
 }
 
+export interface VehicleItem {
+  id: string;
+  registrationNo: string;
+  type?: string;
+  make?: string | null;
+  model?: string | null;
+  color?: string | null;
+  isResident?: boolean;
+}
+
+export interface PetItem {
+  id: string;
+  name: string;
+  type?: string;
+  breed?: string | null;
+  age?: string | null;
+  notes?: string | null;
+}
+
 interface Family {
   unitId: string;
   familyName: string | null;
@@ -44,6 +63,8 @@ interface Family {
     documentName?: string | null;
   } | null;
   members: FamilyMember[];
+  vehicles?: VehicleItem[];
+  pets?: PetItem[];
 }
 
 const ResidentDirectory = () => {
@@ -94,6 +115,24 @@ const ResidentDirectory = () => {
 
   const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
   const [isFamilyDetailsOpen, setIsFamilyDetailsOpen] = useState(false);
+  const [familyModalTab, setFamilyModalTab] = useState<'members' | 'vehicles' | 'pets'>('members');
+
+  const handleOpenFamilyDetails = async (family: Family) => {
+    setSelectedFamily(family);
+    setIsFamilyDetailsOpen(true);
+    setFamilyModalTab('members');
+    try {
+      const res = await fetch(`${API_BASE}/residents/families/${family.unitId}`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` }
+      });
+      const data = await res.json();
+      if (data.status === 'success' && data.data) {
+        setSelectedFamily(prev => prev && prev.unitId === family.unitId ? { ...prev, ...data.data } : prev);
+      }
+    } catch (e) {
+      console.error('Failed to load full family details:', e);
+    }
+  };
 
   const [isAddAmenityOpen, setIsAddAmenityOpen] = useState(false);
   const [editAmenityId, setEditAmenityId] = useState<string | null>(null);
@@ -749,7 +788,7 @@ const ResidentDirectory = () => {
                         style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, cursor: 'pointer', transition: 'box-shadow 0.15s, transform 0.1s' }}
                         onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
                         onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
-                        onClick={() => { setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}>
+                        onClick={() => handleOpenFamilyDetails(family)}>
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                           <div>
@@ -1054,45 +1093,219 @@ const ResidentDirectory = () => {
               </div>
             )}
 
+            {/* Modal Tabs Header */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', padding: '0 28px', backgroundColor: '#F8FAFC', flexShrink: 0 }}>
+              {[
+                { key: 'members', label: `Family Members (${selectedFamily.members?.length || 0})`, icon: 'users' },
+                { key: 'vehicles', label: `Vehicles (${selectedFamily.vehicles?.length || 0})`, icon: 'car' },
+                { key: 'pets', label: `Pets (${selectedFamily.pets?.length || 0})`, icon: 'paw' },
+              ].map(tab => {
+                const isActive = familyModalTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setFamilyModalTab(tab.key as any)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '12px 18px',
+                      fontSize: 13,
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? 'var(--primary)' : 'var(--text-muted)',
+                      border: 'none',
+                      borderBottom: isActive ? '2px solid var(--primary)' : '2px solid transparent',
+                      backgroundColor: 'transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      marginBottom: -1,
+                    }}
+                  >
+                    <Icon name={tab.icon} size={15} color={isActive ? 'var(--primary)' : 'var(--text-muted)'} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <div style={{ padding: '16px 28px 20px', overflowY: 'auto', flex: 1 }}>
-              <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Family Members</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {selectedFamily.members.map(member => (
-                  <div key={member.id} style={{
-                    padding: 16, borderRadius: 10,
-                    border: `1px solid ${member.isPrimary ? '#DDD6FE' : 'var(--border-color)'}`,
-                    backgroundColor: member.isPrimary ? '#FAFAFA' : 'white',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <div style={{
-                          width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 15, fontWeight: 700,
-                          backgroundColor: member.isPrimary ? '#EDE9FE' : '#F1F5F9',
-                          color: member.isPrimary ? '#6D28D9' : '#475569',
-                        }}>
-                          {member.name.charAt(0).toUpperCase()}
+              {familyModalTab === 'members' && (
+                <div>
+                  <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Family Members</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {selectedFamily.members.map(member => (
+                      <div key={member.id} style={{
+                        padding: 16, borderRadius: 10,
+                        border: `1px solid ${member.isPrimary ? '#DDD6FE' : 'var(--border-color)'}`,
+                        backgroundColor: member.isPrimary ? '#FAFAFA' : 'white',
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                            <div style={{
+                              width: 38, height: 38, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 15, fontWeight: 700,
+                              backgroundColor: member.isPrimary ? '#EDE9FE' : '#F1F5F9',
+                              color: member.isPrimary ? '#6D28D9' : '#475569',
+                            }}>
+                              {member.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 15 }}>{member.name}</div>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{member.relationship}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {member.isPrimary && <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: '#EDE9FE', color: '#6D28D9' }}>Primary</span>}
+                            <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: member.isActive ? '#DCFCE7' : '#FEE2E2', color: member.isActive ? '#15803D' : '#991B1B' }}>
+                              {member.isActive ? 'Active' : 'Suspended'}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>{member.name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{member.relationship}</div>
+                        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                          {member.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="phone" size={12} />{member.phone}</div>}
+                          {member.email && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="mail" size={12} />{member.email}</div>}
+                          {!member.phone && !member.email && <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No contact info</div>}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {member.isPrimary && <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: '#EDE9FE', color: '#6D28D9' }}>Primary</span>}
-                        <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: member.isActive ? '#DCFCE7' : '#FEE2E2', color: member.isActive ? '#15803D' : '#991B1B' }}>
-                          {member.isActive ? 'Active' : 'Suspended'}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                      {member.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="phone" size={12} />{member.phone}</div>}
-                      {member.email && <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-muted)' }}><Icon name="mail" size={12} />{member.email}</div>}
-                      {!member.phone && !member.email && <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No contact info</div>}
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {familyModalTab === 'vehicles' && (
+                <div>
+                  <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Registered Vehicles</h4>
+                  {(!selectedFamily.vehicles || selectedFamily.vehicles.length === 0) ? (
+                    <div style={{ textAlign: 'center', padding: '36px 16px', backgroundColor: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1' }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                        <Icon name="car" size={22} color="#64748B" />
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No vehicles registered</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>The resident has not added any vehicles to this unit yet.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {selectedFamily.vehicles.map(v => (
+                        <div key={v.id} style={{
+                          padding: 16, borderRadius: 10,
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'white',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                            <div style={{
+                              width: 42, height: 42, borderRadius: 10,
+                              backgroundColor: v.type === 'BIKE' ? '#FEF3C7' : v.type === 'EV' ? '#DCFCE7' : '#EFF6FF',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              <Icon
+                                name={v.type === 'BIKE' ? 'motorbike' : v.type === 'EV' ? 'bolt' : 'car'}
+                                size={22}
+                                color={v.type === 'BIKE' ? '#D97706' : v.type === 'EV' ? '#16A34A' : '#2563EB'}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                  fontWeight: 700,
+                                  letterSpacing: '0.06em',
+                                  backgroundColor: '#F1F5F9',
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                  border: '1px solid #CBD5E1',
+                                  color: '#0F172A',
+                                }}>
+                                  {v.registrationNo}
+                                </span>
+                                <span style={{
+                                  padding: '2px 8px',
+                                  borderRadius: 12,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  backgroundColor: v.type === 'BIKE' ? '#FEF3C7' : v.type === 'EV' ? '#DCFCE7' : '#EFF6FF',
+                                  color: v.type === 'BIKE' ? '#B45309' : v.type === 'EV' ? '#15803D' : '#1D4ED8',
+                                }}>
+                                  {v.type === 'BIKE' ? 'Two-Wheeler' : v.type === 'EV' ? 'Electric Vehicle' : v.type === 'CAR' ? 'Car / 4-Wheeler' : v.type || 'Vehicle'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                                {[v.make, v.model, v.color ? `Color: ${v.color}` : null].filter(Boolean).join(' • ') || 'Resident Vehicle'}
+                              </div>
+                            </div>
+                          </div>
+                          <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: '#DCFCE7', color: '#15803D' }}>
+                            Authorized
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {familyModalTab === 'pets' && (
+                <div>
+                  <h4 style={{ margin: '0 0 14px 0', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Registered Pets</h4>
+                  {(!selectedFamily.pets || selectedFamily.pets.length === 0) ? (
+                    <div style={{ textAlign: 'center', padding: '36px 16px', backgroundColor: '#F8FAFC', borderRadius: 12, border: '1px dashed #CBD5E1' }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                        <Icon name="paw" size={22} color="#64748B" />
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>No pets registered</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>The resident has not added any pets to this household yet.</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {selectedFamily.pets.map(p => (
+                        <div key={p.id} style={{
+                          padding: 16, borderRadius: 10,
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'white',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                            <div style={{
+                              width: 42, height: 42, borderRadius: 10,
+                              backgroundColor: '#FEF3C7',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              <Icon name="paw" size={22} color="#D97706" />
+                            </div>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{p.name}</span>
+                                <span style={{
+                                  padding: '2px 8px',
+                                  borderRadius: 12,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  backgroundColor: '#EDE9FE',
+                                  color: '#6D28D9',
+                                }}>
+                                  {p.type || 'Pet'}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                                {[p.breed ? `Breed: ${p.breed}` : null, p.age ? `Age: ${p.age}` : null, p.notes ? `Notes: ${p.notes}` : null].filter(Boolean).join(' • ') || 'Household Pet'}
+                              </div>
+                            </div>
+                          </div>
+                          <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: '#DCFCE7', color: '#15803D' }}>
+                            Registered
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div style={{ padding: '14px 28px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>

@@ -78,6 +78,7 @@ model Unit {
   residents       Resident[]
   property        Property         @relation(fields: [propertyId], references: [id])
   vehicles        Vehicle[]
+  pets            Pet[]
 
   @@unique([propertyId, unitNumber])
 }
@@ -430,6 +431,7 @@ model Vehicle {
   id             String   @id @default(cuid())
   unitId         String
   registrationNo String
+  type           String   @default("CAR") // CAR, BIKE, EV, OTHER
   make           String?
   model          String?
   color          String?
@@ -437,9 +439,24 @@ model Vehicle {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  unit           Unit     @relation(fields: [unitId], references: [id])
+  unit           Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
   @@unique([unitId, registrationNo])
+}
+
+model Pet {
+  id        String   @id @default(cuid())
+  unitId    String
+  name      String
+  type      String   @default("DOG") // DOG, CAT, BIRD, OTHER
+  breed     String?
+  age       String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
 }
 
 model ParkingSlot {

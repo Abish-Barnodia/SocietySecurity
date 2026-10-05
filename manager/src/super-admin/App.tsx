@@ -8,7 +8,6 @@ import { DemoRequests } from './pages/DemoRequests';
 import { Managers } from './pages/Managers';
 import { Subscriptions } from './pages/Subscriptions';
 import { AuditLogs } from './pages/AuditLogs';
-import { Settings } from './pages/Settings';
 import { ProvisionSocietyModal } from './components/societies/ProvisionSocietyModal';
 import { superAdminService } from './services/superAdmin.service';
 import type { PlatformStatsResponse, DemoRequest } from './types';
@@ -69,8 +68,6 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
         return { title: 'Subscription Plans & Tiers', subtitle: 'Manage billing tiers and feature allowances' };
       case 'audit':
         return { title: 'Platform Audit Trail', subtitle: 'Administrative logs and tenant lifecycle mutations' };
-      case 'settings':
-        return { title: 'System & Gateway Settings', subtitle: 'SMTP, WhatsApp Business and integration parameters' };
       default:
         return { title: 'Super Admin', subtitle: '' };
     }
@@ -120,8 +117,6 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({ onLogout }) 
             {activeTab === 'subscriptions' && <Subscriptions />}
 
             {activeTab === 'audit' && <AuditLogs />}
-
-            {activeTab === 'settings' && <Settings />}
           </div>
         </main>
 

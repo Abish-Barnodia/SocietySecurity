@@ -9,6 +9,12 @@ import {
   getUnitResidents,
   addHouseholdMember,
   removeHouseholdMember,
+  getUnitVehicles,
+  addUnitVehicle,
+  removeUnitVehicle,
+  getUnitPets,
+  addUnitPet,
+  removeUnitPet,
   updateAlertPreferences,
   getAllResidents,
   getFamilyDetails,
@@ -55,6 +61,12 @@ router.put('/me/alerts',     requireRole('RESIDENT'), validate(alertPreferencesS
 router.get('/unit',          requireRole('RESIDENT'), getUnitResidents);
 router.post('/unit/members', requireRole('RESIDENT'), addHouseholdMember);
 router.delete('/unit/members/:memberId', requireRole('RESIDENT'), removeHouseholdMember);
+router.get('/unit/vehicles', requireRole('RESIDENT'), getUnitVehicles);
+router.post('/unit/vehicles', requireRole('RESIDENT'), addUnitVehicle);
+router.delete('/unit/vehicles/:vehicleId', requireRole('RESIDENT'), removeUnitVehicle);
+router.get('/unit/pets',     requireRole('RESIDENT'), getUnitPets);
+router.post('/unit/pets',     requireRole('RESIDENT'), addUnitPet);
+router.delete('/unit/pets/:petId', requireRole('RESIDENT'), removeUnitPet);
 
 // Manager operations
 router.get('/pending',             requireRole('MANAGER', 'COMMITTEE'), requireManagerPermission('residents'), getPendingResidents);

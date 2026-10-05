@@ -54,12 +54,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'audit', label: 'Platform Audit Trail', icon: 'solar:shield-check-bold-duotone' },
       ],
     },
-    {
-      title: 'CONFIGURATION',
-      items: [
-        { id: 'settings', label: 'System Settings', icon: 'solar:settings-minimalistic-bold-duotone' },
-      ],
-    },
   ];
 
   return (

@@ -215,6 +215,24 @@ const mapMember = (raw: any): Member => ({
   isPrimary: !!raw.isPrimary,
 });
 
+export type Vehicle = {
+  id: string;
+  registrationNo: string;
+  type: string;
+  make?: string | null;
+  model?: string | null;
+  color?: string | null;
+};
+
+export type Pet = {
+  id: string;
+  name: string;
+  type: string;
+  breed?: string | null;
+  age?: string | null;
+  notes?: string | null;
+};
+
 export type ScanRequest = {
   id: string;
   passId?: string;
@@ -329,6 +347,14 @@ type DataContextType = {
   fetchMembers: () => Promise<void>;
   addMember: (name: string, phone: string) => Promise<void>;
   deleteMember: (id: string) => Promise<void>;
+  vehicles: Vehicle[];
+  fetchVehicles: () => Promise<void>;
+  addVehicle: (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string }) => Promise<void>;
+  deleteVehicle: (id: string) => Promise<void>;
+  pets: Pet[];
+  fetchPets: () => Promise<void>;
+  addPet: (data: { name: string; type?: string; breed?: string; age?: string; notes?: string }) => Promise<void>;
+  deletePet: (id: string) => Promise<void>;
   amenities: Amenity[];
   fetchAmenities: () => Promise<void>;
   amenitiesLastFetchedAt: React.MutableRefObject<number>;
@@ -355,6 +381,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [pets, setPets] = useState<Pet[]>([]);
   const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [scanRequests, setScanRequests] = useState<ScanRequest[]>([]);
   const [pendingWalkIns, setPendingWalkIns] = useState<PendingWalkIn[]>([]);
@@ -481,6 +509,60 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMembers((prev) => prev.filter(m => m.id !== id));
   }, []);
 
+  const fetchVehicles = useCallback(async () => {
+    try {
+      const response = await api.get('/residents/unit/vehicles');
+      const raw: any[] = response.data.data ?? [];
+      setVehicles(raw.map((v: any) => ({
+        id: v.id,
+        registrationNo: v.registrationNo,
+        type: v.type || 'CAR',
+        make: v.make || null,
+        model: v.model || null,
+        color: v.color || null,
+      })));
+    } catch (error) {
+      console.error('Failed to fetch unit vehicles:', error);
+    }
+  }, []);
+
+  const addVehicle = useCallback(async (data: { registrationNo: string; type?: string; make?: string; model?: string; color?: string }) => {
+    await api.post('/residents/unit/vehicles', data);
+    await fetchVehicles();
+  }, [fetchVehicles]);
+
+  const deleteVehicle = useCallback(async (id: string) => {
+    await api.delete(`/residents/unit/vehicles/${id}`);
+    setVehicles((prev) => prev.filter(v => v.id !== id));
+  }, []);
+
+  const fetchPets = useCallback(async () => {
+    try {
+      const response = await api.get('/residents/unit/pets');
+      const raw: any[] = response.data.data ?? [];
+      setPets(raw.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type || 'DOG',
+        breed: p.breed || null,
+        age: p.age || null,
+        notes: p.notes || null,
+      })));
+    } catch (error) {
+      console.error('Failed to fetch unit pets:', error);
+    }
+  }, []);
+
+  const addPet = useCallback(async (data: { name: string; type?: string; breed?: string; age?: string; notes?: string }) => {
+    await api.post('/residents/unit/pets', data);
+    await fetchPets();
+  }, [fetchPets]);
+
+  const deletePet = useCallback(async (id: string) => {
+    await api.delete(`/residents/unit/pets/${id}`);
+    setPets((prev) => prev.filter(p => p.id !== id));
+  }, []);
+
   const fetchAmenities = useCallback(async () => {
     try {
       const response = await api.get('/amenities');
@@ -584,10 +666,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         fetchProfileSettings(),
         fetchEntries(),
         fetchMembers(),
+        fetchVehicles(),
+        fetchPets(),
         fetchAmenities(),
       ]);
     }
-  }, [isAuthenticated, userRole, userProfile?.status, fetchPasses, fetchAlerts, fetchProfileSettings, fetchEntries, fetchMembers, fetchAmenities]);
+  }, [isAuthenticated, userRole, userProfile?.status, fetchPasses, fetchAlerts, fetchProfileSettings, fetchEntries, fetchMembers, fetchVehicles, fetchPets, fetchAmenities]);
 
   // Guard-initiated walk-in requests arrive over the resident's `unit_{id}`
   // socket room (see api-server socket.handler.ts) — surface them as a real
@@ -661,6 +745,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // of only refreshing next time the Household screen happens to remount.
     const handleHouseholdUpdated = () => {
       fetchMembers();
+      fetchVehicles();
+      fetchPets();
     };
 
     // Emitted by acknowledgeAlert() to the user who raised the alert
@@ -779,6 +865,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
     entries, fetchEntries, entriesLastFetchedAt,
     members, fetchMembers, addMember, deleteMember,
+    vehicles, fetchVehicles, addVehicle, deleteVehicle,
+    pets, fetchPets, addPet, deletePet,
     amenities, fetchAmenities, amenitiesLastFetchedAt, bookAmenity,
     scanRequests, addScanRequest,
     pendingWalkIns, respondWalkIn,
@@ -792,6 +880,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     alerts, addAlert, markAlertRead, markAllAlertsRead, fetchAlerts, claimVehicleAlert, triggerDuressAlert,
     entries, fetchEntries,
     members, fetchMembers, addMember, deleteMember,
+    vehicles, fetchVehicles, addVehicle, deleteVehicle,
+    pets, fetchPets, addPet, deletePet,
     amenities, fetchAmenities, bookAmenity,
     scanRequests, addScanRequest,
     pendingWalkIns, respondWalkIn,

@@ -57,14 +57,12 @@ const VALID_TABS = new Set([
 ]);
 
 const App: React.FC = () => {
-  // ponytail: capture path at construction time — before the URL-sync effect
-  // can rewrite '/' to '/dashboard', so the landing page check below is reliable.
-  const [initialPath] = useState(() => window.location.pathname);
-  const tabFromPath = () => {
-    const p = window.location.pathname.replace(/^\//, '').toLowerCase();
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname.toLowerCase());
+  const tabFromPath = (path = window.location.pathname) => {
+    const p = path.replace(/^\//, '').toLowerCase();
     return VALID_TABS.has(p) ? p : 'dashboard';
   };
-  const [activeTab, setActiveTab] = useState(tabFromPath);
+  const [activeTab, setActiveTab] = useState(() => tabFromPath());
   // Bumped on every sidebar click (even re-clicking the current tab) and
   // used as the page-content key, so re-clicking "Guard Management" while
   // deep in a guard's profile actually remounts it back to the roster -
@@ -82,8 +80,6 @@ const App: React.FC = () => {
   // instant an alert is raised or acknowledged, by this manager or another
   // one — not just on the next 15s poll some other page happens to run.
   const [alertStatuses, setAlertStatuses] = useState<Record<string, string>>({});
-  // ponytail: drives the Sign-In transition from the landing page.
-  const [showLogin, setShowLogin] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const unreadAlertCount = Object.values(alertStatuses).filter((s) => s !== 'ACKNOWLEDGED').length;
 
@@ -104,11 +100,18 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
     const path = `/${activeTab}`;
-    if (window.location.pathname !== path) history.pushState(null, '', path);
+    if (window.location.pathname.toLowerCase() !== path) {
+      history.pushState(null, '', path);
+      setCurrentPath(path);
+    }
   }, [activeTab, isAuthenticated]);
 
   useEffect(() => {
-    const onPop = () => setActiveTab(tabFromPath());
+    const onPop = () => {
+      const path = window.location.pathname.toLowerCase();
+      setCurrentPath(path);
+      setActiveTab(tabFromPath(path));
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -198,10 +201,11 @@ const App: React.FC = () => {
     document.documentElement.removeAttribute('data-theme');
     setFullProfile(null);
     setIsAuthenticated(false);
+    history.pushState(null, '', '/');
+    setCurrentPath('/');
   };
 
   // Public pass verification route for QR scans from any phone / camera browser
-  const currentPath = window.location.pathname.toLowerCase();
   if (currentPath === '/verify-pass' || currentPath === '/pass-verify' || currentPath === '/verify') {
     return <PassVerificationView />;
   }
@@ -215,27 +219,26 @@ const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    // ponytail: show landing page at '/', login at '/login'.
-    const path = window.location.pathname;
     const handleLoginWithReturn = (token: string, user: any) => {
       setActiveTab('dashboard');
       handleLogin(token, user);
       history.replaceState(null, '', '/dashboard');
+      setCurrentPath('/dashboard');
     };
-    // Landing page at root (and user hasn't clicked Sign In yet)
-    if ((initialPath === '/' || initialPath === '') && !showLogin) {
+
+    // If on root path ('/' or ''), render the Landing Page
+    if (currentPath === '/' || currentPath === '') {
       return (
         <LandingPage
           onGoToLogin={() => {
             history.pushState({ returnTo: '/dashboard' }, '', '/login');
-            setShowLogin(true);
+            setCurrentPath('/login');
           }}
         />
       );
     }
-    if (path !== '/login') {
-      history.replaceState({ returnTo: path }, '', '/login');
-    }
+
+    // Otherwise render the Login screen
     return <Login onLogin={handleLoginWithReturn} />;
   }
 

@@ -7,7 +7,11 @@ import { AppError } from '../../middlewares/error.middleware';
 import { Role, SocietyStatus, DemoRequestStatus } from '@prisma/client';
 import { razorpay } from '../../config/razorpay';
 import { env } from '../../config/env';
-import { sendDemoRequestNotificationToSuperAdmin } from '../../utils/email.service';
+import {
+  sendDemoRequestNotificationToSuperAdmin,
+  sendDemoBookingConfirmationToUser,
+  sendManagerCredentialsEmail,
+} from '../../utils/email.service';
 import { uploadBuffer } from '../../utils/objectStorage.util';
 
 const ALLOWED_DEMO_DOC_MIME = /^(image\/|application\/pdf$|application\/msword$|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$)/;
@@ -105,8 +109,7 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       },
     });
 
-    // ponytail: send email notification to Super Admin via SMTP
-    sendDemoRequestNotificationToSuperAdmin({
+    const demoPayload = {
       societyName,
       contactName,
       email,
@@ -119,7 +122,17 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
       message: combinedMessage,
       documentUrl: documentUrl || null,
       documentName: documentName || null,
-    }).catch((err) => console.error('Error sending superadmin notification email:', err));
+    };
+
+    // ponytail: 1. Send confirmation email to the user on their registered email
+    sendDemoBookingConfirmationToUser(demoPayload).catch((err) =>
+      console.error(`Failed to send demo booking email to registrant ${email}:`, err)
+    );
+
+    // ponytail: 2. Send email notification to Super Admin via SMTP
+    sendDemoRequestNotificationToSuperAdmin(demoPayload).catch((err) =>
+      console.error('Error sending superadmin notification email:', err)
+    );
 
     return sendSuccess(res, 201, 'Payment verified and demo trial activated successfully!', {
       demoRequest,
@@ -135,7 +148,7 @@ export const verifyDemoPaymentAndSubmit = async (req: Request, res: Response, ne
 
 export const createDemoRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { contactName, email, phone, societyName, city, numberOfUnits, message, documentUrl, documentName } = req.body;
+    const { contactName, email, phone, societyName, city, numberOfUnits, message, documentUrl, documentName, selectedPlan } = req.body;
 
     const demoRequest = await prisma.demoRequest.create({
       data: {
@@ -152,18 +165,28 @@ export const createDemoRequest = async (req: Request, res: Response, next: NextF
       },
     });
 
-    // ponytail: send email notification to Super Admin via SMTP
-    sendDemoRequestNotificationToSuperAdmin({
+    const demoPayload = {
       societyName,
       contactName,
       email,
       phone,
       city,
       numberOfUnits: numberOfUnits ? Number(numberOfUnits) : null,
+      selectedPlan: selectedPlan || 'Starter Tier',
       message: message || null,
       documentUrl: documentUrl || null,
       documentName: documentName || null,
-    }).catch((err) => console.error('Error sending superadmin notification email:', err));
+    };
+
+    // ponytail: 1. Send confirmation email to the user on their registered email
+    sendDemoBookingConfirmationToUser(demoPayload).catch((err) =>
+      console.error(`Failed to send demo booking email to registrant ${email}:`, err)
+    );
+
+    // ponytail: 2. Send email notification to Super Admin via SMTP
+    sendDemoRequestNotificationToSuperAdmin(demoPayload).catch((err) =>
+      console.error('Error sending superadmin notification email:', err)
+    );
 
     return sendSuccess(res, 201, 'Demo request submitted successfully. Our team will contact you soon.', demoRequest);
   } catch (error) {
@@ -440,6 +463,15 @@ export const approveAndProvision = async (req: Request, res: Response, next: Nex
     } catch (e) {
       // Non-blocking error
     }
+
+    // ponytail: auto-dispatch manager credentials email upon approval
+    sendManagerCredentialsEmail({
+      to: managerEmail,
+      managerName: managerName || demoRequest.contactName || 'Manager',
+      societyName: result.property.name,
+      slug: result.property.slug || 'society',
+      temporaryPassword: rawPassword,
+    }).catch((err) => console.error('Error auto-dispatching manager credentials email:', err));
 
     return sendSuccess(res, 201, 'Society and Manager account provisioned successfully!', {
       society: {

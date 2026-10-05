@@ -33,6 +33,9 @@ export const sendEmail = async (
           user: smtpUser,
           pass: smtpPass,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         tls: {
           rejectUnauthorized: false,
         },
@@ -45,6 +48,9 @@ export const sendEmail = async (
           user: smtpUser,
           pass: smtpPass,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
         tls: {
           rejectUnauthorized: false,
         },
@@ -127,6 +133,91 @@ export interface DemoNotificationData {
   documentUrl?: string | null;
   documentName?: string | null;
 }
+
+// ponytail: direct confirmation email to the person who booked the demo on their registered email
+export const sendDemoBookingConfirmationToUser = async (data: DemoNotificationData) => {
+  if (!data.email) return;
+
+  const subject = `🎉 Demo & Trial Booked: Welcome to Society Security (${data.societyName})`;
+  const text = `Hello ${data.contactName},\n\nThank you for booking a demo trial of Society Security for ${data.societyName}!\n\nDetails of your registration:\n- Society Name: ${data.societyName}\n- Contact Person: ${data.contactName}\n- Email: ${data.email}\n- Phone: ${data.phone}\n- Selected Plan: ${data.selectedPlan || '1-Month Demo Trial'}\n${data.paymentId ? `- Payment Status: ₹1.00 Paid (ID: ${data.paymentId})\n` : ''}\nNext Steps:\nOur onboarding team is reviewing your registration and setting up your dedicated Society Manager Portal. You will receive an email with your manager login credentials and activation details within 24 hours.\n\nNeed help? Reply directly to this email or reach us at support.\n\nBest regards,\nSociety Security Team`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div style="background: linear-gradient(135deg, #00A67C, #00C896); padding: 24px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px;">
+        <h2 style="margin: 0; font-size: 24px; font-weight: 700;">Demo Booked Successfully! 🎉</h2>
+        <p style="margin: 6px 0 0; font-size: 14px; opacity: 0.95;">Welcome to Society Security</p>
+      </div>
+
+      <div style="background: white; padding: 24px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+        <p style="margin-top: 0; font-size: 16px; color: #0f172a;">
+          Hello <strong>${data.contactName}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #475569; line-height: 22px;">
+          Thank you for choosing <strong>Society Security</strong>! We have received your demo request and 1-month trial registration for <strong>${data.societyName}</strong>.
+        </p>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin: 20px 0;">
+          <h4 style="margin: 0 0 12px; color: #166534; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+            📋 Your Registration Summary
+          </h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b; width: 140px;">Society:</td>
+              <td style="padding: 8px 0; font-weight: 700; color: #0f172a;">${data.societyName}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b;">Contact Name:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #0f172a;">${data.contactName}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b;">Registered Email:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${data.email}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b;">Phone:</td>
+              <td style="padding: 8px 0; color: #0f172a;">${data.phone}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b;">Plan / Trial:</td>
+              <td style="padding: 8px 0; font-weight: 600; color: #00A67C;">${data.selectedPlan || '1-Month Full Access Demo Trial'}</td>
+            </tr>
+            ${data.paymentId ? `
+            <tr style="border-bottom: 1px solid #dcfce7;">
+              <td style="padding: 8px 0; color: #64748b;">Payment Status:</td>
+              <td style="padding: 8px 0; color: #16a34a; font-weight: 700;">✓ ₹1.00 Paid (ID: ${data.paymentId})</td>
+            </tr>
+            ` : ''}
+            ${data.documentName ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b;">Document:</td>
+              <td style="padding: 8px 0; color: #0f172a;">✓ ${data.documentName} Attached</td>
+            </tr>
+            ` : ''}
+          </table>
+        </div>
+
+        <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 14px 16px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; color: #1e40af; line-height: 22px;">
+          ⏱️ <strong>What happens next?</strong><br />
+          Our administrative team is reviewing your verification and setting up your dedicated <strong>Society Manager Portal</strong>. Your manager portal login credentials will be emailed to <strong>${data.email}</strong> within <strong>24 hours</strong>.
+        </div>
+
+        <p style="font-size: 13px; color: #64748b; line-height: 20px; margin-bottom: 0;">
+          If you have any questions or require an urgent onboarding, please feel free to reply directly to this email.
+        </p>
+      </div>
+
+      <div style="text-align: center; font-size: 12px; color: #94a3b8;">
+        © Society Security System • Transforming Residential Security & Management
+      </div>
+    </div>
+  `;
+
+  try {
+    return await sendEmail(data.email, subject, text, html);
+  } catch (err) {
+    console.error(`Failed to send demo confirmation email to user ${data.email}:`, err);
+  }
+};
 
 // ponytail: direct SMTP email alert to super admin when society registers for demo
 export const sendDemoRequestNotificationToSuperAdmin = async (data: DemoNotificationData) => {

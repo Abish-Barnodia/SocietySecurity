@@ -9,7 +9,7 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('accessToken') || localStorage.getItem('superadmin_token');
+  const token = localStorage.getItem('superadmin_token') || localStorage.getItem('accessToken');
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json',

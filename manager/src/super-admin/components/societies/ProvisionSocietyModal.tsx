@@ -32,6 +32,9 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [zoomedPhotoUrl, setZoomedPhotoUrl] = useState<string | null>(null);
 
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
+
   const isImageFile = (url?: string | null, name?: string | null) => {
     if (!url) return false;
     const lower = (url + ' ' + (name || '')).toLowerCase();
@@ -58,6 +61,8 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
       setError(null);
       setCopied(false);
       setZoomedPhotoUrl(null);
+      setIsSendingEmail(false);
+      setEmailSentSuccess(false);
 
       // Extract address, pin, and plan if encoded in message
       const msg = demoRequest.message || '';
@@ -107,15 +112,29 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const handleSendEmail = () => {
-    if (!provisionedData) return;
+  const handleSendEmail = async () => {
+    if (!provisionedData || isSendingEmail) return;
     const recipient = provisionedData.credentials.email || managerEmail;
     const portalUrl = getPortalUrl(provisionedData.society.slug);
-    const subject = `Welcome to SecureGate - Login Credentials for ${provisionedData.society.name}`;
-    const body = `Hello ${provisionedData.manager?.name || managerName || 'Manager'},\n\nYour society "${provisionedData.society.name}" has been successfully approved and provisioned on SecureGate!\n\nHere are your Manager Portal login details:\n• Portal URL: ${portalUrl}\n• Society Slug: ${provisionedData.society.slug}\n• Login Email: ${provisionedData.credentials.email}\n• Temporary Password: ${provisionedData.credentials.temporaryPassword}\n\nPlease sign in to configure your entry gates, assign security guards, and onboard residents.\nFor account security, remember to update your temporary password after logging in.\n\nBest regards,\nSecureGate Platform Administration`;
 
-    const mailtoUrl = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.open(mailtoUrl, '_blank');
+    setIsSendingEmail(true);
+    try {
+      await superAdminService.sendManagerCredentialsEmail({
+        societyId: provisionedData.society.id,
+        societyName: provisionedData.society.name,
+        slug: provisionedData.society.slug,
+        managerName: provisionedData.manager?.name || managerName || 'Manager',
+        managerEmail: recipient,
+        temporaryPassword: provisionedData.credentials.temporaryPassword,
+        portalUrl,
+      });
+      setEmailSentSuccess(true);
+      setTimeout(() => setEmailSentSuccess(false), 5000);
+    } catch (err: any) {
+      alert(`Failed to send email: ${err.message || 'SMTP server error'}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
   const handleSendWhatsApp = () => {
@@ -245,8 +264,9 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
                 type="button"
                 className="btn"
                 onClick={handleSendEmail}
+                disabled={isSendingEmail}
                 style={{
-                  background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+                  background: emailSentSuccess ? 'linear-gradient(135deg, #059669 0%, #10B981 100%)' : 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
                   color: '#FFFFFF',
                   border: 'none',
                   display: 'flex',
@@ -256,11 +276,14 @@ export const ProvisionSocietyModal: React.FC<ProvisionSocietyModalProps> = ({
                   fontWeight: 600,
                   padding: '10px 16px',
                   borderRadius: 'var(--radius-sm)',
-                  boxShadow: '0 2px 8px rgba(2, 132, 199, 0.25)',
+                  boxShadow: emailSentSuccess ? '0 2px 8px rgba(16, 185, 129, 0.3)' : '0 2px 8px rgba(2, 132, 199, 0.25)',
+                  cursor: isSendingEmail ? 'not-allowed' : 'pointer',
+                  opacity: isSendingEmail ? 0.75 : 1,
+                  transition: 'all 0.2s ease',
                 }}
               >
-                <Icon icon="solar:letter-bold" width="18" />
-                Send via Email
+                <Icon icon={emailSentSuccess ? "solar:check-circle-bold" : isSendingEmail ? "svg-spinners:180-ring-with-bg" : "solar:letter-bold"} width="18" />
+                {emailSentSuccess ? 'Email Sent Directly!' : isSendingEmail ? 'Sending Email...' : 'Send via Email'}
               </button>
             </div>
           </div>

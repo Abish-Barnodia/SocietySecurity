@@ -101,5 +101,19 @@ export const superAdminService = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  sendManagerCredentialsEmail: (data: {
+    societyId?: string;
+    societyName: string;
+    slug: string;
+    managerName?: string;
+    managerEmail: string;
+    temporaryPassword?: string;
+    portalUrl?: string;
+  }) =>
+    request<{ sent: boolean; message: string }>('/super-admin/send-manager-credentials', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 

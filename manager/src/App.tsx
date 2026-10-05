@@ -167,7 +167,10 @@ const App: React.FC = () => {
     return () => { socket.disconnect(); };
   }, [isAuthenticated]);
 
-  const handleLogin = (_token: string, _loggedInUser: any) => {
+  const handleLogin = (_token: string, loggedInUser: any) => {
+    if (loggedInUser) {
+      setFullProfile(loggedInUser);
+    }
     setIsAuthenticated(true);
   };
 
@@ -175,7 +178,7 @@ const App: React.FC = () => {
     // Must actually hit the backend — for a manager this is what releases
     // the single-active-session lock immediately instead of leaving the
     // portal blocked for everyone else until the idle timeout.
-    const token = localStorage.getItem('accessToken');
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('superadmin_token');
     const storedRefreshToken = localStorage.getItem('refreshToken');
     try {
       await fetch(`${API_BASE}/auth/logout`, {
@@ -189,7 +192,10 @@ const App: React.FC = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('superadmin_token');
+    localStorage.removeItem('superadmin_user');
     document.documentElement.removeAttribute('data-theme');
+    setFullProfile(null);
     setIsAuthenticated(false);
   };
 

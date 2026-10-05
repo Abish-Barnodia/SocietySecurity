@@ -163,6 +163,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         if (data.data.user.role === 'SUPER_ADMIN') {
           localStorage.setItem('superadmin_token', data.data.accessToken);
           localStorage.setItem('superadmin_user', JSON.stringify(data.data.user));
+        } else {
+          localStorage.removeItem('superadmin_token');
+          localStorage.removeItem('superadmin_user');
+          localStorage.removeItem('superadmin_theme');
         }
         onLogin(data.data.accessToken, data.data.user);
       } else {

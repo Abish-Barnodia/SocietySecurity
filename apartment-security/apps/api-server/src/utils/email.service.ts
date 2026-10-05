@@ -29,40 +29,7 @@ export const sendEmail = async (
     return { messageId: 'mock-id' };
   }
 
-  const smtpHost = process.env.SMTP_HOST || (smtpUser.endsWith('@gmail.com') ? 'smtp.gmail.com' : 'smtp.ethereal.email');
-  const isGmail = smtpHost.includes('gmail.com') || smtpUser.endsWith('@gmail.com');
-  const smtpPort = parseInt(process.env.SMTP_PORT || (isGmail ? '465' : '587'), 10);
-  const isSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-
-  const transporter = isGmail
-    ? nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        tls: {
-          rejectUnauthorized: false,
-        },
-      })
-    : nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: isSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        tls: {
-          rejectUnauthorized: false,
-        },
-      });
+  const isGmail = smtpUser.endsWith('@gmail.com');
 
   const mailOptions = {
     from: process.env.SMTP_FROM || `"Society Security" <${smtpUser || 'noreply@example.com'}>`,
@@ -73,13 +40,55 @@ export const sendEmail = async (
     attachments,
   };
 
+  // Primary transport: Gmail direct SSL on port 465 with IPv4 forced
+  const primaryTransporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+    family: 4,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  } as any);
+
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log('[SMTP SUCCESS] Message sent successfully: %s to %s', info.messageId, to);
+    const info = await primaryTransporter.sendMail(mailOptions);
+    console.log('[SMTP SUCCESS] Message sent via port 465: %s to %s', info.messageId, to);
     return info;
   } catch (err: any) {
-    console.error('[SMTP ERROR] Failed to send email to %s (Subject: "%s"):', to, subject, err?.message || err);
-    throw err;
+    console.warn('[SMTP WARNING] Port 465 failed, attempting port 587 STARTTLS fallback...', err?.message || err);
+    try {
+      const fallbackTransporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        requireTLS: true,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        family: 4,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+        tls: {
+          rejectUnauthorized: false,
+        },
+      } as any);
+      const fallbackInfo = await fallbackTransporter.sendMail(mailOptions);
+      console.log('[SMTP SUCCESS] Message sent via port 587 fallback: %s to %s', fallbackInfo.messageId, to);
+      return fallbackInfo;
+    } catch (fallbackErr: any) {
+      console.error('[SMTP ERROR] Both port 465 and 587 failed to send to %s:', to, fallbackErr?.message || fallbackErr);
+      throw fallbackErr;
+    }
   }
 };
 

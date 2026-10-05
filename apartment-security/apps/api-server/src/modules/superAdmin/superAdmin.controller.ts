@@ -775,19 +775,28 @@ export const sendManagerCredentials = async (req: Request, res: Response, next: 
     }
 
     const { sendManagerCredentialsEmail } = await import('../../utils/email.service');
-    await sendManagerCredentialsEmail({
-      to: managerEmail,
-      managerName,
-      societyName: societyName || 'Society Security',
-      slug: slug || 'society',
-      temporaryPassword,
-      portalUrl,
-    });
+    try {
+      await sendManagerCredentialsEmail({
+        to: managerEmail,
+        managerName,
+        societyName: societyName || 'Society Security',
+        slug: slug || 'society',
+        temporaryPassword,
+        portalUrl,
+      });
 
-    return sendSuccess(res, 200, `Login credentials sent successfully to ${managerEmail}`, {
-      sent: true,
-      recipient: managerEmail,
-    });
+      return sendSuccess(res, 200, `Login credentials sent successfully to ${managerEmail}`, {
+        sent: true,
+        recipient: managerEmail,
+      });
+    } catch (sendErr: any) {
+      console.error('[sendManagerCredentials] Failed to dispatch credentials email:', sendErr?.message || sendErr);
+      return sendSuccess(res, 200, `Credentials recorded, but email relay encountered an issue: ${sendErr?.message || 'SMTP service error'}`, {
+        sent: false,
+        recipient: managerEmail,
+        warning: sendErr?.message || 'SMTP server error',
+      });
+    }
   } catch (error) {
     next(error);
   }

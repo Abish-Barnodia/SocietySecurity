@@ -11,6 +11,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendingDemosCount = 0 }) => {
   const user = authService.getCurrentUser();
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -216,7 +217,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
         </div>
 
         <button
-          onClick={handleLogout}
+          onClick={() => setShowLogoutConfirm(true)}
           disabled={isLoggingOut}
           title={isLoggingOut ? 'Signing Out...' : 'Sign Out'}
           style={{
@@ -253,6 +254,119 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, pendi
           />
         </button>
       </div>
+
+      {/* Super Admin Logout Confirmation Modal Card */}
+      {showLogoutConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999999,
+            background: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            style={{
+              background: 'var(--bg-card, #FFFFFF)',
+              color: 'var(--text-primary, #0F172A)',
+              borderRadius: '16px',
+              maxWidth: '400px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '1px solid var(--border-color, #E2E8F0)',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: '24px 24px 16px 24px', textAlign: 'center' }}>
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '50%',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#EF4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px auto',
+                }}
+              >
+                <Icon icon="solar:logout-2-bold" width="26" color="#EF4444" />
+              </div>
+
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-primary, #0F172A)' }}>
+                Sign Out Confirmation
+              </h3>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted, #64748B)', lineHeight: 1.5 }}>
+                Are you sure you want to logout? You will need to enter your super admin credentials to access the platform again.
+              </p>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 24px 24px 24px',
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'center',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-color, #CBD5E1)',
+                  background: 'var(--bg-card, #F8FAFC)',
+                  color: 'var(--text-primary, #334155)',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  handleLogout();
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: '#EF4444',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Icon icon="solar:logout-2-bold" width="16" color="#FFFFFF" />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };

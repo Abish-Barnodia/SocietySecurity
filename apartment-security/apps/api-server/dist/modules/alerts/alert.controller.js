@@ -135,25 +135,15 @@ const triggerDuress = async (req, res, next) => {
 exports.triggerDuress = triggerDuress;
 const getAlerts = async (req, res, next) => {
     try {
-        // Caller's propertyId — already resolved by auth middleware — scopes alerts
-        // to prevent cross-tenant data exposure.
-        const propertyId = req.user.propertyId;
-        if (!propertyId)
-            return next(new error_middleware_1.AppError('No property context found', 403));
-        // Managers/committee run the property's Alerts & Escalation dashboard —
-        // they need oversight of everything happening on the property (a
-        // resident's own broadcast, a guard's vehicle alert), not just alerts
-        // some triggerAlert() call happened to target at their role. Guards and
-        // residents keep the narrower "alerts addressed to me" feed.
-        const isOversightRole = req.user.role === 'MANAGER' || req.user.role === 'COMMITTEE';
+        const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+        const propertyId = req.user?.propertyId;
+        if (!propertyId && !isSuperAdmin) {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Alerts fetched', []);
+        }
+        const isOversightRole = isSuperAdmin || req.user?.role === 'MANAGER' || req.user?.role === 'COMMITTEE';
         const alerts = await prisma_1.prisma.alert.findMany({
             where: {
-                propertyId,
-                // Role-wide broadcasts (targetRoles) and alerts aimed at this specific
-                // user (targetUserIds — e.g. a visitor-approval request for one
-                // resident) are both valid ways an alert can be "for" this caller;
-                // matching only targetRoles meant any targetUserIds-only alert
-                // (walk-in requests, visitor QR approvals) was never fetchable here.
+                ...(propertyId ? { propertyId } : {}),
                 ...(isOversightRole ? {} : {
                     OR: [
                         { targetRoles: { has: req.user.role } },
@@ -162,7 +152,7 @@ const getAlerts = async (req, res, next) => {
                 }),
             },
             orderBy: { createdAt: 'desc' },
-            take: 50
+            take: 50,
         });
         return (0, response_util_1.sendSuccess)(res, 200, 'Alerts fetched', alerts);
     }

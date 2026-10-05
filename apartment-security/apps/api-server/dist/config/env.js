@@ -6,7 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.env = void 0;
 const zod_1 = require("zod");
 const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
+// Load .env from various possible working directories
 dotenv_1.default.config();
+dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), 'apps/api-server/.env') });
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../../.env') });
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../.env') });
 const envSchema = zod_1.z.object({
     NODE_ENV: zod_1.z.enum(['development', 'production', 'test']).default('development'),
     PORT: zod_1.z.string().default('5000').transform(Number),

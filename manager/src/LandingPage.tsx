@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE } from './config';
+import { INDIAN_STATES, getCitiesForState, findStateForCity } from './indiaLocations';
 
 // ─── Iconify CDN icon component (ponytail: no npm install needed) ─────────────
 const Icon = ({ icon, size = 24, color = 'currentColor', style }: {
@@ -130,6 +131,8 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
   const [isDraggingDoc, setIsDraggingDoc] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [paymentSuccessInfo, setPaymentSuccessInfo] = useState<{ paymentId: string; plan: string; society: string } | null>(null);
+  // ponytail: derived filtered city list using native datalist support
+  const availableCities = getCitiesForState(demoForm.state);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -206,6 +209,29 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
   const handleDemoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setDemoError('');
+
+    // ponytail: validate phone (exactly 10 digits), PIN (6 digits), and flats (positive integer)
+    const phoneDigits = demoForm.managerPhone.replace(/\D/g, '').slice(-10);
+    if (phoneDigits.length !== 10) {
+      setDemoError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    if (demoForm.pin && demoForm.pin.length !== 6) {
+      setDemoError('PIN Code must be a 6-digit number.');
+      return;
+    }
+
+    const flatCount = parseInt(demoForm.flats, 10);
+    if (!demoForm.flats || isNaN(flatCount) || flatCount <= 0) {
+      setDemoError('Number of flats must be at least 1.');
+      return;
+    }
+
+    const formattedPhone = `+91 ${phoneDigits}`;
+    const standardizedName = demoForm.managerName.trim().toUpperCase();
+    const standardizedSociety = demoForm.societyName.trim().toUpperCase();
+
     setDemoLoading(true);
 
     try {
@@ -229,19 +255,19 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
       if (demoForm.address) extraNotes.push(`Address: ${demoForm.address}`);
       if (demoForm.state) extraNotes.push(`State: ${demoForm.state}`);
       if (demoForm.pin) extraNotes.push(`PIN: ${demoForm.pin}`);
-      if (demoForm.towers) extraNotes.push(`Towers: ${demoForm.towers}`);
+      if (demoForm.towers) extraNotes.push(`Towers: ${demoForm.towers.trim().toUpperCase()}`);
       if (demoForm.selectedPlan) extraNotes.push(`Interested Plan: ${demoForm.selectedPlan}`);
       if (demoForm.currentSecurity) extraNotes.push(`Current System: ${demoForm.currentSecurity}`);
       if (demoForm.demoDate) extraNotes.push(`Preferred Date: ${demoForm.demoDate}`);
       if (demoForm.message) extraNotes.push(`Requirements: ${demoForm.message}`);
 
       const formDataPayload = {
-        contactName: demoForm.managerName,
-        societyName: demoForm.societyName,
-        phone: demoForm.managerPhone,
-        email: demoForm.managerEmail,
-        city: demoForm.city || undefined,
-        numberOfUnits: demoForm.flats ? parseInt(demoForm.flats, 10) : undefined,
+        contactName: standardizedName,
+        societyName: standardizedSociety,
+        phone: formattedPhone,
+        email: demoForm.managerEmail.trim(),
+        city: demoForm.city ? demoForm.city.trim() : undefined,
+        numberOfUnits: flatCount,
         selectedPlan: demoForm.selectedPlan || 'Standard Pro (₹5,999/mo - Up to 300 Flats)',
         message: extraNotes.length > 0 ? extraNotes.join(' | ') : undefined,
         documentUrl: demoForm.documentUrl || undefined,
@@ -257,9 +283,9 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
         description: '1-Month Demo Trial Activation (₹1.00)',
         order_id: orderId,
         prefill: {
-          name: demoForm.managerName,
-          email: demoForm.managerEmail,
-          contact: demoForm.managerPhone,
+          name: standardizedName,
+          email: demoForm.managerEmail.trim(),
+          contact: formattedPhone,
         },
         theme: {
           color: '#00A67C',
@@ -1097,9 +1123,9 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="lp-form-grid">
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Society Name <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" placeholder="e.g. Greenview Heights" required value={demoForm.societyName}
-                        onChange={e => setDemoForm(f => ({ ...f, societyName: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input type="text" placeholder="E.G. GREENVIEW HEIGHTS" required value={demoForm.societyName}
+                        onChange={e => setDemoForm(f => ({ ...f, societyName: e.target.value.toUpperCase() }))}
+                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%', textTransform: 'uppercase' }}
                       />
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
@@ -1111,37 +1137,102 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>City <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" placeholder="Mumbai" required value={demoForm.city}
-                        onChange={e => setDemoForm(f => ({ ...f, city: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input
+                        type="text"
+                        list="india-cities-list"
+                        placeholder={demoForm.state ? `Type city in ${demoForm.state}...` : "Type or select City..."}
+                        required
+                        value={demoForm.city}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setDemoForm(f => {
+                            const detected = !f.state ? findStateForCity(val) : undefined;
+                            return {
+                              ...f,
+                              city: val,
+                              ...(detected ? { state: detected } : {}),
+                            };
+                          });
+                        }}
+                        className="form-input"
+                        style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                        autoComplete="off"
                       />
+                      <datalist id="india-cities-list">
+                        {availableCities.map(c => (
+                          <option key={c} value={c} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>State <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" placeholder="Maharashtra" required value={demoForm.state}
-                        onChange={e => setDemoForm(f => ({ ...f, state: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input
+                        type="text"
+                        list="india-states-list"
+                        placeholder="Type or select State..."
+                        required
+                        value={demoForm.state}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setDemoForm(f => ({ ...f, state: val }));
+                        }}
+                        className="form-input"
+                        style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                        autoComplete="off"
                       />
+                      <datalist id="india-states-list">
+                        {INDIAN_STATES.map(s => (
+                          <option key={s} value={s} />
+                        ))}
+                      </datalist>
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>PIN Code <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" placeholder="400001" required value={demoForm.pin}
-                        onChange={e => setDemoForm(f => ({ ...f, pin: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>PIN Code (6 Digits) <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        placeholder="400001"
+                        required
+                        value={demoForm.pin}
+                        onKeyDown={e => {
+                          // ponytail: prevent negative sign, letters or non-digits on keypress
+                          if (['-', '+', 'e', 'E', '.'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={e => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          setDemoForm(f => ({ ...f, pin: digits }));
+                        }}
+                        className="form-input"
+                        style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
                       />
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Number of Flats <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="number" placeholder="200" required value={demoForm.flats}
-                        onChange={e => setDemoForm(f => ({ ...f, flats: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="200"
+                        required
+                        value={demoForm.flats}
+                        onKeyDown={e => {
+                          // ponytail: prevent negative numbers and letters
+                          if (['-', '+', 'e', 'E', '.'].includes(e.key)) e.preventDefault();
+                        }}
+                        onChange={e => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          setDemoForm(f => ({ ...f, flats: digits }));
+                        }}
+                        className="form-input"
+                        style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
                       />
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Towers / Blocks</label>
-                      <input type="text" placeholder="4 Towers (A, B, C, D)" value={demoForm.towers}
-                        onChange={e => setDemoForm(f => ({ ...f, towers: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input type="text" placeholder="4 TOWERS (A, B, C, D)" value={demoForm.towers}
+                        onChange={e => setDemoForm(f => ({ ...f, towers: e.target.value.toUpperCase() }))}
+                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%', textTransform: 'uppercase' }}
                       />
                     </div>
                   </div>
@@ -1155,17 +1246,64 @@ const LandingPage: React.FC<{ onGoToLogin: () => void }> = ({ onGoToLogin }) => 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }} className="lp-form-grid">
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Full Name <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" placeholder="Arjun Mehta" required value={demoForm.managerName}
-                        onChange={e => setDemoForm(f => ({ ...f, managerName: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
+                      <input type="text" placeholder="ARJUN MEHTA" required value={demoForm.managerName}
+                        onChange={e => setDemoForm(f => ({ ...f, managerName: e.target.value.toUpperCase() }))}
+                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%', textTransform: 'uppercase' }}
                       />
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="tel" placeholder="+91 98765 43210" required value={demoForm.managerPhone}
-                        onChange={e => setDemoForm(f => ({ ...f, managerPhone: e.target.value }))}
-                        className="form-input" style={{ borderRadius: 9, padding: '10px 13px', fontSize: 13, background: '#f8fafc', width: '100%' }}
-                      />
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 9,
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          background: '#f1f5f9',
+                          borderRight: '1px solid #cbd5e1',
+                          padding: '10px 12px',
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: '#334155',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          userSelect: 'none',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <span>🇮🇳</span>
+                          <span>+91</span>
+                        </div>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          placeholder="98765 43210"
+                          required
+                          maxLength={10}
+                          value={demoForm.managerPhone.replace(/^\+91\s*/, '')}
+                          onKeyDown={e => {
+                            // ponytail: prevent non-digit keys and negative numbers
+                            if (['-', '+', 'e', 'E', '.'].includes(e.key)) e.preventDefault();
+                          }}
+                          onChange={e => {
+                            const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setDemoForm(f => ({ ...f, managerPhone: digits ? `+91 ${digits}` : '' }));
+                          }}
+                          style={{
+                            border: 'none',
+                            outline: 'none',
+                            padding: '10px 13px',
+                            fontSize: 13,
+                            background: 'transparent',
+                            width: '100%',
+                            fontWeight: 600,
+                            color: '#0f172a',
+                          }}
+                        />
+                      </div>
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>Email Address <span style={{ color: '#ef4444' }}>*</span></label>

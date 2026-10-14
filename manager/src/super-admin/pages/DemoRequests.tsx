@@ -20,6 +20,9 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
   const [provisioningDemo, setProvisioningDemo] = useState<DemoRequest | null>(null);
   const [zoomedDoc, setZoomedDoc] = useState<{ url: string; name: string; society: string; contact: string } | null>(null);
   const [contactDemo, setContactDemo] = useState<DemoRequest | null>(null);
+  const [rejectConfirmDemo, setRejectConfirmDemo] = useState<DemoRequest | null>(null);
+  const [restoreConfirmDemo, setRestoreConfirmDemo] = useState<DemoRequest | null>(null);
+  const [isUpdatingLeadStatus, setIsUpdatingLeadStatus] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<'phone' | 'email' | null>(null);
 
   // ponytail: quick copy helper with visual confirmation
@@ -75,6 +78,38 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
       onDemosUpdated?.();
     } catch (err: any) {
       alert(err.message || 'Failed to update status');
+    }
+  };
+
+  // ponytail: confirmed reject handler
+  const handleConfirmReject = async () => {
+    if (!rejectConfirmDemo) return;
+    setIsUpdatingLeadStatus(true);
+    try {
+      await superAdminService.updateDemoStatus(rejectConfirmDemo.id, 'REJECTED');
+      setRejectConfirmDemo(null);
+      fetchDemos();
+      onDemosUpdated?.();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject lead');
+    } finally {
+      setIsUpdatingLeadStatus(false);
+    }
+  };
+
+  // ponytail: confirmed restore to pending handler
+  const handleConfirmRestore = async () => {
+    if (!restoreConfirmDemo) return;
+    setIsUpdatingLeadStatus(true);
+    try {
+      await superAdminService.updateDemoStatus(restoreConfirmDemo.id, 'PENDING');
+      setRestoreConfirmDemo(null);
+      fetchDemos();
+      onDemosUpdated?.();
+    } catch (err: any) {
+      alert(err.message || 'Failed to restore lead to pending');
+    } finally {
+      setIsUpdatingLeadStatus(false);
     }
   };
 
@@ -294,13 +329,21 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                               <Icon icon="solar:check-circle-bold" width="14" />
                               Provision
                             </button>
-                            {demo.status !== 'REJECTED' && (
+                            {demo.status !== 'REJECTED' ? (
                               <button
                                 className="btn btn-danger btn-sm"
-                                title="Reject Lead"
-                                onClick={() => handleUpdateStatus(demo.id, 'REJECTED')}
+                                title="Reject Lead (Shows Confirmation)"
+                                onClick={() => setRejectConfirmDemo(demo)}
                               >
                                 <Icon icon="solar:close-circle-bold" width="14" />
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                title="Reopen Lead (Restore to Pending)"
+                                onClick={() => setRestoreConfirmDemo(demo)}
+                              >
+                                <Icon icon="solar:restart-bold" width="14" />
                               </button>
                             )}
                           </>
@@ -579,6 +622,221 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                   Status: {contactDemo.status}
                 </span>
               )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Reject Lead Confirmation Card Modal */}
+      <Modal
+        isOpen={Boolean(rejectConfirmDemo)}
+        onClose={() => !isUpdatingLeadStatus && setRejectConfirmDemo(null)}
+        title="Confirm Lead Rejection"
+        maxWidth="480px"
+      >
+        {rejectConfirmDemo && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#EF4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: '24px',
+                }}
+              >
+                <Icon icon="solar:danger-triangle-bold-duotone" width="26" />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Reject lead inquiry for "{rejectConfirmDemo.societyName}"?
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  Are you sure you want to reject this request? The status will change to <strong>REJECTED</strong>. You can still review or provision this society later if needed.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '8px',
+                padding: '14px',
+                fontSize: '0.825rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Society / Inquiry:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{rejectConfirmDemo.societyName}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Contact Person:</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{rejectConfirmDemo.contactName}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Email:</span>
+                <span style={{ color: 'var(--text-primary)' }}>{rejectConfirmDemo.email}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Phone:</span>
+                <span style={{ color: 'var(--text-primary)' }}>{rejectConfirmDemo.phone}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Current Status:</span>
+                <StatusBadge status={rejectConfirmDemo.status} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setRejectConfirmDemo(null)}
+                disabled={isUpdatingLeadStatus}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmReject}
+                disabled={isUpdatingLeadStatus}
+                style={{
+                  background: '#EF4444',
+                  color: '#FFFFFF',
+                  borderColor: '#DC2626',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700,
+                }}
+              >
+                {isUpdatingLeadStatus ? (
+                  <>
+                    <Icon icon="solar:spinner-line-duotone" width="16" className="animate-spin" />
+                    Rejecting...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:close-circle-bold" width="16" />
+                    Confirm Rejection
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Restore Lead Confirmation Card Modal */}
+      <Modal
+        isOpen={Boolean(restoreConfirmDemo)}
+        onClose={() => !isUpdatingLeadStatus && setRestoreConfirmDemo(null)}
+        title="Reopen Demo Lead"
+        maxWidth="480px"
+      >
+        {restoreConfirmDemo && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '12px',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#3B82F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  fontSize: '24px',
+                }}
+              >
+                <Icon icon="solar:restart-bold-duotone" width="26" />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <h4 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Reopen lead for "{restoreConfirmDemo.societyName}"?
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                  Are you sure you want to restore this rejected request back to <strong>PENDING</strong>?
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '8px',
+                padding: '14px',
+                fontSize: '0.825rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Society / Inquiry:</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{restoreConfirmDemo.societyName}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Contact Person:</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{restoreConfirmDemo.contactName}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Current Status:</span>
+                <StatusBadge status={restoreConfirmDemo.status} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setRestoreConfirmDemo(null)}
+                disabled={isUpdatingLeadStatus}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmRestore}
+                disabled={isUpdatingLeadStatus}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 700,
+                }}
+              >
+                {isUpdatingLeadStatus ? (
+                  <>
+                    <Icon icon="solar:spinner-line-duotone" width="16" className="animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:restart-bold" width="16" />
+                    Confirm Reopen
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}

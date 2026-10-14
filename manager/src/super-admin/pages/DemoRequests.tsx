@@ -19,6 +19,15 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
   const [search, setSearch] = useState('');
   const [provisioningDemo, setProvisioningDemo] = useState<DemoRequest | null>(null);
   const [zoomedDoc, setZoomedDoc] = useState<{ url: string; name: string; society: string; contact: string } | null>(null);
+  const [contactDemo, setContactDemo] = useState<DemoRequest | null>(null);
+  const [copiedField, setCopiedField] = useState<'phone' | 'email' | null>(null);
+
+  // ponytail: quick copy helper with visual confirmation
+  const handleCopy = (text: string, field: 'phone' | 'email') => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const isImageFile = (url?: string | null, name?: string | null) => {
     if (!url) return false;
@@ -150,8 +159,12 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                     <td>
                       <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{demo.contactName}</div>
                     </td>
-                    <td>
-                      <div style={{ fontSize: '0.825rem' }}>{demo.email}</div>
+                    <td
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setContactDemo(demo)}
+                      title="Click to view contact options"
+                    >
+                      <div style={{ fontSize: '0.825rem', color: 'var(--text-primary)' }}>{demo.email}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{demo.phone}</div>
                     </td>
                     <td>
@@ -250,14 +263,24 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {demo.status === 'PENDING' && (
+                        {demo.status === 'PENDING' ? (
                           <button
                             className="btn btn-secondary btn-sm"
-                            title="Mark as Contacted"
-                            onClick={() => handleUpdateStatus(demo.id, 'CONTACTED')}
+                            title="View Contact Phone & Email"
+                            onClick={() => setContactDemo(demo)}
                           >
                             <Icon icon="solar:phone-calling-bold" width="14" />
                             Contacted
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            title="View Contact Phone & Email"
+                            onClick={() => setContactDemo(demo)}
+                            style={{ opacity: 0.85 }}
+                          >
+                            <Icon icon="solar:phone-calling-bold" width="14" />
+                            Contact
                           </button>
                         )}
 
@@ -367,6 +390,195 @@ export const DemoRequests: React.FC<DemoRequestsProps> = ({ onDemosUpdated }) =>
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+      {/* Contact Requested Person Modal */}
+      <Modal
+        isOpen={Boolean(contactDemo)}
+        onClose={() => setContactDemo(null)}
+        title="Contact Requested Person"
+        maxWidth="500px"
+      >
+        {contactDemo && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            {/* Person & Society Info Banner */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-subtle)',
+            }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {contactDemo.contactName}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+                  {contactDemo.societyName} {contactDemo.city ? `• ${contactDemo.city}` : ''}
+                </div>
+              </div>
+              <StatusBadge status={contactDemo.status} />
+            </div>
+
+            {/* Phone Number Box */}
+            <div style={{
+              padding: '14px 16px',
+              borderRadius: '8px',
+              background: 'rgba(0, 200, 150, 0.05)',
+              border: '1px solid rgba(0, 200, 150, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#00A67C', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Phone Number
+                </span>
+                {copiedField === 'phone' && (
+                  <span style={{ fontSize: '0.725rem', color: '#00A67C', fontWeight: 700 }}>Copied!</span>
+                )}
+              </div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
+                {contactDemo.phone || 'No phone provided'}
+              </div>
+              {contactDemo.phone && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                  <a
+                    href={`tel:${contactDemo.phone}`}
+                    className="btn btn-primary btn-sm"
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Icon icon="solar:phone-calling-bold" width="14" />
+                    Call
+                  </a>
+                  <a
+                    href={`https://wa.me/${contactDemo.phone.replace(/\D/g, '').length === 10 ? `91${contactDemo.phone.replace(/\D/g, '')}` : contactDemo.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary btn-sm"
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Icon icon="logos:whatsapp-icon" width="14" />
+                    WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleCopy(contactDemo.phone, 'phone')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Icon icon="solar:copy-bold" width="14" />
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Email Address Box */}
+            <div style={{
+              padding: '14px 16px',
+              borderRadius: '8px',
+              background: 'rgba(59, 130, 246, 0.05)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Email Address
+                </span>
+                {copiedField === 'email' && (
+                  <span style={{ fontSize: '0.725rem', color: '#3B82F6', fontWeight: 700 }}>Copied!</span>
+                )}
+              </div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                {contactDemo.email || 'No email provided'}
+              </div>
+              {contactDemo.email && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                  <a
+                    href={`mailto:${contactDemo.email}?subject=${encodeURIComponent(`SecureGate Demo Inquiry - ${contactDemo.societyName}`)}`}
+                    className="btn btn-primary btn-sm"
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Icon icon="solar:letter-bold" width="14" />
+                    Send Email
+                  </a>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleCopy(contactDemo.email, 'email')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <Icon icon="solar:copy-bold" width="14" />
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Inquiry Details if any */}
+            {(contactDemo.message || contactDemo.numberOfUnits) && (
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid var(--border-subtle)',
+                fontSize: '0.775rem',
+                color: 'var(--text-dim)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}>
+                {contactDemo.numberOfUnits && (
+                  <div>
+                    <strong style={{ color: 'var(--text-primary)' }}>Estimated Units: </strong>
+                    {contactDemo.numberOfUnits} Units
+                  </div>
+                )}
+                {contactDemo.message && (
+                  <div>
+                    <strong style={{ color: 'var(--text-primary)' }}>Message: </strong>
+                    <span style={{ fontStyle: 'italic' }}>"{contactDemo.message}"</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setContactDemo(null)}
+              >
+                Close
+              </button>
+
+              {contactDemo.status === 'PENDING' ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    await handleUpdateStatus(contactDemo.id, 'CONTACTED');
+                    setContactDemo(null);
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Icon icon="solar:check-circle-bold" width="16" />
+                  Mark as Contacted
+                </button>
+              ) : (
+                <span style={{ fontSize: '0.8rem', color: 'var(--emerald)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Icon icon="solar:verified-check-bold" width="16" />
+                  Status: {contactDemo.status}
+                </span>
+              )}
             </div>
           </div>
         )}

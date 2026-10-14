@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "npm --prefix apartment-security/apps/api-server run dev",
+    "dev:manager": "npm --prefix manager run dev",
     "build": "npm --prefix apartment-security/apps/api-server run build",
     "start": "node apartment-security/apps/api-server/dist/server.js",
     "install:all": "npm --prefix apartment-security/apps/api-server install && npm --prefix manager install"

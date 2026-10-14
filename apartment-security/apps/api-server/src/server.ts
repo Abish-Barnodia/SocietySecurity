@@ -18,7 +18,8 @@ export const io = new Server(server, {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // mobile / server-to-server
       if (isKnownOrigin(origin)) return callback(null, true);
-      callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
+      // ponytail: clean reject without throwing unhandled error
+      callback(null, false);
     },
     credentials: true,
   },

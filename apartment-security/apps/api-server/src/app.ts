@@ -60,7 +60,8 @@ app.use(cors({
       return callback(null, true);
     }
     if (isKnownOrigin(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    // ponytail: clean reject without throwing 500 internal server error
+    callback(null, false);
   },
   credentials: true,
 }));

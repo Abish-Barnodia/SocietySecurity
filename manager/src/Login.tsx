@@ -51,52 +51,59 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }, []);
 
   // Load public registered societies
-  useEffect(() => {
-    const fetchSocieties = async () => {
-      setSocietiesLoading(true);
-      setSocietyLoadError(false);
-      try {
-        const res = await fetch(`${API_BASE}/auth/societies`);
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.data)) {
-          setSocieties(data.data);
+  // ponytail: reusable fetch with error clearing and retry capability
+  const fetchSocieties = async () => {
+    setSocietiesLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/societies`);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.data)) {
+        setSocieties(data.data);
+        setSocietyLoadError(false);
 
-          // Auto-select from URL query (?slug=...) if provided
-          const params = new URLSearchParams(window.location.search);
-          const slugParam = params.get('slug');
-          if (slugParam) {
-            const found = data.data.find((s: SocietyOption) => s.slug === slugParam || s.id === slugParam);
-            if (found) {
-              setSelectedSociety(found);
-              setSocietySearch(found.name);
-            }
+        // Auto-select from URL query (?slug=...) if provided
+        const params = new URLSearchParams(window.location.search);
+        const slugParam = params.get('slug');
+        if (slugParam) {
+          const found = data.data.find((s: SocietyOption) => s.slug === slugParam || s.id === slugParam);
+          if (found) {
+            setSelectedSociety(found);
+            setSocietySearch(found.name);
           }
-        } else {
-          setSocietyLoadError(true);
         }
-      } catch (err) {
-        console.error('Failed to load registered societies', err);
+      } else {
         setSocietyLoadError(true);
-      } finally {
-        setSocietiesLoading(false);
       }
-    };
+    } catch (err) {
+      console.error('Failed to load registered societies', err);
+      setSocietyLoadError(true);
+    } finally {
+      setSocietiesLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchSocieties();
   }, []);
 
-  // When dropdown opens, refresh societies in background to pick up newly approved ones immediately
+  // When dropdown opens, refresh societies in background or retry if failed earlier
   useEffect(() => {
     if (isDropdownOpen) {
-      fetch(`${API_BASE}/auth/societies`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data?.data)) {
-            setSocieties(data.data);
-          }
-        })
-        .catch(() => {});
+      if (societies.length === 0 || societyLoadError) {
+        fetchSocieties();
+      } else {
+        fetch(`${API_BASE}/auth/societies`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (Array.isArray(data?.data)) {
+              setSocieties(data.data);
+              setSocietyLoadError(false);
+            }
+          })
+          .catch(() => {});
+      }
     }
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, societies.length, societyLoadError]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -370,9 +377,30 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     fontWeight: 500,
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
                     gap: 8,
                   }}>
-                    ⚠️ Could not reach the server. Make sure the API is running on port 5000.
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>⚠️ Could not reach the server. Make sure the API is running on port 5000.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => fetchSocieties()}
+                      disabled={societiesLoading}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        border: '1px solid #FED7AA',
+                        background: '#FFFFFF',
+                        color: '#C2410C',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {societiesLoading ? 'Retrying...' : 'Retry'}
+                    </button>
                   </div>
                 )}
 
@@ -497,6 +525,30 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             </div>
                           );
                         })
+                      ) : societyLoadError && societies.length === 0 ? (
+                        <div style={{ padding: '16px 12px', textAlign: 'center', fontSize: 13, color: '#C2410C' }}>
+                          <div>Could not load societies. Server unreachable.</div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fetchSocieties();
+                            }}
+                            style={{
+                              marginTop: 8,
+                              padding: '5px 12px',
+                              borderRadius: 6,
+                              border: '1px solid #FED7AA',
+                              background: '#FFF7ED',
+                              color: '#C2410C',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Retry
+                          </button>
+                        </div>
                       ) : (
                         <div style={{ padding: '16px 12px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
                           {societySearch

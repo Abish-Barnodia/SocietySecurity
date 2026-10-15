@@ -161,10 +161,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           email: cleanEmail,
           password: cleanPassword,
           propertyId: selectedSociety?.id || undefined,
+          portal: 'manager',
         }),
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
+        // ponytail: Block residents and other non-manager roles from entering the manager portal
+        const role = data.data?.user?.role;
+        if (role !== 'MANAGER' && role !== 'SUPER_ADMIN') {
+          setError('Access denied. Resident accounts cannot access the Manager Portal.');
+          return;
+        }
+
         // ponytail: Storing credentials in localStorage
         localStorage.setItem('accessToken', data.data.accessToken);
         localStorage.setItem('refreshToken', data.data.refreshToken);

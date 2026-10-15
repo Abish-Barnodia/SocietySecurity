@@ -362,7 +362,7 @@ export const signupEmail = async (req: Request, res: Response, next: NextFunctio
 
 export const loginEmail = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password, propertyId } = req.body;
+    const { email, password, propertyId, portal } = req.body;
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanPassword = (password || '').trim();
 
@@ -404,6 +404,11 @@ export const loginEmail = async (req: Request, res: Response, next: NextFunction
     }
     if (!user.isActive) {
       return next(new AppError('This account has been deactivated', 403));
+    }
+
+    // ponytail: Block non-managers when attempting to log into the Manager Portal
+    if (portal === 'manager' && user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN') {
+      return next(new AppError('Access denied. Resident accounts cannot access the Manager Portal.', 403));
     }
 
     let managerSessionToken: string | undefined;

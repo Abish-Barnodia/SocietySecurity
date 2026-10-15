@@ -64,14 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
+    const response = await api.post('/auth/login', { email, password, portal: 'manager' });
     const { data } = response.data;
+    // ponytail: Block residents and non-managers immediately
+    if (data.user?.role !== 'MANAGER' && data.user?.role !== 'SUPER_ADMIN') {
+      throw new Error('Access denied. Resident accounts cannot access the Manager Portal.');
+    }
     localStorage.setItem('managerToken', data.accessToken);
     localStorage.setItem('managerRefreshToken', data.refreshToken);
     try {
       await hydrateFromMe();
     } catch (error) {
       localStorage.removeItem('managerToken');
+      localStorage.removeItem('managerRefreshToken');
       throw error;
     }
   };

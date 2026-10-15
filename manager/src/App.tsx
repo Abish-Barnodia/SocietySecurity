@@ -134,13 +134,16 @@ const App: React.FC = () => {
     })
       .then(async (res) => {
         const data = await res.json();
-        if (res.ok && data.status === 'success') {
+        // ponytail: Disallow non-manager accounts (like RESIDENT) from staying authenticated in manager portal
+        const role = data.data?.role;
+        if (res.ok && data.status === 'success' && (role === 'MANAGER' || role === 'SUPER_ADMIN')) {
           setFullProfile(data.data);
           setIsAuthenticated(true);
         } else {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
+          localStorage.removeItem('superadmin_token');
           setIsAuthenticated(false);
         }
       })
@@ -172,6 +175,11 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   const handleLogin = (_token: string, loggedInUser: any) => {
+    // ponytail: Guard against non-manager roles
+    if (loggedInUser?.role && loggedInUser.role !== 'MANAGER' && loggedInUser.role !== 'SUPER_ADMIN') {
+      handleLogout();
+      return;
+    }
     if (loggedInUser) {
       setFullProfile(loggedInUser);
     }
@@ -218,21 +226,21 @@ const App: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    const handleLoginWithReturn = (token: string, user: any) => {
-      handleLogin(token, user);
-      const params = new URLSearchParams(window.location.search);
-      const redirectPath = params.get('redirect');
-      if (redirectPath) {
-        history.replaceState(null, '', redirectPath);
-        setCurrentPath(redirectPath.toLowerCase());
-      } else {
-        setActiveTab('dashboard');
-        history.replaceState(null, '', '/dashboard');
-        setCurrentPath('/dashboard');
-      }
-    };
+  const handleLoginWithReturn = (token: string, user: any) => {
+    handleLogin(token, user);
+    const params = new URLSearchParams(window.location.search);
+    const redirectPath = params.get('redirect');
+    if (redirectPath) {
+      history.replaceState(null, '', redirectPath);
+      setCurrentPath(redirectPath.toLowerCase());
+    } else {
+      setActiveTab('dashboard');
+      history.replaceState(null, '', '/dashboard');
+      setCurrentPath('/dashboard');
+    }
+  };
 
+  if (!isAuthenticated) {
     // If on root path ('/' or ''), render the Landing Page
     if (currentPath === '/' || currentPath === '') {
       return (
@@ -260,6 +268,11 @@ const App: React.FC = () => {
 
   if (userRole === 'SUPER_ADMIN') {
     return <SuperAdminPortal onLogout={handleLogout} />;
+  }
+
+  // ponytail: ensure residents or any other non-manager roles cannot render manager portal
+  if (userRole !== 'MANAGER') {
+    return <Login onLogin={handleLoginWithReturn} />;
   }
 
   const operationsNav = [

@@ -82,6 +82,7 @@ export const loginEmailSchema = z.object({
     email: z.string().email(),
     password: z.string().min(1),
     propertyId: z.string().optional().nullable(),
+    portal: z.string().optional().nullable(),
   })
 });
 

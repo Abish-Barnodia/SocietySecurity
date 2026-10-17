@@ -32,7 +32,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Society selection & autocomplete states
-  // ponytail: Instant zero-latency load from localStorage cache (0ms) + auto-restore previous society
+  // ponytail: Instant zero-latency load from localStorage cache (0ms) without pre-selecting any society
   const [societies, setSocieties] = useState<SocietyOption[]>(() => {
     try {
       const cached = localStorage.getItem('sg_cached_societies');
@@ -41,22 +41,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       return [];
     }
   });
-  const [selectedSociety, setSelectedSociety] = useState<SocietyOption | null>(() => {
-    try {
-      const saved = localStorage.getItem('selectedSociety');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [societySearch, setSocietySearch] = useState(() => {
-    try {
-      const saved = localStorage.getItem('selectedSociety');
-      return saved ? (JSON.parse(saved)?.name || '') : '';
-    } catch {
-      return '';
-    }
-  });
+  const [selectedSociety, setSelectedSociety] = useState<SocietyOption | null>(null);
+  const [societySearch, setSocietySearch] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [societiesLoading, setSocietiesLoading] = useState(() => {
     try {

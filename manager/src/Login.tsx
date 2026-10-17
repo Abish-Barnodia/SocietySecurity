@@ -32,11 +32,40 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Society selection & autocomplete states
-  const [societies, setSocieties] = useState<SocietyOption[]>([]);
-  const [selectedSociety, setSelectedSociety] = useState<SocietyOption | null>(null);
-  const [societySearch, setSocietySearch] = useState('');
+  // ponytail: Instant zero-latency load from localStorage cache (0ms) + auto-restore previous society
+  const [societies, setSocieties] = useState<SocietyOption[]>(() => {
+    try {
+      const cached = localStorage.getItem('sg_cached_societies');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedSociety, setSelectedSociety] = useState<SocietyOption | null>(() => {
+    try {
+      const saved = localStorage.getItem('selectedSociety');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [societySearch, setSocietySearch] = useState(() => {
+    try {
+      const saved = localStorage.getItem('selectedSociety');
+      return saved ? (JSON.parse(saved)?.name || '') : '';
+    } catch {
+      return '';
+    }
+  });
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [societiesLoading, setSocietiesLoading] = useState(true);
+  const [societiesLoading, setSocietiesLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('sg_cached_societies');
+      return !cached || JSON.parse(cached).length === 0;
+    } catch {
+      return true;
+    }
+  });
   const [societyLoadError, setSocietyLoadError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -51,15 +80,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }, []);
 
   // Load public registered societies
-  // ponytail: reusable fetch with error clearing and retry capability
-  const fetchSocieties = async () => {
-    setSocietiesLoading(true);
+  // ponytail: stale-while-revalidate - background refresh without blocking UI
+  const fetchSocieties = async (forceLoading = false) => {
+    if (forceLoading || societies.length === 0) {
+      setSocietiesLoading(true);
+    }
     try {
       const res = await fetch(`${API_BASE}/auth/societies`);
       const data = await res.json();
       if (res.ok && Array.isArray(data.data)) {
         setSocieties(data.data);
         setSocietyLoadError(false);
+        try {
+          localStorage.setItem('sg_cached_societies', JSON.stringify(data.data));
+        } catch {}
 
         // Auto-select from URL query (?slug=...) if provided
         const params = new URLSearchParams(window.location.search);
@@ -71,12 +105,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             setSocietySearch(found.name);
           }
         }
-      } else {
+      } else if (societies.length === 0) {
         setSocietyLoadError(true);
       }
     } catch (err) {
       console.error('Failed to load registered societies', err);
-      setSocietyLoadError(true);
+      if (societies.length === 0) {
+        setSocietyLoadError(true);
+      }
     } finally {
       setSocietiesLoading(false);
     }
@@ -86,22 +122,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     fetchSocieties();
   }, []);
 
-  // When dropdown opens, refresh societies in background or retry if failed earlier
+  // When dropdown opens, only re-fetch if list is empty or had error
   useEffect(() => {
-    if (isDropdownOpen) {
-      if (societies.length === 0 || societyLoadError) {
-        fetchSocieties();
-      } else {
-        fetch(`${API_BASE}/auth/societies`)
-          .then((res) => res.json())
-          .then((data) => {
-            if (Array.isArray(data?.data)) {
-              setSocieties(data.data);
-              setSocietyLoadError(false);
-            }
-          })
-          .catch(() => {});
-      }
+    if (isDropdownOpen && (societies.length === 0 || societyLoadError)) {
+      fetchSocieties(true);
     }
   }, [isDropdownOpen, societies.length, societyLoadError]);
 
@@ -489,7 +513,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       zIndex: 50,
                       padding: '6px',
                     }}>
-                      {societiesLoading ? (
+                      {societiesLoading && filteredSocieties.length === 0 ? (
                         <div style={{ padding: '16px 12px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
                           Loading societies...
                         </div>

@@ -1,9 +1,42 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerResidentPublic = exports.resetPassword = exports.forgotPassword = exports.checkApprovalStatus = exports.loginEmail = exports.signupEmail = exports.updateManagerAlertPreferences = exports.updateMyManagerProfile = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = exports.getPublicSocieties = void 0;
+exports.registerResidentPublic = exports.resetPassword = exports.forgotPassword = exports.checkApprovalStatus = exports.loginEmail = exports.signupEmail = exports.updateManagerAlertPreferences = exports.updateMyManagerProfile = exports.getMe = exports.registerFcmToken = exports.logoutAllDevices = exports.logout = exports.refreshToken = exports.verifyOtp = exports.requestOtp = exports.getPublicSocieties = exports.invalidateSocietiesCache = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const prisma_1 = require("../../config/prisma");
 const otp_util_1 = require("../../utils/otp.util");
@@ -16,8 +49,32 @@ const logger_util_1 = require("../../utils/logger.util");
 const managerPortalLock_util_1 = require("../../utils/managerPortalLock.util");
 const supabaseAuth_util_1 = require("../../utils/supabaseAuth.util");
 const email_service_1 = require("../../utils/email.service");
+// ponytail: In-memory cache + HTTP cache headers so public societies load in <1ms without DB roundtrips
+let cachedSocieties = null;
+let cacheExpiry = 0;
+const invalidateSocietiesCache = () => {
+    cachedSocieties = null;
+    cacheExpiry = 0;
+};
+exports.invalidateSocietiesCache = invalidateSocietiesCache;
 const getPublicSocieties = async (req, res, next) => {
     try {
+        const now = Date.now();
+        // Cache in client browser for 60s, stale-while-revalidate for 5 minutes
+        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+        if (cachedSocieties && now < cacheExpiry) {
+            return (0, response_util_1.sendSuccess)(res, 200, 'Societies retrieved successfully', cachedSocieties);
+        }
+        try {
+            const { redis } = await Promise.resolve().then(() => __importStar(require('../../config/redis')));
+            const redisCached = await redis.get('public:societies');
+            if (redisCached) {
+                cachedSocieties = JSON.parse(redisCached);
+                cacheExpiry = now + 60 * 1000;
+                return (0, response_util_1.sendSuccess)(res, 200, 'Societies retrieved successfully', cachedSocieties);
+            }
+        }
+        catch { }
         // Include ACTIVE and PENDING societies so newly provisioned societies
         // appear in the login dropdown before their status is explicitly activated.
         // Only SUSPENDED societies are excluded from the public list.
@@ -32,6 +89,13 @@ const getPublicSocieties = async (req, res, next) => {
             },
             orderBy: { name: 'asc' },
         });
+        cachedSocieties = societies;
+        cacheExpiry = now + 60 * 1000;
+        try {
+            const { redis } = await Promise.resolve().then(() => __importStar(require('../../config/redis')));
+            await redis.set('public:societies', JSON.stringify(societies), 'EX', 300);
+        }
+        catch { }
         return (0, response_util_1.sendSuccess)(res, 200, 'Societies retrieved successfully', societies);
     }
     catch (error) {

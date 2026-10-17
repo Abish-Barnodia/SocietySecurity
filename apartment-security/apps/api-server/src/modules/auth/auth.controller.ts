@@ -12,8 +12,35 @@ import { claimManagerPortalLock, releaseManagerPortalLock, MANAGER_SESSION_IDLE_
 import { sendSupabaseRecoveryEmail, verifySupabaseRecoveryCode, setSupabaseUserPassword } from '../../utils/supabaseAuth.util';
 import { sendPasswordResetEmail, sendResidentRegistrationEmailToManager } from '../../utils/email.service';
 
+// ponytail: In-memory cache + HTTP cache headers so public societies load in <1ms without DB roundtrips
+let cachedSocieties: any[] | null = null;
+let cacheExpiry = 0;
+
+export const invalidateSocietiesCache = () => {
+  cachedSocieties = null;
+  cacheExpiry = 0;
+};
+
 export const getPublicSocieties = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const now = Date.now();
+    // Cache in client browser for 60s, stale-while-revalidate for 5 minutes
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+
+    if (cachedSocieties && now < cacheExpiry) {
+      return sendSuccess(res, 200, 'Societies retrieved successfully', cachedSocieties);
+    }
+
+    try {
+      const { redis } = await import('../../config/redis');
+      const redisCached = await redis.get('public:societies');
+      if (redisCached) {
+        cachedSocieties = JSON.parse(redisCached);
+        cacheExpiry = now + 60 * 1000;
+        return sendSuccess(res, 200, 'Societies retrieved successfully', cachedSocieties);
+      }
+    } catch {}
+
     // Include ACTIVE and PENDING societies so newly provisioned societies
     // appear in the login dropdown before their status is explicitly activated.
     // Only SUSPENDED societies are excluded from the public list.
@@ -28,6 +55,15 @@ export const getPublicSocieties = async (req: Request, res: Response, next: Next
       },
       orderBy: { name: 'asc' },
     });
+
+    cachedSocieties = societies;
+    cacheExpiry = now + 60 * 1000;
+
+    try {
+      const { redis } = await import('../../config/redis');
+      await redis.set('public:societies', JSON.stringify(societies), 'EX', 300);
+    } catch {}
+
     return sendSuccess(res, 200, 'Societies retrieved successfully', societies);
   } catch (error) {
     next(error);

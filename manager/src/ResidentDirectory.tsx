@@ -140,11 +140,11 @@ const ResidentDirectory = () => {
   const [isAddAmenityOpen, setIsAddAmenityOpen] = useState(false);
   const [editAmenityId, setEditAmenityId] = useState<string | null>(null);
   const [amenityForm, setAmenityForm] = useState({ name: '', capacity: '10', openTime: '06:00', closeTime: '22:00', status: 'AVAILABLE' });
-
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
   const [suspendingFamily, setSuspendingFamily] = useState(false);
-  const [revokingSuspensionUnitId, setRevokingSuspensionUnitId] = useState<string | null>(null);
+  const [revokeConfirmUnitId, setRevokeConfirmUnitId] = useState<string | null>(null);
+  const [revokingSuspension, setRevokingSuspension] = useState(false);
   const [deleteConfirmUnitId, setDeleteConfirmUnitId] = useState<string | null>(null);
   const [deletingFamily, setDeletingFamily] = useState(false);
 
@@ -444,11 +444,12 @@ const ResidentDirectory = () => {
     }
   };
 
-  // ponytail: revoke suspension and reinstate family access
-  const handleRevokeSuspension = async (unitId: string) => {
-    setRevokingSuspensionUnitId(unitId);
+  // ponytail: revoke suspension and reinstate family access with confirmation and loading
+  const confirmRevokeFamily = async () => {
+    if (!revokeConfirmUnitId) return;
+    setRevokingSuspension(true);
     try {
-      const res = await fetch(`${API_BASE}/residents/families/${unitId}/restore`, {
+      const res = await fetch(`${API_BASE}/residents/families/${revokeConfirmUnitId}/restore`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${getAuthToken()}` },
       });
@@ -456,19 +457,20 @@ const ResidentDirectory = () => {
         showToast('Family suspension revoked', 'success');
         // ponytail: in-place state update without full page reload
         setFamilies(prev => prev.map(f => {
-          if (f.unitId !== unitId) return f;
+          if (f.unitId !== revokeConfirmUnitId) return f;
           return {
             ...f,
             members: f.members.map(m => ({ ...m, isActive: true })),
           };
         }));
         setSelectedFamily(prev => {
-          if (!prev || prev.unitId !== unitId) return prev;
+          if (!prev || prev.unitId !== revokeConfirmUnitId) return prev;
           return {
             ...prev,
             members: prev.members.map(m => ({ ...m, isActive: true })),
           };
         });
+        setRevokeConfirmUnitId(null);
         fetchData(true);
       } else {
         const data = await res.json().catch(() => ({}));
@@ -477,7 +479,7 @@ const ResidentDirectory = () => {
     } catch {
       showToast('An unexpected error occurred', 'error');
     } finally {
-      setRevokingSuspensionUnitId(null);
+      setRevokingSuspension(false);
     }
   };
 
@@ -972,12 +974,11 @@ const ResidentDirectory = () => {
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleRevokeSuspension(family.unitId)}
-                                    disabled={revokingSuspensionUnitId === family.unitId}
+                                    onClick={() => setRevokeConfirmUnitId(family.unitId)}
                                     title="Revoke suspension"
                                     style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, backgroundColor: '#ECFDF5', border: '1px solid #059669', color: '#059669', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <Icon name="rotate-2" size={12} />
-                                    {revokingSuspensionUnitId === family.unitId ? 'Revoking...' : 'Revoke'}
+                                    Revoke
                                   </button>
                                 )}
                                 <button
@@ -1089,39 +1090,38 @@ const ResidentDirectory = () => {
                           {family.members.length > 3 && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, backgroundColor: '#F1F5F9', color: '#94A3B8' }}>+{family.members.length - 3} more</span>}
                         </div>
 
-                        <div style={{ display: 'flex', gap: 8, paddingTop: 14, borderTop: '1px solid var(--border-color)', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 6, paddingTop: 14, borderTop: '1px solid var(--border-color)', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             <button
                               onClick={e => { e.stopPropagation(); setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-                              View Family <Icon name="chevron-right" size={14} />
+                              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 11px', fontSize: 12, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              View Family <Icon name="chevron-right" size={13} />
                             </button>
                             <button
                               onClick={e => { e.stopPropagation(); openWorkers(family); }}
                               title="Domestic workers registered by this household"
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: 6, cursor: 'pointer' }}>
-                              <Icon name="users-group" size={14} /> Workers
+                              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '7px 10px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              <Icon name="users-group" size={13} /> Workers
                             </button>
                           </div>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             {active ? (
                               <button onClick={e => { e.stopPropagation(); setSuspendConfirmUnitId(family.unitId); }}
-                                style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
+                                style={{ padding: '7px 11px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                                 Suspend
                               </button>
                             ) : (
-                              <button onClick={e => { e.stopPropagation(); handleRevokeSuspension(family.unitId); }}
-                                disabled={revokingSuspensionUnitId === family.unitId}
+                              <button onClick={e => { e.stopPropagation(); setRevokeConfirmUnitId(family.unitId); }}
                                 title="Revoke suspension"
-                                style={{ padding: '7px 14px', fontSize: 13, fontWeight: 600, backgroundColor: '#ECFDF5', border: '1px solid #059669', color: '#059669', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <Icon name="rotate-2" size={13} />
-                                {revokingSuspensionUnitId === family.unitId ? 'Revoking...' : 'Revoke'}
+                                style={{ padding: '7px 11px', fontSize: 12, fontWeight: 600, backgroundColor: '#ECFDF5', border: '1px solid #059669', color: '#059669', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                                <Icon name="rotate-2" size={12} />
+                                Revoke
                               </button>
                             )}
                             <button onClick={e => { e.stopPropagation(); setDeleteConfirmUnitId(family.unitId); }}
                               title="Delete family"
-                              style={{ padding: '7px 10px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #DC2626', color: '#DC2626', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                              <Icon name="trash" size={14} />
+                              style={{ padding: '7px 8px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #DC2626', color: '#DC2626', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                              <Icon name="trash" size={13} />
                             </button>
                           </div>
                         </div>
@@ -1591,11 +1591,10 @@ const ResidentDirectory = () => {
                   Suspend Family
                 </button>
               ) : (
-                <button onClick={() => handleRevokeSuspension(selectedFamily.unitId)}
-                  disabled={revokingSuspensionUnitId === selectedFamily.unitId}
+                <button onClick={() => { setIsFamilyDetailsOpen(false); setRevokeConfirmUnitId(selectedFamily.unitId); }}
                   style={{ padding: '9px 20px', fontSize: 13, fontWeight: 600, backgroundColor: '#059669', border: '1px solid #059669', color: '#FFFFFF', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Icon name="rotate-2" size={14} />
-                  {revokingSuspensionUnitId === selectedFamily.unitId ? 'Revoking...' : 'Revoke Suspension'}
+                  Revoke Suspension
                 </button>
               )}
               <button className="btn btn-primary" onClick={() => setIsFamilyDetailsOpen(false)} style={{ padding: '9px 24px' }}>Close</button>
@@ -1813,6 +1812,50 @@ const ResidentDirectory = () => {
                       </>
                     ) : (
                       'Yes, Suspend'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ===== CONFIRM REVOKE MODAL ===== */}
+      {revokeConfirmUnitId && (() => {
+        const targetFamily = families.find(f => f.unitId === revokeConfirmUnitId);
+        return (
+          <div className="modal-overlay" onClick={() => !revokingSuspension && setRevokeConfirmUnitId(null)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="rotate-2" size={20} color="#059669" />
+                  </div>
+                  <div>
+                    <h3 className="modal-title">Revoke Suspension</h3>
+                    <p className="modal-subtitle" style={{ color: '#059669' }}>Confirmation required</p>
+                  </div>
+                </div>
+                {!revokingSuspension && <button className="modal-close" onClick={() => setRevokeConfirmUnitId(null)}>&times;</button>}
+              </div>
+              <div className="modal-body">
+                <p style={{ margin: '0 0 14px 0', fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>
+                  Are you sure you want to revoke the suspension for <strong>Unit {targetFamily?.apartmentNumber || ''}</strong> ({targetFamily ? displayName(targetFamily) : 'this family'})?
+                </p>
+                <div style={{ padding: '12px 14px', background: '#F0FDF4', borderRadius: 8, border: '1px solid #BBF7D0', fontSize: 13, color: '#166534', marginBottom: 20 }}>
+                  All {targetFamily?.totalMembers || 'all'} family member(s) will be restored to active status and regain access to the resident app and gate services.
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setRevokeConfirmUnitId(null)} disabled={revokingSuspension}>Cancel</button>
+                  <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#059669', borderColor: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={confirmRevokeFamily} disabled={revokingSuspension}>
+                    {revokingSuspension ? (
+                      <>
+                        <Icon name="loader-2" className="spin" size={16} color="#FFF" />
+                        <span>Revoking...</span>
+                      </>
+                    ) : (
+                      'Yes, Revoke'
                     )}
                   </button>
                 </div>

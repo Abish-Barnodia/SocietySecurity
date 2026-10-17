@@ -40,6 +40,9 @@ import superAdminRouter from './modules/superAdmin/superAdmin.routes';
 
 const app = express();
 
+// ponytail: trust first reverse proxy hop (Render, Cloudflare, AWS) for client IP & rate-limiting
+app.set('trust proxy', 1);
+
 // Security headers. Default CORP is 'same-origin', which silently blocks
 // <img>/<video>/<audio> tags on other origins (e.g. the manager web
 // dashboard) from loading files served from /uploads — relax it since

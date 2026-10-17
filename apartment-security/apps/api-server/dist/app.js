@@ -74,6 +74,8 @@ const managerAccounts_routes_1 = require("./modules/managerAccounts/managerAccou
 const demoRequest_routes_1 = __importDefault(require("./modules/demoRequests/demoRequest.routes"));
 const superAdmin_routes_1 = __importDefault(require("./modules/superAdmin/superAdmin.routes"));
 const app = (0, express_1.default)();
+// ponytail: trust first reverse proxy hop (Render, Cloudflare, AWS) for client IP & rate-limiting
+app.set('trust proxy', 1);
 // Security headers. Default CORP is 'same-origin', which silently blocks
 // <img>/<video>/<audio> tags on other origins (e.g. the manager web
 // dashboard) from loading files served from /uploads — relax it since

@@ -179,6 +179,9 @@ export default function EntriesScreen() {
 
   const renderEntryCard = (item: Entry) => {
     const isInside = item.status === 'Entered';
+    const isLeft = item.status === 'Exited';
+    const isDenied = item.status === 'Denied';
+    const isPending = item.status === 'Pending';
     const durationStr = getDurationText(item.entryAt, item.exitAt);
 
     return (
@@ -210,20 +213,32 @@ export default function EntriesScreen() {
               <View
                 style={[
                   styles.statusBadge,
-                  isInside ? styles.statusBadgeInside : styles.statusBadgeLeft,
+                  isInside
+                    ? styles.statusBadgeInside
+                    : isDenied
+                    ? { backgroundColor: '#fee2e2' }
+                    : isPending
+                    ? { backgroundColor: '#fef3c7' }
+                    : styles.statusBadgeLeft,
                 ]}
               >
                 <Text
                   style={[
                     styles.statusBadgeText,
-                    isInside ? styles.statusTextInside : styles.statusTextLeft,
+                    isInside
+                      ? styles.statusTextInside
+                      : isDenied
+                      ? { color: '#dc2626' }
+                      : isPending
+                      ? { color: '#d97706' }
+                      : styles.statusTextLeft,
                   ]}
                 >
-                  {isInside ? 'INSIDE' : 'LEFT'}
+                  {isInside ? 'INSIDE' : isDenied ? 'DENIED' : isPending ? 'PENDING' : 'LEFT'}
                 </Text>
               </View>
 
-              {durationStr && (
+              {durationStr && (isInside || isLeft) && (
                 <View style={[styles.durationChip, isInside && styles.durationChipActive]}>
                   <Ionicons name="time-outline" size={11} color={isInside ? '#16a34a' : colors.textMuted} />
                   <Text style={[styles.durationChipText, isInside && styles.durationChipTextActive]}>
@@ -627,16 +642,34 @@ export default function EntriesScreen() {
                     <View
                       style={[
                         styles.statusBadge,
-                        detailsEntry.status === 'Entered' ? styles.statusBadgeInside : styles.statusBadgeLeft,
+                        detailsEntry.status === 'Entered'
+                          ? styles.statusBadgeInside
+                          : detailsEntry.status === 'Denied'
+                          ? { backgroundColor: '#fee2e2' }
+                          : detailsEntry.status === 'Pending'
+                          ? { backgroundColor: '#fef3c7' }
+                          : styles.statusBadgeLeft,
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusBadgeText,
-                          detailsEntry.status === 'Entered' ? styles.statusTextInside : styles.statusTextLeft,
+                          detailsEntry.status === 'Entered'
+                            ? styles.statusTextInside
+                            : detailsEntry.status === 'Denied'
+                            ? { color: '#dc2626' }
+                            : detailsEntry.status === 'Pending'
+                            ? { color: '#d97706' }
+                            : styles.statusTextLeft,
                         ]}
                       >
-                        {detailsEntry.status === 'Entered' ? 'CURRENTLY INSIDE' : 'EXITED PROPERTY'}
+                        {detailsEntry.status === 'Entered'
+                          ? 'CURRENTLY INSIDE'
+                          : detailsEntry.status === 'Denied'
+                          ? 'DENIED ENTRY'
+                          : detailsEntry.status === 'Pending'
+                          ? 'APPROVAL PENDING'
+                          : 'EXITED PROPERTY'}
                       </Text>
                     </View>
                   </View>
@@ -647,7 +680,9 @@ export default function EntriesScreen() {
                   <View style={styles.infoLine}>
                     <Ionicons name="time-outline" size={18} color={colors.textMuted} />
                     <View style={{ marginLeft: 10, flex: 1 }}>
-                      <Text style={styles.infoLineLabel}>Entry In-Time</Text>
+                      <Text style={styles.infoLineLabel}>
+                        {detailsEntry.status === 'Denied' || detailsEntry.status === 'Pending' ? 'Request In-Time' : 'Entry In-Time'}
+                      </Text>
                       <Text style={styles.infoLineVal}>{detailsEntry.time} ({detailsEntry.fullDate})</Text>
                     </View>
                   </View>
@@ -664,13 +699,29 @@ export default function EntriesScreen() {
                     </View>
                   )}
 
-                  {getDurationText(detailsEntry.entryAt, detailsEntry.exitAt) && (
+                  {getDurationText(detailsEntry.entryAt, detailsEntry.exitAt) && (detailsEntry.status === 'Entered' || detailsEntry.status === 'Exited') && (
                     <View style={[styles.infoLine, { marginTop: 10 }]}>
                       <Ionicons name="timer-outline" size={18} color={detailsEntry.status === 'Entered' ? '#16a34a' : colors.textMuted} />
                       <View style={{ marginLeft: 10, flex: 1 }}>
                         <Text style={styles.infoLineLabel}>Visit Duration</Text>
                         <Text style={[styles.infoLineVal, detailsEntry.status === 'Entered' && { color: '#16a34a', fontWeight: '800' }]}>
                           {getDurationText(detailsEntry.entryAt, detailsEntry.exitAt)} {detailsEntry.status === 'Entered' ? '• Currently inside building' : '• Total stay duration'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {(detailsEntry.status === 'Denied' || detailsEntry.status === 'Pending') && (
+                    <View style={[styles.infoLine, { marginTop: 10 }]}>
+                      <Ionicons
+                        name={detailsEntry.status === 'Denied' ? 'close-circle-outline' : 'hourglass-outline'}
+                        size={18}
+                        color={detailsEntry.status === 'Denied' ? '#dc2626' : '#d97706'}
+                      />
+                      <View style={{ marginLeft: 10, flex: 1 }}>
+                        <Text style={styles.infoLineLabel}>Approval Status</Text>
+                        <Text style={[styles.infoLineVal, { color: detailsEntry.status === 'Denied' ? '#dc2626' : '#d97706', fontWeight: '700' }]}>
+                          {detailsEntry.status === 'Denied' ? 'Entry Denied / Not Approved' : 'Awaiting Resident Approval'}
                         </Text>
                       </View>
                     </View>

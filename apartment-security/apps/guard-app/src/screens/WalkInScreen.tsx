@@ -15,7 +15,6 @@ import { ThemeColors } from '../theme/colors';
 
 type Unit = { id: string; unitNumber: string; tower: string | null; residents: { name: string }[] };
 type RecentVisitor = { visitorName: string; vehicleNumber: string | null };
-type DomesticWorker = { id: string; name: string; type: string; entryTime: string; exitTime: string };
 
 export default function WalkInScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -44,9 +43,6 @@ export default function WalkInScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  const [domesticWorkers, setDomesticWorkers] = useState<DomesticWorker[]>([]);
-  const [clearingWorkerId, setClearingWorkerId] = useState<string | null>(null);
-
   const loadPrefetch = () => {
     setLoadError(false);
     // Ponytail: load everything at once, minimum boilerplate
@@ -71,31 +67,6 @@ export default function WalkInScreen({ navigation }: any) {
     loadPrefetch();
   }, []);
 
-  // Once the guard has picked a specific flat, show that unit's registered
-  // staff so a routine daily arrival doesn't need the full walk-in form.
-  useEffect(() => {
-    const unit = units.find(u => (u.tower || '') === blockInput && u.unitNumber === flatInput);
-    if (!unit) { setDomesticWorkers([]); return; }
-    api.get(`/domestic-workers/unit/${unit.id}`)
-      .then((res) => setDomesticWorkers(res.data.data ?? []))
-      .catch(() => setDomesticWorkers([]));
-  }, [blockInput, flatInput, units]);
-
-  const handleClearWorker = async (worker: DomesticWorker) => {
-    if (!selectedGateId) {
-      Alert.alert(t('walkin_systemErrorTitle'), t('walkin_systemErrorMsg'));
-      return;
-    }
-    setClearingWorkerId(worker.id);
-    try {
-      await api.post('/domestic-workers/entries', { domesticWorkerId: worker.id, entryPointId: selectedGateId });
-      Alert.alert(t('walkin_staffCleared'), `${worker.name} ${t('walkin_staffClearedMsg')}`);
-    } catch (error: any) {
-      Alert.alert(t('common_error'), error.response?.data?.message ?? t('walkin_errorMsg'));
-    } finally {
-      setClearingWorkerId(null);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!visitorName.trim() || !flatInput.trim()) {
@@ -279,30 +250,6 @@ export default function WalkInScreen({ navigation }: any) {
           </View>
           {units.length === 0 && <Text style={{ color: colors.textMuted, marginTop: 4, fontSize: 12 }}>{t('walkin_loadingFlats')}</Text>}
 
-          {domesticWorkers.length > 0 && (
-            <View style={{ marginTop: 16 }}>
-              <Text style={styles.label}>{t('walkin_registeredStaff')}</Text>
-              {domesticWorkers.map((worker) => (
-                <View key={worker.id} style={styles.workerRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.workerName}>{worker.name}</Text>
-                    <Text style={styles.workerMeta}>{worker.type} · {worker.entryTime}–{worker.exitTime}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.clearInButton, clearingWorkerId === worker.id && { opacity: 0.6 }]}
-                    onPress={() => handleClearWorker(worker)}
-                    disabled={clearingWorkerId === worker.id}
-                  >
-                    {clearingWorkerId === worker.id ? (
-                      <ActivityIndicator color={colors.card} size="small" />
-                    ) : (
-                      <Text style={styles.clearInButtonText}>{t('walkin_clearIn')}</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
 
           <Text style={styles.label}>{t('walkin_purposeOfVisit')}</Text>
           <TextInput
@@ -344,12 +291,24 @@ export default function WalkInScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      <Modal visible={blockPickerOpen} transparent animationType="fade">
+      {/* ponytail: ensure modalSheet respects insets.bottom so Tower/Flat items sit safely above Android software navigation buttons */}
+      <Modal visible={blockPickerOpen} transparent animationType="fade" onRequestClose={() => setBlockPickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setBlockPickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{t('walkin_blockTower')}</Text>
+              <TouchableOpacity onPress={() => setBlockPickerOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={Array.from(new Set(units.map(u => u.tower || ''))).sort()}
               keyExtractor={(item) => item}
+              contentContainerStyle={{ paddingBottom: 8 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
@@ -364,12 +323,23 @@ export default function WalkInScreen({ navigation }: any) {
         </TouchableOpacity>
       </Modal>
 
-      <Modal visible={flatPickerOpen} transparent animationType="fade">
+      <Modal visible={flatPickerOpen} transparent animationType="fade" onRequestClose={() => setFlatPickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setFlatPickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{t('walkin_flatNo')}</Text>
+              <TouchableOpacity onPress={() => setFlatPickerOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
             <FlatList
               data={units.filter(u => (u.tower || '') === blockInput).sort((a,b) => a.unitNumber.localeCompare(b.unitNumber))}
               keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingBottom: 8 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
@@ -439,27 +409,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonText: { color: colors.card, fontSize: 18, fontWeight: 'bold' },
-  workerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
-  },
-  workerName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  workerMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  clearInButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    minWidth: 76,
-    alignItems: 'center',
-  },
-  clearInButtonText: { color: colors.card, fontSize: 13, fontWeight: '700' },
   chip: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -498,7 +447,30 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: 'white',
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '50%', paddingVertical: 8 },
+  modalSheet: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '55%', paddingVertical: 8 },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
   modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 20 },
   modalItemText: { fontSize: 16, color: colors.text }
 });

@@ -83,6 +83,7 @@ const ResidentDirectory = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [towerFilter, setTowerFilter] = useState('All Towers');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
 
   const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
@@ -747,17 +748,46 @@ const ResidentDirectory = () => {
           {activeTab === 'directory' && (
             <>
               {/* Search & Filters */}
-              <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-                <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-                  <Icon name="search" size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
-                  <input type="text" className="form-input" placeholder="Search by family, unit, or member name..."
-                    style={{ paddingLeft: 36, backgroundColor: 'white' }}
-                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <div style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 12, flex: 1, maxWidth: 500 }}>
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <Icon name="search" size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                    <input type="text" className="form-input" placeholder="Search by family, unit, or member name..."
+                      style={{ paddingLeft: 36, backgroundColor: 'white' }}
+                      value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  </div>
+                  <select className="form-input" style={{ width: 'auto', backgroundColor: 'white' }}
+                    value={towerFilter} onChange={e => setTowerFilter(e.target.value)}>
+                    {uniqueTowers.map(t => <option key={t}>{t}</option>)}
+                  </select>
                 </div>
-                <select className="form-input" style={{ width: 'auto', backgroundColor: 'white' }}
-                  value={towerFilter} onChange={e => setTowerFilter(e.target.value)}>
-                  {uniqueTowers.map(t => <option key={t}>{t}</option>)}
-                </select>
+                {/* ponytail: view toggle between Card & List view for large resident directories */}
+                <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid var(--border-color)', overflow: 'hidden', backgroundColor: '#F1F5F9', padding: 2 }}>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('card')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      backgroundColor: viewMode === 'card' ? 'white' : 'transparent',
+                      color: viewMode === 'card' ? 'var(--text-main)' : 'var(--text-muted)',
+                      boxShadow: viewMode === 'card' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    <Icon name="layout-grid" size={15} /> Card
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
+                      color: viewMode === 'list' ? 'var(--text-main)' : 'var(--text-muted)',
+                      boxShadow: viewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    <Icon name="list" size={15} /> List
+                  </button>
+                </div>
               </div>
 
               {/* Stats */}
@@ -777,9 +807,131 @@ const ResidentDirectory = () => {
                 ))}
               </div>
 
-              {/* Family Cards */}
+              {/* Family Cards / List View */}
               {filteredFamilies.length === 0 ? (
                 <EmptyState icon="users" message={searchQuery ? 'No families match your search.' : 'No families yet. Click "Add Household" to get started!'} />
+              ) : viewMode === 'list' ? (
+                /* ponytail: dense table list view for 100+ residents */
+                <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid var(--border-color)', overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr className="table-header-row">
+                        <th style={{ padding: '12px 18px' }}>Unit / Apartment</th>
+                        <th style={{ padding: '12px 18px' }}>Family / Owner</th>
+                        <th style={{ padding: '12px 18px' }}>Type</th>
+                        <th style={{ padding: '12px 18px' }}>Occupancy</th>
+                        <th style={{ padding: '12px 18px' }}>Members</th>
+                        <th style={{ padding: '12px 18px' }}>Status</th>
+                        <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredFamilies.map(family => {
+                        const active = familyIsActive(family);
+                        const isTenant = family.residentType === 'Tenant' || family.primaryResident?.residentType === 'Tenant';
+                        const famTitle = family.familyName || (family.primaryResident?.name ? `${family.primaryResident.name} Family` : 'Household');
+
+                        return (
+                          <tr key={family.unitId} className="table-row" style={{ borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }}
+                            onClick={() => handleOpenFamilyDetails(family)}>
+                            <td style={{ padding: '14px 18px', fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>
+                              <div>Unit {family.apartmentNumber}</div>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginTop: 2 }}>
+                                {family.tower}{family.floor ? ` · Floor ${family.floor}` : ''}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px 18px', fontSize: 13 }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{famTitle}</div>
+                              {family.primaryResident && (
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  Primary: {family.primaryResident.name} {family.primaryResident.phone ? `(${family.primaryResident.phone})` : ''}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px 18px', fontSize: 12 }}>
+                              {isTenant ? (
+                                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+                                  Tenant
+                                </span>
+                              ) : (
+                                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FDE68A' }}>
+                                  Owner
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px 18px', fontSize: 13, color: 'var(--text-main)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span>{family.occupancyStatus || family.primaryResident?.occupancyStatus || 'Currently residing'}</span>
+                                {(family.documentUrl || family.primaryResident?.documentUrl) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDocument({
+                                        url: (family.documentUrl || family.primaryResident?.documentUrl)!,
+                                        name: family.documentName || family.primaryResident?.documentName || `Unit ${family.apartmentNumber} Agreement`
+                                      });
+                                    }}
+                                    title="View Agreement"
+                                    style={{
+                                      border: 'none', background: 'none', color: '#0284C7', cursor: 'pointer', display: 'inline-flex', padding: 2
+                                    }}
+                                  >
+                                    <Icon name="file-text" size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px 18px', fontSize: 13 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--primary)', backgroundColor: 'var(--primary-bg)', padding: '2px 8px', borderRadius: 12, fontSize: 12 }}>
+                                {family.totalMembers}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px 18px', fontSize: 12 }}>
+                              <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: active ? '#E0F2FE' : '#FEE2E2', color: active ? '#0369A1' : '#991B1B' }}>
+                                {active ? 'active' : 'suspended'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px 18px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                              <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => { setSelectedFamily(family); setIsFamilyDetailsOpen(true); }}
+                                  style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, backgroundColor: 'var(--primary)', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  View <Icon name="chevron-right" size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openWorkers(family)}
+                                  title="Domestic workers"
+                                  style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Icon name="users-group" size={13} /> Workers
+                                </button>
+                                {active ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSuspendConfirmUnitId(family.unitId)}
+                                    style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #D97706', color: '#D97706', borderRadius: 6, cursor: 'pointer' }}>
+                                    Suspend
+                                  </button>
+                                ) : (
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', padding: '0 4px' }}>Suspended</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmUnitId(family.unitId)}
+                                  title="Delete family"
+                                  style={{ padding: '6px 8px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid #DC2626', color: '#DC2626', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                  <Icon name="trash" size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {filteredFamilies.map(family => {
@@ -794,8 +946,11 @@ const ResidentDirectory = () => {
 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                           <div>
+                            {/* ponytail: uniform naming - line 1 always Unit & Tower + badge, line 2 always Family/Owner name */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>{displayName(family)}</h3>
+                              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>
+                                Unit {family.apartmentNumber}{family.tower ? ` · ${family.tower}` : ''}
+                              </h3>
                               {isTenant ? (
                                 <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
                                   Tenant (Rented)
@@ -807,7 +962,7 @@ const ResidentDirectory = () => {
                               )}
                             </div>
                             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <Icon name="home" size={11} /> Unit {family.apartmentNumber} &middot; {family.tower}
+                              <Icon name="users" size={13} /> {family.familyName || (family.primaryResident?.name ? `${family.primaryResident.name} Family` : 'Household')}
                             </p>
                           </div>
                           <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: active ? '#E0F2FE' : '#FEE2E2', color: active ? '#0369A1' : '#991B1B' }}>

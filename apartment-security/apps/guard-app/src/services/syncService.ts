@@ -2,6 +2,7 @@ import api from '../utils/api';
 import * as offlinePassCache from './offlinePassCache';
 
 let syncing = false;
+let autoSyncInterval: ReturnType<typeof setInterval> | null = null;
 const listeners = new Set<(pending: number) => void>();
 
 export function onQueueChange(callback: (pending: number) => void): () => void {
@@ -12,6 +13,23 @@ export function onQueueChange(callback: (pending: number) => void): () => void {
 async function notify() {
   const queue = await offlinePassCache.getQueue();
   listeners.forEach((callback) => callback(queue.length));
+  checkAutoSync(queue.length);
+}
+
+function checkAutoSync(queueLength: number) {
+  if (queueLength > 0 && !autoSyncInterval) {
+    // ponytail: auto-retry syncing queued walk-ins every 5s while items are pending
+    autoSyncInterval = setInterval(() => {
+      flushQueue();
+    }, 5000);
+  } else if (queueLength === 0 && autoSyncInterval) {
+    clearInterval(autoSyncInterval);
+    autoSyncInterval = null;
+  }
+}
+
+export function isSyncing(): boolean {
+  return syncing;
 }
 
 export async function queueWalkin(payload: Record<string, unknown>): Promise<void> {

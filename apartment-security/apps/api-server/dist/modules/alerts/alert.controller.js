@@ -140,11 +140,18 @@ const getAlerts = async (req, res, next) => {
         if (!propertyId && !isSuperAdmin) {
             return (0, response_util_1.sendSuccess)(res, 200, 'Alerts fetched', []);
         }
-        const isOversightRole = isSuperAdmin || req.user?.role === 'MANAGER' || req.user?.role === 'COMMITTEE';
+        const isManagerOrCommittee = req.user?.role === 'MANAGER' || req.user?.role === 'COMMITTEE';
         const alerts = await prisma_1.prisma.alert.findMany({
             where: {
                 ...(propertyId ? { propertyId } : {}),
-                ...(isOversightRole ? {} : {
+                ...(isSuperAdmin ? {} : isManagerOrCommittee ? {
+                    OR: [
+                        { targetRoles: { hasSome: ['MANAGER', 'COMMITTEE', 'GUARD'] } },
+                        { incidentId: { not: null } },
+                        { priority: 'P1' },
+                        { targetUserIds: { has: req.user.userId } },
+                    ],
+                } : {
                     OR: [
                         { targetRoles: { has: req.user.role } },
                         { targetUserIds: { has: req.user.userId } },

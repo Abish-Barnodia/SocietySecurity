@@ -10,6 +10,7 @@
     "prisma:migrate": "npx prisma migrate dev",
     "prisma:generate": "npx prisma generate",
     "prisma:studio": "npx prisma studio",
+    "sync:db": "ts-node --transpile-only src/migrateDbSafe.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },

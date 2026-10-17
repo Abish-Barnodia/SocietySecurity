@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
-import { shareQrAsImage } from '../../utils/shareQrPass';
+import { shareQrAsImage, formatResidentUnit } from '../../utils/shareQrPass';
 import { ThemedPassCard } from '../../components/ThemedPassCard';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -138,6 +138,9 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
   const { userProfile } = useAuth();
 
   const userName = userProfile?.name || 'Resident';
+  // ponytail: derive actual unit & property from resident profile without hardcoding
+  const myUnitName = formatResidentUnit(userProfile?.wing, userProfile?.flat);
+  const myPropertyName = userProfile?.propertyName || 'Greenfield Heights';
 
   const passCardRef = React.useRef<View>(null);
   const [activeCardData, setActiveCardData] = useState<{
@@ -155,13 +158,25 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
     themeId: 'home',
     visitorName: 'Guest',
     residentName: userName,
-    unitName: 'Tower A • Flat 402',
-    propertyName: 'Greenfield Heights',
+    unitName: myUnitName,
+    propertyName: myPropertyName,
     validTimeWindow: 'Today',
     passCode: 'PASS-123456',
     otpCode: '123456',
     qrPayload: 'pass-preview',
   });
+
+  // ponytail: keep activeCardData in sync when userProfile loads
+  useEffect(() => {
+    if (userProfile) {
+      setActiveCardData((prev) => ({
+        ...prev,
+        residentName: userProfile.name || prev.residentName,
+        unitName: formatResidentUnit(userProfile.wing, userProfile.flat),
+        propertyName: userProfile.propertyName || prev.propertyName,
+      }));
+    }
+  }, [userProfile]);
 
   // Navigation / Step state
   const [currentStep, setCurrentStep] = useState<FlowStep>('ENTRY_HUB');
@@ -361,8 +376,8 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
           themeId: selectedThemeId,
           visitorName: finalGuests.length > 1 ? `${primaryName} (+${finalGuests.length - 1} guests)` : primaryName,
           residentName: userName,
-          unitName: 'Tower A • Flat 402',
-          propertyName: 'Greenfield Heights',
+          unitName: myUnitName,
+          propertyName: myPropertyName,
           validTimeWindow: getEntryWindowFormatted(),
           passCode: created.id.substring(created.id.length - 6).toUpperCase(),
           otpCode: created.otpCode,
@@ -1013,7 +1028,13 @@ export default function CreatePassScreen({ navigation }: { navigation: any }) {
                 <View style={styles.cardArtContainer}>
                   <Ionicons name={selectedTheme.iconName} size={54} color={selectedTheme.accentColor} />
                   <Text style={[styles.cardArtWelcomeText, { color: selectedTheme.bannerColor }]}>
-                    WELCOME TO APARTMENT 402
+                    {userProfile?.flat ? (
+                      /^flat\b|^apartment\b|^apt\b|^unit\b/i.test(userProfile.flat.trim())
+                        ? `WELCOME TO ${userProfile.flat.trim().toUpperCase()}`
+                        : `WELCOME TO APARTMENT ${userProfile.flat.trim().toUpperCase()}`
+                    ) : (
+                      'WELCOME TO OUR HOME'
+                    )}
                   </Text>
                   <Text style={[styles.cardArtSub, { color: selectedTheme.bannerColor }]}>
                     Pass Pre-Approved by {userName}

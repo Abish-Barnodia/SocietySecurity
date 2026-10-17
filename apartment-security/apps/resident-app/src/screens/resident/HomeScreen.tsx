@@ -24,6 +24,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
 import { useSocket } from '../../context/SocketContext';
 import api from '../../utils/api';
+import { formatResidentUnit } from '../../utils/shareQrPass';
 
 interface CommunityComment {
   id: string;
@@ -263,9 +264,10 @@ export default function HomeScreen({ navigation }: { navigation: any }) {
 
   // Fallback to defaults if no profile exists
   const name = userProfile?.name ? userProfile.name.split(' ')[0] : 'Resident';
+  // ponytail: format resident unit cleanly
   const myUnit =
-    userProfile?.wing && userProfile?.flat
-      ? `Tower ${userProfile.wing} • Flat ${userProfile.flat}`
+    userProfile?.wing || userProfile?.flat
+      ? formatResidentUnit(userProfile?.wing, userProfile?.flat)
       : 'Tower A • Flat 402';
 
   const handleSOS = () => {

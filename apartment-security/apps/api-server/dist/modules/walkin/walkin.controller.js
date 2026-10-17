@@ -64,10 +64,28 @@ const requestWalkin = async (req, res, next) => {
         if (targetUnit.residents.length === 0) {
             return next(new error_middleware_1.AppError('This unit has no registered resident to approve the request', 400));
         }
-        // Create a pending entry
+        // ponytail: create a Pass record so this walk-in visitor is recorded on the Expected Visitors list with Manager/Admin
+        const pass = await prisma_1.prisma.pass.create({
+            data: {
+                residentId: targetUnit.residents[0].id,
+                unitId,
+                type: 'ONE_TIME',
+                status: 'ACTIVE',
+                visitorName,
+                visitorPhone,
+                purpose: purpose ? `Walk-in: ${purpose}` : 'Walk-in visitor',
+                validFrom: new Date(),
+                validUntil: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2-hour window
+                entryPointIds: [entryPointId],
+                createdByRole: 'GUARD',
+                createdByName: `${guard.name} (Guard)`,
+            }
+        });
+        // Create a pending entry linked to the pass
         const entry = await prisma_1.prisma.entry.create({
             data: {
                 unitId,
+                passId: pass.id,
                 guardId: guard.id,
                 entryPointId,
                 method: 'MANUAL_GUARD',
@@ -188,6 +206,15 @@ const respondWalkin = async (req, res, next) => {
             await prisma_1.prisma.passUsageHistory.updateMany({
                 where: { entryId: id },
                 data: { outcome: status === 'APPROVED' ? 'CLEARED' : 'DENIED' }
+            });
+        }
+        if (entry.passId) {
+            await prisma_1.prisma.pass.update({
+                where: { id: entry.passId },
+                data: {
+                    status: status === 'APPROVED' ? 'ACTIVE' : 'REVOKED',
+                    ...(status === 'DENIED' ? { revokedAt: new Date(), revokedBy: 'Resident' } : {})
+                }
             });
         }
         // Notify Guard App — room is `guard:${id}` (colon), matching what

@@ -126,7 +126,7 @@ export const ThemedPassCard = React.forwardRef<View, ThemedPassProps>(
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>HOST</Text>
                 <Text style={styles.detailValue} numberOfLines={1}>
-                  {residentName} ({unitName})
+                  {unitName ? `${residentName} (${unitName})` : residentName}
                 </Text>
               </View>
 

@@ -44,6 +44,8 @@ const createPass = async (req, res, next) => {
         const { type, visitorName, visitorPhone, purpose, validFrom, validUntil, entryPointIds, recurringRule, unitId: reqUnitId } = req.body;
         let residentId = null;
         let finalUnitId = reqUnitId;
+        let createdByRole = 'RESIDENT';
+        let createdByName = null;
         if (req.user.role === 'RESIDENT') {
             const currentResident = await prisma_1.prisma.resident.findUnique({
                 where: { userId: req.user.userId }
@@ -52,6 +54,8 @@ const createPass = async (req, res, next) => {
                 return next(new error_middleware_1.AppError('Resident context not found', 404));
             residentId = currentResident.id;
             finalUnitId = currentResident.unitId;
+            createdByRole = 'RESIDENT';
+            createdByName = currentResident.name;
         }
         else if (req.user.role === 'MANAGER' || req.user.role === 'COMMITTEE') {
             if (!finalUnitId)
@@ -59,6 +63,14 @@ const createPass = async (req, res, next) => {
             // Optionally find the primary resident of this unit to assign as host
             const unitResident = await prisma_1.prisma.resident.findFirst({ where: { unitId: finalUnitId } });
             residentId = unitResident ? unitResident.id : null;
+            createdByRole = req.user.role;
+            if (req.user.role === 'MANAGER') {
+                const mgr = await prisma_1.prisma.manager.findUnique({ where: { userId: req.user.userId } });
+                createdByName = mgr?.name ? `${mgr.name} (Manager)` : 'Property Manager';
+            }
+            else {
+                createdByName = 'Management Committee';
+            }
         }
         else {
             return next(new error_middleware_1.AppError('Unauthorized to create passes', 403));
@@ -78,6 +90,8 @@ const createPass = async (req, res, next) => {
                     validUntil: new Date(validUntil),
                     entryPointIds: entryPointIds || [],
                     otpCode: otpPlaintext,
+                    createdByRole,
+                    createdByName,
                     ...(recurringRule && {
                         recurringRule: {
                             create: recurringRule
@@ -119,7 +133,7 @@ const getMyPasses = async (req, res, next) => {
             return next(new error_middleware_1.AppError('Resident context not found', 404));
         const passes = await prisma_1.prisma.pass.findMany({
             where: { unitId },
-            include: { recurringRule: true },
+            include: { recurringRule: true, unit: true, resident: true },
             orderBy: { createdAt: 'desc' },
             take: 100
         });

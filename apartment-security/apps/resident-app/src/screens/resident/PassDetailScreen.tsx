@@ -8,7 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useTheme } from '../../context/ThemeContext';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '@apartment-security/shared-auth';
-import { shareQrAsImage, detectThemeFromPass, THEME_CONFIGS } from '../../utils/shareQrPass';
+import { shareQrAsImage, detectThemeFromPass, THEME_CONFIGS, formatResidentUnit } from '../../utils/shareQrPass';
 import { ThemedPassCard } from '../../components/ThemedPassCard';
 import { captureRef } from 'react-native-view-shot';
 import { RouteProp } from '@react-navigation/native';
@@ -28,6 +28,8 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
 
   const pass = passes.find(p => p.id === passId);
   const propertyName = userProfile?.propertyName || 'Greenfield Heights';
+  // ponytail: resolve real unit name from resident profile
+  const currentUnitName = formatResidentUnit(userProfile?.wing, userProfile?.flat);
   const themeKey = pass ? detectThemeFromPass({ purpose: pass.purpose, type: pass.type }) : 'home';
   const theme = THEME_CONFIGS[themeKey] || THEME_CONFIGS.home;
 
@@ -69,7 +71,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
         passCode: getPassCode(),
         otpCode: pass.otpCode,
         propertyName: propertyName,
-        unitName: (userProfile as any)?.unit || 'Flat 402',
+        unitName: currentUnitName,
       });
     } catch {
       Alert.alert('Error', 'Error sharing themed visitor pass');
@@ -223,6 +225,14 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
               <Text style={styles.gridLabel}>Allowed Gate</Text>
               <Text style={styles.gridValue}>{pass.gate || 'All Gates'}</Text>
             </View>
+            <View style={styles.gridItem}>
+              <Text style={styles.gridLabel}>Created By</Text>
+              <Text style={[styles.gridValue, { color: pass.createdByRole === 'MANAGER' ? '#0284c7' : colors.text, fontWeight: '700' }]}>
+                {pass.createdByRole === 'MANAGER'
+                  ? (pass.createdByName || 'Property Manager')
+                  : 'You (Resident)'}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -374,7 +384,7 @@ export default function PassDetailScreen({ navigation, route }: { navigation: an
           themeId={themeKey}
           visitorName={pass.name}
           residentName={userProfile?.name || 'Resident'}
-          unitName={(userProfile as any)?.unit || 'Flat 402'}
+          unitName={currentUnitName}
           propertyName={propertyName}
           validTimeWindow={pass.time || 'Valid Today'}
           passCode={getPassCode()}

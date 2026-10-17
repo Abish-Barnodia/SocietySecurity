@@ -55,6 +55,13 @@ const AlertsEscalation = () => {
       if (alertRes.status === 'fulfilled' && alertRes.value.ok) {
         const data = await alertRes.value.json();
         (data.data || []).forEach((al: any) => {
+          // Filter out private resident gate notifications (e.g. domestic worker arrival, visitor checkout)
+          const isPrivateResidentNotice =
+            (!al.targetRoles || al.targetRoles.length === 0 || !al.targetRoles.some((r: string) => ['MANAGER', 'COMMITTEE', 'GUARD'].includes(r))) &&
+            !al.incidentId &&
+            al.priority !== 'P1';
+          if (isPrivateResidentNotice) return;
+
           unifiedAlerts.push({
             id: `al-${al.id}`,
             realId: al.id,

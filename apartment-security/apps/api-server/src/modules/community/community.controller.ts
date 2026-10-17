@@ -899,7 +899,7 @@ export const sendDirectMessage = async (req: Request, res: Response, next: NextF
       partnerId = targetGuard.userId;
     }
 
-    const { text, mediaType, mediaUri, fileName, fileSize, durationSec, replyToId, replyToText, replyToSender } = req.body;
+    const { text, mediaType, mediaUri, fileName, fileSize, durationSec, replyToId, replyToText, replyToSender, clientMsgId } = req.body;
     if (!text && !mediaUri) {
       return next(new AppError('Message text or attachment required', 400));
     }
@@ -940,6 +940,7 @@ export const sendDirectMessage = async (req: Request, res: Response, next: NextF
 
     const newMsg = {
       id: `dm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      clientMsgId: clientMsgId ? String(clientMsgId).trim() : undefined,
       senderId: currentUserId,
       senderName,
       senderRole: req.user!.role,

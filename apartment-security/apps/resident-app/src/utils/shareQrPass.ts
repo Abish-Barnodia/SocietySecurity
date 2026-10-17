@@ -119,6 +119,20 @@ export function detectThemeFromPass(pass: { purpose?: string; type?: string }): 
   return 'home';
 }
 
+// ponytail: format resident unit with tower & flat without duplicating tower prefix
+export function formatResidentUnit(wing?: string | null, flat?: string | null): string {
+  const w = (wing || '').trim();
+  const f = (flat || '').trim();
+  if (w && f) {
+    const wingPart = /^tower\b|^block\b|^wing\b/i.test(w) ? w : `Tower ${w}`;
+    const flatPart = /^flat\b|^unit\b|^apt\b|^apartment\b/i.test(f) ? f : `Flat ${f}`;
+    return `${wingPart} • ${flatPart}`;
+  }
+  if (f) return /^flat\b|^unit\b|^apt\b|^apartment\b/i.test(f) ? f : `Flat ${f}`;
+  if (w) return w;
+  return 'Your Unit';
+}
+
 export function buildThemedHtml(options: ThemedPassShareOptions): string {
   const themeKey = options.themeId || detectThemeFromPass({ purpose: options.purpose, type: options.passType });
   const theme = THEME_CONFIGS[themeKey] || THEME_CONFIGS.home;
@@ -129,7 +143,7 @@ export function buildThemedHtml(options: ThemedPassShareOptions): string {
   const hostName = options.residentName || 'Resident';
   const visitorName = options.visitorName || 'Special Guest';
   const propertyName = options.propertyName || 'Greenfield Heights';
-  const unit = options.unitName || 'Tower A • Flat 402';
+  const unit = options.unitName || 'Your Unit';
   const timeWindow = options.validTimeWindow || 'Today • Valid Entry';
   const code = options.passCode || options.filenameHint.toUpperCase();
   const note = options.note ? `"${options.note}"` : '';

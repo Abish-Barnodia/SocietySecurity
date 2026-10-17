@@ -20,6 +20,8 @@ export type Pass = {
   gate?: string;
   qrPayload?: string | null;
   otpCode?: string | null;
+  createdByRole?: string;
+  createdByName?: string | null;
 };
 
 export type Alert = {
@@ -81,6 +83,8 @@ const mapPass = (raw: any): Pass => ({
   gate: raw.gate ?? undefined,
   qrPayload: raw.qrPayload ?? null,
   otpCode: raw.otpCode ?? null,
+  createdByRole: raw.createdByRole,
+  createdByName: raw.createdByName,
 });
 
 const ALERT_PRIORITY_ICON: Record<string, string> = {

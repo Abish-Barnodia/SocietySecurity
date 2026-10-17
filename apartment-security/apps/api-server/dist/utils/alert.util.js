@@ -81,14 +81,17 @@ const triggerAlert = async (params) => {
     });
     // Emit live socket event to every target user's personal room so their
     // app receives the alert instantly without relying on FCM push.
-    // Also broadcast to the property managers room — managers get oversight of
-    // alerts on their Alerts & Escalation screen.
+    // Broadcast to the property managers room only for security alerts, incidents,
+    // duress alarms, or broadcasts targeted to management — NOT private resident unit arrivals/exits.
     try {
         const { io } = await Promise.resolve().then(() => __importStar(require('../server')));
         for (const uid of userIds) {
             io?.to(`user:${uid}`).emit('new_alert', alert);
         }
-        io?.to(`property:${propertyId}:managers`).emit('new_alert', alert);
+        const isManagerAlert = targetRoles.some((r) => ['MANAGER', 'COMMITTEE', 'GUARD'].includes(r)) || priority === 'P1' || !!incidentId;
+        if (isManagerAlert) {
+            io?.to(`property:${propertyId}:managers`).emit('new_alert', alert);
+        }
     }
     catch { /* server not yet ready during tests */ }
     const allFcmTokens = users.flatMap((u) => u.fcmTokens);

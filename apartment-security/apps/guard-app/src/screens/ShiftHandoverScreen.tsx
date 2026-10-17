@@ -225,13 +225,17 @@ export default function ShiftHandoverScreen({ onNavigate }: { onNavigate: (tab: 
 
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
             {roster.length === 0 ? (
               <Text style={{ padding: 20, color: colors.textMuted }}>{t('handover_noGuardsFound')}</Text>
             ) : (
               <FlatList
                 data={roster}
                 keyExtractor={(item) => item.id}
+                contentContainerStyle={{ paddingBottom: 8 }}
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.modalItem}

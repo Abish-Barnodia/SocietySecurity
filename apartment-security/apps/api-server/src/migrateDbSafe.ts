@@ -131,6 +131,23 @@ async function migrate() {
     `);
     console.log('✓ Created PlatformSetting table');
 
+    // 6.2 Add createdByRole and createdByName to Pass table
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Pass" 
+      ADD COLUMN IF NOT EXISTS "createdByRole" TEXT DEFAULT 'RESIDENT',
+      ADD COLUMN IF NOT EXISTS "createdByName" TEXT;
+
+      -- Backfill existing passes: if laundry or kiran, mark as MANAGER created; otherwise RESIDENT
+      UPDATE "Pass" 
+      SET "createdByRole" = 'MANAGER', "createdByName" = 'Property Manager'
+      WHERE "visitorName" ILIKE '%kiran%' OR "purpose" ILIKE '%laundry%';
+
+      UPDATE "Pass" 
+      SET "createdByRole" = 'RESIDENT'
+      WHERE "createdByRole" IS NULL;
+    `);
+    console.log('✓ Created/Updated Pass table with createdByRole and createdByName');
+
     // 7. Seed / Update Super Admin user
     const email = 'admin@societysecurity.com';
     const phone = '9999999999';

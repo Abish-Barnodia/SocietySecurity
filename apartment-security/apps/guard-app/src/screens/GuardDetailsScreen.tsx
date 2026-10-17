@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Modal, FlatList, Alert, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@apartment-security/shared-auth';
 import { useTheme } from '../context/ThemeContext';
@@ -27,6 +27,7 @@ export default function GuardDetailsScreen() {
   const { guardProfile, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
   const styles = getStyles(colors);
   const [step, setStep] = useState<'details' | 'confirm'>('details');
 
@@ -165,12 +166,16 @@ export default function GuardDetailsScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={postPickerOpen} transparent animationType="fade">
+      <Modal visible={postPickerOpen} transparent animationType="fade" onRequestClose={() => setPostPickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPostPickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
             <FlatList
               data={entryPoints}
               keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingBottom: 8 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
@@ -185,12 +190,16 @@ export default function GuardDetailsScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <Modal visible={shiftPickerOpen} transparent animationType="fade">
+      <Modal visible={shiftPickerOpen} transparent animationType="fade" onRequestClose={() => setShiftPickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShiftPickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
             <FlatList
               data={SHIFTS}
               keyExtractor={(item) => item}
+              contentContainerStyle={{ paddingBottom: 8 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}

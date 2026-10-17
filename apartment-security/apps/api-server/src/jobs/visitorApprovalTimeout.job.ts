@@ -21,6 +21,12 @@ export const visitorApprovalTimeoutJob = cron.schedule('*/15 * * * * *', async (
         where: { id: wa.entryId },
         data: { status: 'NO_RESPONSE' },
       });
+      if (wa.entry.passId) {
+        await prisma.pass.update({
+          where: { id: wa.entry.passId },
+          data: { status: 'EXPIRED' },
+        });
+      }
       await prisma.passUsageHistory.updateMany({
         where: { entryId: wa.entryId },
         data: { outcome: 'TIMEOUT' },

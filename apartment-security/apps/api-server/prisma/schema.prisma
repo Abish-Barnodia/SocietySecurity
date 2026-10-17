@@ -240,6 +240,8 @@ model Pass {
   suspendedUntil DateTime?
   revokedAt      DateTime?
   revokedBy      String?
+  createdByRole  String?            @default("RESIDENT")
+  createdByName  String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   entries        Entry[]

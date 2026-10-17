@@ -42,6 +42,8 @@ const ExpectedVisitors = () => {
   // Filters
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [typeFilter, setTypeFilter] = useState('All Types');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   // Modals
   const [selectedPass, setSelectedPass] = useState<any>(null);
@@ -295,6 +297,19 @@ const ExpectedVisitors = () => {
         return false;
       }
     }
+
+    // Search query (visitor name, phone, host, unit, purpose)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const visitor = (pass.visitorName || '').toLowerCase();
+      const phone = (pass.visitorPhone || '').toLowerCase();
+      const host = (pass.resident?.name || '').toLowerCase();
+      const unit = passUnitLabel(pass).toLowerCase();
+      const purpose = (pass.purpose || '').toLowerCase();
+      if (!visitor.includes(q) && !phone.includes(q) && !host.includes(q) && !unit.includes(q) && !purpose.includes(q)) {
+        return false;
+      }
+    }
     
     return true;
   });
@@ -318,119 +333,292 @@ const ExpectedVisitors = () => {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-        <select 
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
-        >
-          <option>All Status</option>
-          <option>Pending</option>
-          <option>Approved</option>
-          <option>Expired</option>
-          <option>Suspended</option>
-          <option>Revoked</option>
-        </select>
-        <select 
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
-        >
-          <option>All Types</option>
-          <option>One Time</option>
-          <option>Recurring</option>
-          <option>Delivery</option>
-          <option>Contractor</option>
-        </select>
-        <div style={{ padding: '8px 12px', color: '#6B7280', fontSize: 14, display: 'flex', alignItems: 'center' }}>
-          {filteredPasses.length} visitors
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+          <div style={{ position: 'relative', minWidth: 240, flex: '1 1 240px', maxWidth: 360 }}>
+            <Icon name="search" size={16} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+            <input 
+              type="text" 
+              className="form-input" 
+              placeholder="Search visitor, host, unit..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: 36, backgroundColor: 'white', width: '100%' }}
+            />
+          </div>
+          <select 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
+          >
+            <option>All Status</option>
+            <option>Pending</option>
+            <option>Approved</option>
+            <option>Expired</option>
+            <option>Suspended</option>
+            <option>Revoked</option>
+          </select>
+          <select 
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #E5E7EB', backgroundColor: 'white', color: '#374151', fontSize: 14 }}
+          >
+            <option>All Types</option>
+            <option>One Time</option>
+            <option>Recurring</option>
+            <option>Delivery</option>
+            <option>Contractor</option>
+          </select>
+          <div style={{ padding: '8px 12px', color: '#6B7280', fontSize: 14, display: 'flex', alignItems: 'center' }}>
+            {filteredPasses.length} visitors
+          </div>
+        </div>
+
+        {/* ponytail: view mode toggle for card vs dense list view when visitors scale to hundreds */}
+        <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid #E5E7EB', overflow: 'hidden', backgroundColor: '#F9FAFB', padding: 2 }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('card')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              backgroundColor: viewMode === 'card' ? 'white' : 'transparent',
+              color: viewMode === 'card' ? '#111827' : '#6B7280',
+              boxShadow: viewMode === 'card' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            <Icon name="layout-grid" size={15} /> Card
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              backgroundColor: viewMode === 'list' ? 'white' : 'transparent',
+              color: viewMode === 'list' ? '#111827' : '#6B7280',
+              boxShadow: viewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            <Icon name="list" size={15} /> List
+          </button>
         </div>
       </div>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
-        gap: 16 
-      }}>
-        {filteredPasses.length === 0 && !loading && (
-          <div style={{ gridColumn: '1 / -1', padding: 32, textAlign: 'center', color: '#9CA3AF', border: '1px dashed #E5E7EB', borderRadius: 8 }}>
-            No expected visitors match your filters.
-          </div>
-        )}
-        {filteredPasses.map(pass => {
-          const status = getStatusDisplay(pass.status, pass.validFrom, pass.validUntil);
-          const initial = pass.visitorName ? pass.visitorName.charAt(0).toUpperCase() : 'V';
-          
-          return (
-            <div key={pass.id} style={{ 
-              border: '1px solid #E5E7EB', borderRadius: 8, padding: 16, backgroundColor: 'white',
-              display: 'flex', flexDirection: 'column'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <div style={{ 
-                    width: 40, height: 40, borderRadius: '50%', backgroundColor: '#F3F4F6', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    color: '#4B5563', fontWeight: 600, fontSize: 16 
-                  }}>
-                    {initial}
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827' }}>
-                      {pass.visitorName}
-                    </h3>
-                    <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
-                      {pass.type?.replace(/_/g, ' ')}
+      {filteredPasses.length === 0 && !loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#9CA3AF', border: '1px dashed #E5E7EB', borderRadius: 8 }}>
+          No expected visitors match your search or filters.
+        </div>
+      ) : viewMode === 'list' ? (
+        /* Dense Table List View */
+        <div style={{ backgroundColor: 'white', borderRadius: 12, border: '1px solid #E5E7EB', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr className="table-header-row">
+                <th style={{ padding: '12px 18px' }}>Visitor</th>
+                <th style={{ padding: '12px 18px' }}>Pass Type</th>
+                <th style={{ padding: '12px 18px' }}>Unit</th>
+                <th style={{ padding: '12px 18px' }}>Host Resident</th>
+                <th style={{ padding: '12px 18px' }}>Created By</th>
+                <th style={{ padding: '12px 18px' }}>Expected Date / Time</th>
+                <th style={{ padding: '12px 18px' }}>Purpose / Notes</th>
+                <th style={{ padding: '12px 18px' }}>Status</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPasses.map(pass => {
+                const status = getStatusDisplay(pass.status, pass.validFrom, pass.validUntil);
+                const initial = pass.visitorName ? pass.visitorName.charAt(0).toUpperCase() : 'V';
+                const isManager = pass.createdByRole === 'MANAGER';
+                const isGuard = pass.createdByRole === 'GUARD';
+                const createdByLabel = isManager
+                  ? (pass.createdByName || 'Manager')
+                  : isGuard
+                  ? (pass.createdByName || 'Guard')
+                  : (pass.resident?.name ? `${pass.resident.name} (Resident)` : 'Resident');
+                const unitStr = pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'Unknown';
+                const expectedStr = new Date(pass.validFrom).toLocaleString('en-GB', {
+                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+
+                return (
+                  <tr key={pass.id} className="table-row" style={{ borderBottom: '1px solid #E5E7EB', cursor: 'pointer' }}
+                    onClick={() => setSelectedPass(pass)}>
+                    <td style={{ padding: '14px 18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          width: 34, height: 34, borderRadius: '50%', backgroundColor: '#F3F4F6',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#4B5563', fontWeight: 600, fontSize: 14, flexShrink: 0
+                        }}>
+                          {initial}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#111827', fontSize: 13 }}>{pass.visitorName}</div>
+                          {pass.visitorPhone && (
+                            <div style={{ fontSize: 12, color: '#6B7280' }}>{pass.visitorPhone}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 12 }}>
+                      <span style={{
+                        padding: '3px 8px', borderRadius: 6, fontWeight: 600, fontSize: 11,
+                        backgroundColor: '#F3F4F6', color: '#374151', textTransform: 'capitalize'
+                      }}>
+                        {pass.type?.replace(/_/g, ' ').toLowerCase()}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 600, color: '#111827' }}>
+                      {unitStr}
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 13, color: '#374151' }}>
+                      {pass.resident?.name || 'Unknown'}
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 12 }}>
+                      <span style={{
+                        color: isManager ? '#0284c7' : isGuard ? '#d97706' : '#059669',
+                        fontWeight: 600,
+                        fontSize: 11,
+                        backgroundColor: isManager ? '#F0F9FF' : isGuard ? '#FFFBEB' : '#ECFDF5',
+                        padding: '2px 8px',
+                        borderRadius: 6
+                      }}>
+                        {createdByLabel}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 12, color: '#374151', whiteSpace: 'nowrap' }}>
+                      {expectedStr}
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 12, color: '#6B7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {pass.purpose || '—'}
+                    </td>
+                    <td style={{ padding: '14px 18px', fontSize: 12 }}>
+                      <span style={{
+                        padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                        backgroundColor: status.bg, color: status.text
+                      }}>
+                        {status.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 18px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPass(pass)}
+                        style={{
+                          color: 'var(--primary)', backgroundColor: 'transparent',
+                          border: '1px solid var(--border-color)', borderRadius: 6,
+                          padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                        }}
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* Card Grid View */
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
+          gap: 16 
+        }}>
+          {filteredPasses.map(pass => {
+            const status = getStatusDisplay(pass.status, pass.validFrom, pass.validUntil);
+            const initial = pass.visitorName ? pass.visitorName.charAt(0).toUpperCase() : 'V';
+            
+            return (
+              <div key={pass.id} style={{ 
+                border: '1px solid #E5E7EB', borderRadius: 8, padding: 16, backgroundColor: 'white',
+                display: 'flex', flexDirection: 'column'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <div style={{ 
+                      width: 40, height: 40, borderRadius: '50%', backgroundColor: '#F3F4F6', 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      color: '#4B5563', fontWeight: 600, fontSize: 16 
+                    }}>
+                      {initial}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827' }}>
+                        {pass.visitorName}
+                      </h3>
+                      <div style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+                        {pass.type?.replace(/_/g, ' ')}
+                      </div>
                     </div>
                   </div>
+                  <span style={{ 
+                    padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500,
+                    backgroundColor: status.bg, color: status.text
+                  }}>
+                    {status.label}
+                  </span>
                 </div>
-                <span style={{ 
-                  padding: '4px 10px', borderRadius: 12, fontSize: 12, fontWeight: 500,
-                  backgroundColor: status.bg, color: status.text
-                }}>
-                  {status.label}
-                </span>
-              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#9CA3AF' }}>Host</span>
-                  <span style={{ color: '#374151', fontWeight: 500, textAlign: 'right' }}>
-                    {pass.resident?.name || 'Unknown'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#9CA3AF' }}>Unit</span>
-                  <span style={{ color: '#374151', fontWeight: 500 }}>
-                    {pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'Unknown'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#9CA3AF' }}>Expected</span>
-                  <span style={{ color: '#374151', fontWeight: 500 }}>
-                    {new Date(pass.validFrom).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                
-                {pass.purpose && (
-                  <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: '#F9FAFB', borderRadius: 6, color: '#6B7280', fontSize: 12 }}>
-                    {pass.purpose}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#9CA3AF' }}>Host</span>
+                    <span style={{ color: '#374151', fontWeight: 500, textAlign: 'right' }}>
+                      {pass.resident?.name || 'Unknown'}
+                    </span>
                   </div>
-                )}
-              </div>
+                  {/* ponytail: show whether pass was created by manager, guard, or resident */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#9CA3AF' }}>Created By</span>
+                    <span style={{ 
+                      color: pass.createdByRole === 'MANAGER' ? '#0284c7' : pass.createdByRole === 'GUARD' ? '#d97706' : '#059669', 
+                      fontWeight: 600,
+                      fontSize: 12,
+                      backgroundColor: pass.createdByRole === 'MANAGER' ? '#F0F9FF' : pass.createdByRole === 'GUARD' ? '#FFFBEB' : '#ECFDF5',
+                      padding: '2px 8px',
+                      borderRadius: 6
+                    }}>
+                      {pass.createdByRole === 'MANAGER' 
+                        ? (pass.createdByName || 'Manager') 
+                        : pass.createdByRole === 'GUARD'
+                        ? (pass.createdByName || 'Guard')
+                        : (pass.resident?.name ? `${pass.resident.name} (Resident)` : 'Resident')}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#9CA3AF' }}>Unit</span>
+                    <span style={{ color: '#374151', fontWeight: 500 }}>
+                      {pass.unit?.tower ? `${pass.unit.tower}-${pass.unit.unitNumber}` : pass.unit?.unitNumber || 'Unknown'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#9CA3AF' }}>Expected</span>
+                    <span style={{ color: '#374151', fontWeight: 500 }}>
+                      {new Date(pass.validFrom).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  
+                  {pass.purpose && (
+                    <div style={{ marginTop: 8, padding: '8px 12px', backgroundColor: '#F9FAFB', borderRadius: 6, color: '#6B7280', fontSize: 12 }}>
+                      {pass.purpose}
+                    </div>
+                  )}
+                </div>
 
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end' }}>
-                <button 
-                  onClick={() => setSelectedPass(pass)}
-                  style={{ color: 'var(--primary)', background: 'none', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                >
-                  Details
-                </button>
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #F3F4F6', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button 
+                    onClick={() => setSelectedPass(pass)}
+                    style={{ color: 'var(--primary)', background: 'none', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Details
+                  </button>
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Details Modal */}
       {selectedPass && (
@@ -465,7 +653,22 @@ const ExpectedVisitors = () => {
               <div style={{ height: 1, backgroundColor: '#E5E7EB', margin: '8px 0' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6B7280' }}>Host Resident</span>
-                <span style={{ fontWeight: 500, color: '#374151' }}>{selectedPass.resident?.name}</span>
+                <span style={{ fontWeight: 500, color: '#374151' }}>{selectedPass.resident?.name || 'Unknown'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#6B7280' }}>Created By</span>
+                <span style={{ 
+                  fontWeight: 600, 
+                  color: selectedPass.createdByRole === 'MANAGER' ? '#0284c7' : '#059669',
+                  fontSize: 12,
+                  backgroundColor: selectedPass.createdByRole === 'MANAGER' ? '#F0F9FF' : '#ECFDF5',
+                  padding: '2px 8px',
+                  borderRadius: 6
+                }}>
+                  {selectedPass.createdByRole === 'MANAGER' 
+                    ? (selectedPass.createdByName || 'Property Manager') 
+                    : (selectedPass.resident?.name ? `${selectedPass.resident.name} (Resident)` : 'Resident')}
+                </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6B7280' }}>Unit</span>

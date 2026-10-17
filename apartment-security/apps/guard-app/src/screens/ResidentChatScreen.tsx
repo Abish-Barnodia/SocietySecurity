@@ -49,6 +49,7 @@ export interface ResidentMember {
 
 export interface DirectMessageItem {
   id: string;
+  clientMsgId?: string;
   senderId: string;
   senderName?: string;
   senderRole?: string;
@@ -224,6 +225,22 @@ export default function ResidentChatScreen({ onBack }: { onBack?: () => void }) 
       if (isForActive) {
         setMessages((prev) => {
           if (prev.some((m) => m.id === incomingMsg.id)) return prev;
+
+          // Reconcile with pending optimistic message to avoid duplicate sent bubbles
+          const optIndex = prev.findIndex(
+            (m) =>
+              (incomingMsg.clientMsgId && m.id === incomingMsg.clientMsgId) ||
+              (m.id.startsWith('dm_opt_') &&
+                m.senderId === incomingMsg.senderId &&
+                m.text === incomingMsg.text)
+          );
+
+          if (optIndex !== -1) {
+            const updated = [...prev];
+            updated[optIndex] = incomingMsg;
+            return updated;
+          }
+
           return [...prev, incomingMsg];
         });
         setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -370,14 +387,20 @@ export default function ResidentChatScreen({ onBack }: { onBack?: () => void }) 
     try {
       const res = await api.post(`/community/dm/${partnerTarget}`, {
         text: textToSend,
+        clientMsgId: optimisticMsg.id,
         replyToId: optimisticMsg.replyToId,
         replyToText: optimisticMsg.replyToText,
         replyToSender: optimisticMsg.replyToSender,
       });
       if (res.data?.data) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === optimisticMsg.id ? res.data.data : m))
-        );
+        const confirmed = res.data.data;
+        setMessages((prev) => {
+          // If socket already arrived and inserted/updated the confirmed message, clean up optimistic placeholder
+          if (prev.some((m) => m.id === confirmed.id)) {
+            return prev.filter((m) => m.id !== optimisticMsg.id);
+          }
+          return prev.map((m) => (m.id === optimisticMsg.id ? confirmed : m));
+        });
       }
     } catch (err) {
       console.log('Error sending direct message:', err);

@@ -350,7 +350,7 @@ const signupEmail = async (req, res, next) => {
 exports.signupEmail = signupEmail;
 const loginEmail = async (req, res, next) => {
     try {
-        const { email, password, propertyId } = req.body;
+        const { email, password, propertyId, portal } = req.body;
         const cleanEmail = (email || '').trim().toLowerCase();
         const cleanPassword = (password || '').trim();
         const user = await prisma_1.prisma.user.findFirst({
@@ -388,6 +388,10 @@ const loginEmail = async (req, res, next) => {
         }
         if (!user.isActive) {
             return next(new error_middleware_1.AppError('This account has been deactivated', 403));
+        }
+        // ponytail: Block non-managers when attempting to log into the Manager Portal
+        if (portal === 'manager' && user.role !== 'MANAGER' && user.role !== 'SUPER_ADMIN') {
+            return next(new error_middleware_1.AppError('Access denied. Resident accounts cannot access the Manager Portal.', 403));
         }
         let managerSessionToken;
         // Role-specific validations for Manager login:

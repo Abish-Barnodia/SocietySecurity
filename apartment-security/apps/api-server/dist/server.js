@@ -23,7 +23,8 @@ exports.io = new socket_io_1.Server(server, {
                 return callback(null, true); // mobile / server-to-server
             if ((0, corsOrigin_util_1.isKnownOrigin)(origin))
                 return callback(null, true);
-            callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
+            // ponytail: clean reject without throwing unhandled error
+            callback(null, false);
         },
         credentials: true,
     },

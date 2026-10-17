@@ -157,24 +157,32 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
                     <Text style={styles.cardName} numberOfLines={1}>
                       {item.name || item.type}
                     </Text>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        isActive && styles.statusPillActive,
-                        isSuspended && styles.statusPillSuspended,
-                        !isActive && !isSuspended && styles.statusPillExpired,
-                      ]}
-                    >
-                      <Text
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {item.createdByRole === 'MANAGER' && (
+                        <View style={styles.managerPill}>
+                          <Ionicons name="business-outline" size={10} color={isDark ? '#38bdf8' : '#0284c7'} />
+                          <Text style={styles.managerPillText}>By Manager</Text>
+                        </View>
+                      )}
+                      <View
                         style={[
-                          styles.statusPillText,
-                          isActive && styles.statusTextActive,
-                          isSuspended && styles.statusTextSuspended,
-                          !isActive && !isSuspended && styles.statusTextExpired,
+                          styles.statusPill,
+                          isActive && styles.statusPillActive,
+                          isSuspended && styles.statusPillSuspended,
+                          !isActive && !isSuspended && styles.statusPillExpired,
                         ]}
                       >
-                        {item.status.toUpperCase()}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.statusPillText,
+                            isActive && styles.statusTextActive,
+                            isSuspended && styles.statusTextSuspended,
+                            !isActive && !isSuspended && styles.statusTextExpired,
+                          ]}
+                        >
+                          {item.status.toUpperCase()}
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
@@ -193,10 +201,14 @@ export default function PassesScreen({ navigation }: { navigation: any }) {
                   </Text>
                 </View>
 
+                {/* ponytail: show creation date and creator name (Manager vs You) */}
                 <View style={styles.detailLine}>
                   <Ionicons name="calendar-outline" size={14} color={colors.textMuted} />
                   <Text style={styles.detailLineText} numberOfLines={1}>
                     {item.created ? `Created ${item.created}` : 'Valid Pass'}
+                    {item.createdByRole === 'MANAGER'
+                      ? ` • by ${item.createdByName || 'Property Manager'}`
+                      : ' • by You'}
                   </Text>
                 </View>
 
@@ -382,6 +394,22 @@ const getStyles = (colors: any, isDark: boolean) =>
     },
 
     // STATUS PILLS
+    managerPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(2, 132, 199, 0.2)' : '#f0f9ff',
+      borderWidth: 1,
+      borderColor: isDark ? '#0284c7' : '#bae6fd',
+    },
+    managerPillText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: isDark ? '#38bdf8' : '#0284c7',
+    },
     statusPill: {
       paddingHorizontal: 8,
       paddingVertical: 3,

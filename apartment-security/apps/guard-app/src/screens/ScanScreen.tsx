@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal, FlatList,
   ActivityIndicator, Linking, Alert, TextInput, Button, Animated, Easing,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../utils/api';
@@ -22,6 +22,7 @@ export default function ScanScreen() {
   const { colors } = useTheme();
   const { t } = useLanguage();
   const styles = getStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const [permission, requestPermission] = useCameraPermissions();
   const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
@@ -296,12 +297,16 @@ export default function ScanScreen() {
         </View>
       )}
 
-      <Modal visible={gatePickerOpen} transparent animationType="fade">
+      <Modal visible={gatePickerOpen} transparent animationType="fade" onRequestClose={() => setGatePickerOpen(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setGatePickerOpen(false)}>
-          <View style={styles.modalSheet}>
+          <View
+            style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom + 12, 36) }]}
+            onStartShouldSetResponder={() => true}
+          >
             <FlatList
               data={entryPoints}
               keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingBottom: 8 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}

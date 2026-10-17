@@ -93,7 +93,8 @@ app.use((0, cors_1.default)({
         }
         if ((0, corsOrigin_util_1.isKnownOrigin)(origin))
             return callback(null, true);
-        callback(new Error(`CORS: origin ${origin} not allowed`));
+        // ponytail: clean reject without throwing 500 internal server error
+        callback(null, false);
     },
     credentials: true,
 }));

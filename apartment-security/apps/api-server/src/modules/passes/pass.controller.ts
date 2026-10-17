@@ -13,6 +13,8 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
     
     let residentId = null;
     let finalUnitId = reqUnitId;
+    let createdByRole = 'RESIDENT';
+    let createdByName: string | null = null;
 
     if (req.user!.role === 'RESIDENT') {
       const currentResident = await prisma.resident.findUnique({
@@ -21,11 +23,20 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
       if (!currentResident) return next(new AppError('Resident context not found', 404));
       residentId = currentResident.id;
       finalUnitId = currentResident.unitId;
+      createdByRole = 'RESIDENT';
+      createdByName = currentResident.name;
     } else if (req.user!.role === 'MANAGER' || req.user!.role === 'COMMITTEE') {
       if (!finalUnitId) return next(new AppError('unitId is required for managers creating passes', 400));
       // Optionally find the primary resident of this unit to assign as host
       const unitResident = await prisma.resident.findFirst({ where: { unitId: finalUnitId } });
       residentId = unitResident ? unitResident.id : null;
+      createdByRole = req.user!.role;
+      if (req.user!.role === 'MANAGER') {
+        const mgr = await prisma.manager.findUnique({ where: { userId: req.user!.userId } });
+        createdByName = mgr?.name ? `${mgr.name} (Manager)` : 'Property Manager';
+      } else {
+        createdByName = 'Management Committee';
+      }
     } else {
       return next(new AppError('Unauthorized to create passes', 403));
     }
@@ -46,6 +57,8 @@ export const createPass = async (req: Request, res: Response, next: NextFunction
           validUntil: new Date(validUntil),
           entryPointIds: entryPointIds || [],
           otpCode: otpPlaintext,
+          createdByRole,
+          createdByName,
           ...(recurringRule && {
             recurringRule: {
               create: recurringRule
@@ -88,7 +101,7 @@ export const getMyPasses = async (req: Request, res: Response, next: NextFunctio
 
     const passes = await prisma.pass.findMany({
       where: { unitId },
-      include: { recurringRule: true },
+      include: { recurringRule: true, unit: true, resident: true },
       orderBy: { createdAt: 'desc' },
       take: 100
     });

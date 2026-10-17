@@ -1111,6 +1111,7 @@ export const restoreFamily = async (req: Request, res: Response, next: NextFunct
         ]);
 
         await auditLog(req.user!.userId, 'RESTORE_FAMILY', 'Unit', unitId);
+        io?.to(`unit_${unitId}`).emit('household_updated', { unitId });
         return sendSuccess(res, 200, 'Family restored successfully');
     } catch (err) { next(err); }
 };

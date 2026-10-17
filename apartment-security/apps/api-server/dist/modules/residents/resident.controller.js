@@ -1122,6 +1122,7 @@ const restoreFamily = async (req, res, next) => {
             prisma_1.prisma.unit.update({ where: { id: unitId }, data: { isDeleted: false } }),
         ]);
         await (0, audit_util_1.auditLog)(req.user.userId, 'RESTORE_FAMILY', 'Unit', unitId);
+        server_1.io?.to(`unit_${unitId}`).emit('household_updated', { unitId });
         return (0, response_util_1.sendSuccess)(res, 200, 'Family restored successfully');
     }
     catch (err) {

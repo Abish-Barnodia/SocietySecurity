@@ -143,6 +143,7 @@ const ResidentDirectory = () => {
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [suspendConfirmUnitId, setSuspendConfirmUnitId] = useState<string | null>(null);
+  const [suspendingFamily, setSuspendingFamily] = useState(false);
   const [revokingSuspensionUnitId, setRevokingSuspensionUnitId] = useState<string | null>(null);
   const [deleteConfirmUnitId, setDeleteConfirmUnitId] = useState<string | null>(null);
   const [deletingFamily, setDeletingFamily] = useState(false);
@@ -398,14 +399,27 @@ const ResidentDirectory = () => {
     if (!suspendConfirmUnitId) return;
     const family = families.find(f => f.unitId === suspendConfirmUnitId);
     if (!family) return;
+    setSuspendingFamily(true);
     try {
       for (const member of family.members) {
         await fetch(`${API_BASE}/residents/${member.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${getAuthToken()}` } });
       }
       showToast('Family suspended', 'success');
+      // ponytail: in-place state update without full page reload
+      setFamilies(prev => prev.map(f => {
+        if (f.unitId !== suspendConfirmUnitId) return f;
+        return {
+          ...f,
+          members: f.members.map(m => ({ ...m, isActive: false })),
+        };
+      }));
       setSuspendConfirmUnitId(null);
-      fetchData();
-    } catch (e) { showToast('An unexpected error occurred', 'error'); }
+      fetchData(true);
+    } catch (e) {
+      showToast('An unexpected error occurred', 'error');
+    } finally {
+      setSuspendingFamily(false);
+    }
   };
 
   const restoreFamily = async (unitId: string) => {
@@ -418,6 +432,7 @@ const ResidentDirectory = () => {
       if (res.ok) {
         showToast('Family restored', 'success');
         setDeletedFamilies(prev => prev.filter(f => f.unitId !== unitId));
+        fetchData(true);
       } else {
         const data = await res.json().catch(() => ({}));
         showToast(data.message || 'Failed to restore family', 'error');
@@ -439,7 +454,14 @@ const ResidentDirectory = () => {
       });
       if (res.ok) {
         showToast('Family suspension revoked', 'success');
-        await fetchData();
+        // ponytail: in-place state update without full page reload
+        setFamilies(prev => prev.map(f => {
+          if (f.unitId !== unitId) return f;
+          return {
+            ...f,
+            members: f.members.map(m => ({ ...m, isActive: true })),
+          };
+        }));
         setSelectedFamily(prev => {
           if (!prev || prev.unitId !== unitId) return prev;
           return {
@@ -447,6 +469,7 @@ const ResidentDirectory = () => {
             members: prev.members.map(m => ({ ...m, isActive: true })),
           };
         });
+        fetchData(true);
       } else {
         const data = await res.json().catch(() => ({}));
         showToast(data.message || 'Failed to revoke suspension', 'error');
@@ -468,8 +491,10 @@ const ResidentDirectory = () => {
       });
       if (res.ok) {
         showToast('Family deleted', 'success');
+        // ponytail: in-place state update without full page reload
+        setFamilies(prev => prev.filter(f => f.unitId !== deleteConfirmUnitId));
         setDeleteConfirmUnitId(null);
-        fetchData();
+        fetchData(true);
       } else {
         const data = await res.json().catch(() => ({}));
         showToast(data.message || 'Failed to delete family', 'error');
@@ -1754,53 +1779,92 @@ const ResidentDirectory = () => {
       )}
 
       {/* ===== CONFIRM SUSPEND MODAL ===== */}
-      {suspendConfirmUnitId && (
-        <div className="modal-overlay" onClick={() => setSuspendConfirmUnitId(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">Suspend Family</h3>
-                <p className="modal-subtitle" style={{ color: '#DC2626' }}>All family members will lose access.</p>
+      {suspendConfirmUnitId && (() => {
+        const targetFamily = families.find(f => f.unitId === suspendConfirmUnitId);
+        return (
+          <div className="modal-overlay" onClick={() => !suspendingFamily && setSuspendConfirmUnitId(null)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="alert-triangle" size={20} color="#D97706" />
+                  </div>
+                  <div>
+                    <h3 className="modal-title">Suspend Family</h3>
+                    <p className="modal-subtitle" style={{ color: '#D97706' }}>Confirmation required</p>
+                  </div>
+                </div>
+                {!suspendingFamily && <button className="modal-close" onClick={() => setSuspendConfirmUnitId(null)}>&times;</button>}
               </div>
-              <button className="modal-close" onClick={() => setSuspendConfirmUnitId(null)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ margin: '0 0 20px 0', fontSize: 14 }}>All members in this household will lose app access and their passes will be invalidated.</p>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmUnitId(null)}>Cancel</button>
-                <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmSuspendFamily}>Yes, Suspend</button>
+              <div className="modal-body">
+                <p style={{ margin: '0 0 14px 0', fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>
+                  Are you sure you want to suspend <strong>Unit {targetFamily?.apartmentNumber || ''}</strong> ({targetFamily ? displayName(targetFamily) : 'this family'})?
+                </p>
+                <div style={{ padding: '12px 14px', background: '#FFFBEB', borderRadius: 8, border: '1px solid #FDE68A', fontSize: 13, color: '#92400E', marginBottom: 20 }}>
+                  All {targetFamily?.totalMembers || 'all'} family member(s) will lose resident app and gate access until revoked by a manager.
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSuspendConfirmUnitId(null)} disabled={suspendingFamily}>Cancel</button>
+                  <button className="btn btn-primary" style={{ flex: 1, backgroundColor: '#D97706', borderColor: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={confirmSuspendFamily} disabled={suspendingFamily}>
+                    {suspendingFamily ? (
+                      <>
+                        <Icon name="loader-2" className="spin" size={16} color="#FFF" />
+                        <span>Suspending...</span>
+                      </>
+                    ) : (
+                      'Yes, Suspend'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ===== CONFIRM DELETE MODAL ===== */}
-      {deleteConfirmUnitId && (
-        <div className="modal-overlay" onClick={() => setDeleteConfirmUnitId(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">Delete Family</h3>
-                <p className="modal-subtitle" style={{ color: '#DC2626' }}>This will remove the family from the directory.</p>
+      {deleteConfirmUnitId && (() => {
+        const targetFamily = families.find(f => f.unitId === deleteConfirmUnitId);
+        return (
+          <div className="modal-overlay" onClick={() => !deletingFamily && setDeleteConfirmUnitId(null)}>
+            <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="trash" size={20} color="#DC2626" />
+                  </div>
+                  <div>
+                    <h3 className="modal-title">Delete Family</h3>
+                    <p className="modal-subtitle" style={{ color: '#DC2626' }}>Confirmation required</p>
+                  </div>
+                </div>
+                {!deletingFamily && <button className="modal-close" onClick={() => setDeleteConfirmUnitId(null)}>&times;</button>}
               </div>
-              <button className="modal-close" onClick={() => setDeleteConfirmUnitId(null)}>&times;</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ margin: '0 0 20px 0', fontSize: 14 }}>
-                All members will lose app access and this family will no longer appear in the Resident Directory.
-                Their history (passes, complaints, entries) is kept, not erased.
-              </p>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setDeleteConfirmUnitId(null)} disabled={deletingFamily}>Cancel</button>
-                <button className="btn btn-primary share-action-btn" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626' }} onClick={confirmDeleteFamily} disabled={deletingFamily}>
-                  {deletingFamily ? 'Deleting...' : 'Yes, Delete'}
-                </button>
+              <div className="modal-body">
+                <p style={{ margin: '0 0 14px 0', fontSize: 14, color: 'var(--text-main)', lineHeight: 1.5 }}>
+                  Are you sure you want to delete <strong>Unit {targetFamily?.apartmentNumber || ''}</strong> ({targetFamily ? displayName(targetFamily) : 'this family'})?
+                </p>
+                <div style={{ padding: '12px 14px', background: '#FEF2F2', borderRadius: 8, border: '1px solid #FECACA', fontSize: 13, color: '#991B1B', marginBottom: 20 }}>
+                  This will remove the family from the active directory. Historical passes, complaints, and entries will be safely retained.
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setDeleteConfirmUnitId(null)} disabled={deletingFamily}>Cancel</button>
+                  <button className="btn btn-primary share-action-btn" style={{ flex: 1, backgroundColor: '#DC2626', borderColor: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={confirmDeleteFamily} disabled={deletingFamily}>
+                    {deletingFamily ? (
+                      <>
+                        <Icon name="loader-2" className="spin" size={16} color="#FFF" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      'Yes, Delete'
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ===== DOMESTIC WORKERS MODAL ===== */}
       {workersFamily && (
